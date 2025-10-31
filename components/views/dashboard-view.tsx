@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Edit, X, Eye, Calendar, Clock, MessageSquare, ChevronDown, ChevronUp } from "lucide-react"
+import { Edit, X, Eye, Calendar, Clock, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import type { ProjectFormData } from "@/components/project-form"
@@ -33,7 +33,7 @@ interface DashboardViewProps {
 
 export function DashboardView({ initialProjects, initialPostsByProject = {} }: DashboardViewProps) {
   const [projects, setProjects] = useState<DashboardView[]>(initialProjects)
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({})
+  const [visiblePostsCount, setVisiblePostsCount] = useState<Record<string, number>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<Record<string, boolean>>({})
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null)
 
@@ -78,8 +78,8 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
     setProjectToDelete(null)
   }
 
-  const toggleExpanded = (projectId: string) => {
-    setExpandedProjects({ ...expandedProjects, [projectId]: !expandedProjects[projectId] })
+  const showMorePosts = (projectId: string) => {
+    setVisiblePostsCount({ ...visiblePostsCount, [projectId]: (visiblePostsCount[projectId] || 1) + 3 })
   }
 
   const formatDate = (dateString: string) => {
@@ -95,26 +95,30 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
     <div className="grid gap-6">
       {projects.map((project) => {
         const posts = initialPostsByProject[project.id] || []
-        const isExpanded = expandedProjects[project.id]
-        const recentPosts = posts.slice(0, 2)
+        const visibleCount = visiblePostsCount[project.id] || 1
+        const visiblePosts = posts.slice(0, visibleCount)
+        const hasMorePosts = visibleCount < posts.length
 
         return (
           <Card key={project.id} className="bg-muted/30 border-border overflow-hidden">
-            <div className="grid md:grid-cols-[200px_1fr] gap-4">
-              <div className="relative h-48 md:h-auto pl-4">
+            <div className="grid grid-cols-2 gap-4 p-4">
+              {/* Left: Image */}
+              <div className="relative aspect-video">
                 {project.thumbnail ? (
                   <Image
                     src={getThumbnailUrl(project.thumbnail, project.username)}
                     alt={project.title}
                     fill
                     className="object-cover rounded"
-                    sizes="(max-width: 768px) 100vw, 200px"
+                    sizes="(max-width: 768px) 100vw, 50vw"
                   />
                 ) : (
                   <ImagePlaceholder className="h-full rounded" />
                 )}
               </div>
-              <div className="px-4 flex flex-col justify-between">
+              
+              {/* Right: Project Info */}
+              <div className="flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-bold">{project.title}</h3>
@@ -145,70 +149,6 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                       </div>
                     )}
                   </div>
-
-                  {/* Posts Section */}
-                  {posts.length > 0 && (
-                    <div className="mb-4">
-                      <button
-                        onClick={() => toggleExpanded(project.id)}
-                        className="flex items-center gap-2 text-sm text-primary hover:underline"
-                      >
-                        {isExpanded ? (
-                          <>
-                            <ChevronUp className="h-4 w-4" />
-                            Hide Posts
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown className="h-4 w-4" />
-                            Show {posts.length} {posts.length === 1 ? 'Post' : 'Posts'}
-                          </>
-                        )}
-                      </button>
-                      
-                      {isExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {posts.map((post) => (
-                            <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
-                              <div className="flex items-start justify-between mb-1">
-                                <h4 className="font-semibold text-sm">{post.title}</h4>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
-                                  <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
-                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                                      <Edit className="h-3 w-3" />
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {!isExpanded && recentPosts.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {recentPosts.map((post) => (
-                            <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
-                              <div className="flex items-start justify-between mb-1">
-                                <h4 className="font-semibold text-sm">{post.title}</h4>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
-                                  <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
-                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                                      <Edit className="h-3 w-3" />
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
                 <div className="flex justify-between gap-2 mt-4">
                   <div className="flex gap-2">
@@ -244,6 +184,49 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                     </Button>
                   </div>
                 </div>
+              </div>
+              
+              {/* Posts Section - Full Width */}
+              <div className="col-span-2">
+                {posts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                    <p className="text-sm text-muted-foreground">No posts yet. Create your first post to get started!</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="space-y-2">
+                      {visiblePosts.map((post) => (
+                        <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="font-semibold text-sm">{post.title}</h4>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                              <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
+                                <Button size="sm" variant="outline" className="text-xs gap-2 px-2! py-1! h-auto">
+                                  <Edit className="h-3 w-3" /> Edit
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {hasMorePosts && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => showMorePosts(project.id)}
+                          className="w-full"
+                        >
+                          Show {Math.min(3, posts.length - visibleCount)} More {posts.length - visibleCount === 1 ? 'Post' : 'Posts'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
