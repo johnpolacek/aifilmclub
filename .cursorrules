@@ -1,0 +1,15 @@
+# Cursor Rules
+
+## Logging Guidelines
+
+- Always use `JSON.stringify()` for console.log, console.error, and console.warn when logging objects or complex data structures
+- Include the third parameter `null, 2` for pretty-printing: `JSON.stringify(data, null, 2)`
+- This makes logs easy to copy/paste for debugging and sharing
+- Example: `console.log("[Component] Event:", JSON.stringify({ key: value }, null, 2))`
+
+## Code Style
+
+- Prefer using `search_replace` and `write` tools for file editing over terminal commands
+- Use TypeScript for type safety
+- Follow existing code patterns and conventions
+

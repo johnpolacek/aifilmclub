@@ -70,3 +70,15 @@ export function getLocationImageUrl(image: string | undefined, username: string 
   const key = `locations/${username}/${image}`
   return getPublicUrl(key)
 }
+
+/**
+ * Get the post image URL
+ * Post image should be just the filename (e.g., "1761873619145.jpg")
+ * Username is required to construct the full path
+ */
+export function getPostImageUrl(image: string | undefined, username: string | undefined): string {
+  if (!image || !username) return ''
+  
+  const key = `posts/${username}/${image}`
+  return getPublicUrl(key)
+}

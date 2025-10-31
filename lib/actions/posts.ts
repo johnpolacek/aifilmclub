@@ -22,7 +22,7 @@ async function getCurrentUsername(): Promise<string> {
 /**
  * Create a new post
  */
-export async function createPost(projectId: string, data: { title: string; content: string }) {
+export async function createPost(projectId: string, data: { title: string; content: string; image?: string }) {
   const { userId } = await auth()
 
   if (!userId) {
@@ -42,6 +42,7 @@ export async function createPost(projectId: string, data: { title: string; conte
       projectId,
       title: data.title,
       content: data.content,
+      image: data.image,
       createdAt: now,
       updatedAt: now,
       username,
@@ -64,7 +65,7 @@ export async function createPost(projectId: string, data: { title: string; conte
 /**
  * Update an existing post
  */
-export async function updatePost(postId: string, data: { title: string; content: string }) {
+export async function updatePost(postId: string, data: { title: string; content: string; image?: string }) {
   const { userId } = await auth()
 
   if (!userId) {
@@ -89,6 +90,7 @@ export async function updatePost(postId: string, data: { title: string; content:
       ...existingPost,
       title: data.title,
       content: data.content,
+      image: data.image,
       updatedAt: new Date().toISOString(),
     }
 
@@ -160,6 +162,60 @@ export async function getProjectPosts(projectId: string): Promise<Post[]> {
   } catch (error) {
     console.error("Error getting project posts:", error)
     return []
+  }
+}
+
+/**
+ * Upload a post image
+ */
+export async function uploadPostImage(formData: FormData) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    throw new Error("You must be signed in to upload a post image")
+  }
+
+  try {
+    const username = await getCurrentUsername()
+    const file = formData.get("image") as File
+
+    if (!file) {
+      throw new Error("No image file provided")
+    }
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      throw new Error("File must be an image")
+    }
+
+    // Validate file size (max 10MB for post images)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      throw new Error("Image must be less than 10MB")
+    }
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Generate a unique filename (timestamp + random to avoid collisions)
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2, 9)
+    const filename = `${timestamp}-${random}.jpg`
+    const key = `posts/${username}/${filename}`
+
+    // Upload optimized image to S3
+    const { uploadImageFromBuffer } = await import("@/lib/s3")
+    await uploadImageFromBuffer(buffer, key, file.type, { isThumbnail: true })
+
+    // Revalidate pages that show post data
+    revalidatePath("/dashboard")
+
+    // Return just the filename (not the full key or URL) - URL will be constructed when displaying
+    return { success: true, imageFilename: filename }
+  } catch (error) {
+    console.error("Error uploading post image:", error)
+    throw new Error(error instanceof Error ? error.message : "Failed to upload post image")
   }
 }
 

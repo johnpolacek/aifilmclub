@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Calendar, Clock, ExternalLink, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, ExternalLink, ArrowLeft, Rss } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { getProjectByUsernameAndSlug } from "@/lib/projects"
@@ -241,11 +241,24 @@ export default async function ProjectPage({
           {/* Project Posts */}
           {posts.length > 0 && (
             <div>
-              <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Project Posts</h2>
+                <a
+                  href={`/api/rss/${username}/${projectSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Rss className="h-4 w-4" />
+                  RSS Feed
+                </a>
+              </div>
               <PostsList 
                 projectId={id} 
                 initialPosts={posts}
                 canEdit={false}
+                projectTitle={project.title}
+                authorName={creatorProfile.name}
               />
             </div>
           )}

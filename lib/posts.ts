@@ -7,6 +7,7 @@ export interface Post {
   projectId: string
   title: string
   content: string
+  image?: string
   createdAt: string
   updatedAt?: string
   username?: string
