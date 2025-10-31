@@ -1,7 +1,9 @@
 import ProjectForm from "@/components/project-form"
+import { PostsList } from "@/components/posts-list"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { getProject } from "@/lib/projects"
+import { getPostsForProject } from "@/lib/posts"
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -9,6 +11,9 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   // Get project data from S3
   const projectData = await getProject(projectId)
+  
+  // Get posts for this project
+  const posts = await getPostsForProject(projectId)
 
   if (!projectData) {
     return (
@@ -41,12 +46,23 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </Link>
 
-        <ProjectForm 
-          initialData={projectData} 
-          projectId={projectId}
-          isEditing 
-          redirectPath="/dashboard"
-        />
+        <div className="space-y-8">
+          <ProjectForm 
+            initialData={projectData} 
+            projectId={projectId}
+            isEditing 
+            redirectPath="/dashboard"
+          />
+          
+          <div>
+            <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
+            <PostsList 
+              projectId={projectId} 
+              initialPosts={posts}
+              canEdit={true}
+            />
+          </div>
+        </div>
       </div>
     </div>
   )

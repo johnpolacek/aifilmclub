@@ -2,9 +2,10 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Film, User, Edit, Plus, ExternalLink } from "lucide-react"
+import { Film, Edit, Plus, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { getProjectsByUsername } from "@/lib/projects"
+import { getPostsForProjects } from "@/lib/posts"
 import { getOrCreateUserProfile } from "@/lib/actions/profiles"
 import { DashboardView } from "@/components/views/dashboard-view"
 import Image from "next/image"
@@ -27,27 +28,18 @@ export default async function DashboardPage() {
 
   // Fetch user's projects
   const projects = await getProjectsByUsername(userProfile.username)
+  
+  // Fetch posts for all projects
+  const projectIds = projects.map(p => p.id)
+  const postsByProject = await getPostsForProjects(projectIds)
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
       <div className="container mx-auto px-4 lg:px-8">
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-8">
           {/* Profile Section */}
-          <div className="lg:col-span-1">
+          <div className="col-span-1">
             <Card className="bg-card border-border">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5 text-primary" />
-                    Profile
-                  </CardTitle>
-                  <Link href="/dashboard/profile">
-                    <Button variant="ghost" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex justify-center">
@@ -94,13 +86,21 @@ export default async function DashboardPage() {
                       </div>
                     )}
                   </div>
+                  <div className="pt-4 border-t">
+                    <Link href="/dashboard/profile" className="w-full">
+                      <Button variant="ghost" size="sm" className="w-full justify-center text-muted-foreground hover:text-foreground">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Profile
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Projects Section */}
-          <div className="lg:col-span-2">
+          <div className="col-span-2 lg:col-span-3">
             <Card className="bg-card border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
                     </Link>
                   </div>
                 ) : (
-                  <DashboardView initialProjects={projects} />
+                  <DashboardView initialProjects={projects} initialPostsByProject={postsByProject} />
                 )}
               </CardContent>
             </Card>

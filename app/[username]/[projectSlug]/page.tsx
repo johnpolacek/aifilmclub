@@ -6,6 +6,8 @@ import Image from "next/image"
 import { getProjectByUsernameAndSlug } from "@/lib/projects"
 import { getUserProfile } from "@/lib/profiles"
 import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils"
+import { getPostsForProject } from "@/lib/posts"
+import { PostsList } from "@/components/posts-list"
 import { notFound } from "next/navigation"
 
 export default async function ProjectPage({
@@ -26,6 +28,9 @@ export default async function ProjectPage({
 
   // Get creator profile
   const creatorProfile = await getUserProfile(username)
+  
+  // Get posts for this project
+  const posts = await getPostsForProject(id)
 
   // Transform thumbnail URL
   const thumbnailUrl = project.thumbnail 
@@ -232,6 +237,18 @@ export default async function ProjectPage({
               </div>
             )}
           </div>
+
+          {/* Project Posts */}
+          {posts.length > 0 && (
+            <div>
+              <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
+              <PostsList 
+                projectId={id} 
+                initialPosts={posts}
+                canEdit={false}
+              />
+            </div>
+          )}
 
           {/* Project Updates */}
           {projectDisplay.updates.length > 0 && (
