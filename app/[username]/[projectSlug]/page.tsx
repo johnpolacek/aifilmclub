@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { getProjectByUsernameAndSlug } from "@/lib/projects"
 import { getUserProfile } from "@/lib/profiles"
-import { getThumbnailUrl } from "@/lib/utils"
+import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils"
 import { notFound } from "next/navigation"
 
 export default async function ProjectPage({
@@ -133,6 +133,87 @@ export default async function ProjectPage({
               <h2 className="text-xl font-bold mb-3">About This Project</h2>
               <p className="text-muted-foreground text-sm leading-relaxed">{projectDisplay.description}</p>
             </div>
+
+            {/* Characters */}
+            {project.characters && project.characters.length > 0 && (
+              <div className="mb-5 pb-5 border-b border-border">
+                <h2 className="text-xl font-bold mb-4">Characters</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {project.characters.map((character, index) => (
+                    <Card key={index} className="bg-muted/30 border-border">
+                      <CardContent className="p-4">
+                        <div className="space-y-3">
+                          {/* Character Image - Full Width */}
+                          {character.image && (
+                            <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                              <Image
+                                src={getCharacterImageUrl(character.image, project.username)}
+                                alt={character.name || "Character"}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Character Info */}
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-sm">{character.name || "Unnamed Character"}</h3>
+                              {character.type && (
+                                <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
+                                  {character.type}
+                                </span>
+                              )}
+                            </div>
+                            {character.description && (
+                              <p className="text-muted-foreground text-sm leading-relaxed">{character.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Setting - Locations */}
+            {project.setting?.locations && project.setting.locations.length > 0 && (
+              <div className="mb-5 pb-5 border-b border-border">
+                <h2 className="text-xl font-bold mb-4">Setting</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {project.setting.locations.map((location, index) => (
+                    <Card key={index} className="bg-muted/30 border-border">
+                      <CardContent className="p-4">
+                        <div className="space-y-3">
+                          {/* Location Image - Full Width (if exists) */}
+                          {location.image && (
+                            <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                              <Image
+                                src={getLocationImageUrl(location.image, project.username)}
+                                alt={location.name || "Location"}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Location Info */}
+                          <div>
+                            <h3 className="font-semibold mb-1 text-sm">{location.name || "Unnamed Location"}</h3>
+                            {location.description && (
+                              <p className="text-muted-foreground text-sm leading-relaxed">{location.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tools */}
             {projectDisplay.tools.length > 0 && (

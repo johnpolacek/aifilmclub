@@ -46,3 +46,27 @@ export function getThumbnailUrl(thumbnail: string | undefined, username: string 
   const key = `thumbnails/${username}/${thumbnail}`
   return getPublicUrl(key)
 }
+
+/**
+ * Get the character image URL
+ * Character image should be just the filename (e.g., "1761873619145.jpg")
+ * Username is required to construct the full path
+ */
+export function getCharacterImageUrl(image: string | undefined, username: string | undefined): string {
+  if (!image || !username) return ''
+  
+  const key = `characters/${username}/${image}`
+  return getPublicUrl(key)
+}
+
+/**
+ * Get the location image URL
+ * Location image should be just the filename (e.g., "1761873619145.jpg")
+ * Username is required to construct the full path
+ */
+export function getLocationImageUrl(image: string | undefined, username: string | undefined): string {
+  if (!image || !username) return ''
+  
+  const key = `locations/${username}/${image}`
+  return getPublicUrl(key)
+}

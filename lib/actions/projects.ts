@@ -179,6 +179,114 @@ export async function uploadProjectThumbnail(formData: FormData) {
 }
 
 /**
+ * Upload a character image
+ */
+export async function uploadCharacterImage(formData: FormData) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    throw new Error("You must be signed in to upload a character image")
+  }
+
+  try {
+    const username = await getCurrentUsername()
+    const file = formData.get("image") as File
+
+    if (!file) {
+      throw new Error("No image file provided")
+    }
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      throw new Error("File must be an image")
+    }
+
+    // Validate file size (max 10MB for character images)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      throw new Error("Image must be less than 10MB")
+    }
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Generate a unique filename (timestamp + random to avoid collisions)
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2, 9)
+    const filename = `${timestamp}-${random}.jpg`
+    const key = `characters/${username}/${filename}`
+
+    // Upload optimized image to S3 (using thumbnail optimization for character images)
+    const { uploadImageFromBuffer } = await import("@/lib/s3")
+    await uploadImageFromBuffer(buffer, key, file.type, { isThumbnail: true })
+
+    // Revalidate pages that show project data
+    revalidatePath("/dashboard")
+
+    // Return just the filename (not the full key or URL) - URL will be constructed when displaying
+    return { success: true, imageFilename: filename }
+  } catch (error) {
+    console.error("Error uploading character image:", error)
+    throw new Error(error instanceof Error ? error.message : "Failed to upload character image")
+  }
+}
+
+/**
+ * Upload a location image
+ */
+export async function uploadLocationImage(formData: FormData) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    throw new Error("You must be signed in to upload a location image")
+  }
+
+  try {
+    const username = await getCurrentUsername()
+    const file = formData.get("image") as File
+
+    if (!file) {
+      throw new Error("No image file provided")
+    }
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      throw new Error("File must be an image")
+    }
+
+    // Validate file size (max 10MB for location images)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      throw new Error("Image must be less than 10MB")
+    }
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Generate a unique filename (timestamp + random to avoid collisions)
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2, 9)
+    const filename = `${timestamp}-${random}.jpg`
+    const key = `locations/${username}/${filename}`
+
+    // Upload optimized image to S3 (using thumbnail optimization for location images)
+    const { uploadImageFromBuffer } = await import("@/lib/s3")
+    await uploadImageFromBuffer(buffer, key, file.type, { isThumbnail: true })
+
+    // Revalidate pages that show project data
+    revalidatePath("/dashboard")
+
+    // Return just the filename (not the full key or URL) - URL will be constructed when displaying
+    return { success: true, imageFilename: filename }
+  } catch (error) {
+    console.error("Error uploading location image:", error)
+    throw new Error(error instanceof Error ? error.message : "Failed to upload location image")
+  }
+}
+
+/**
  * Submit project form (create or update based on context)
  */
 export async function submitProjectForm(

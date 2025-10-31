@@ -18,9 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Film, Upload, LinkIcon, Plus, X, Wrench, Check, Camera } from "lucide-react"
+import { Film, Upload, LinkIcon, Plus, X, Wrench, Check, Camera, User, MapPin } from "lucide-react"
 import Image from "next/image"
-import { getThumbnailUrl } from "@/lib/utils"
+import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils"
 
 // Types
 export interface ProjectLinks {
@@ -34,12 +34,29 @@ export interface CategorizedTool {
   category: ToolCategory
 }
 
+export interface Character {
+  name: string
+  description: string
+  type?: "Main Character" | "Protagonist" | "Supporting"
+  image?: string // filename only, similar to thumbnail
+}
+
+export interface Location {
+  name: string
+  description: string
+  image?: string // filename only
+}
+
 export interface ProjectFormData {
   title: string
   description: string
   status: "In Progress" | "Completed"
   duration: string
   genre: string
+  characters?: Character[]
+  setting?: {
+    locations?: Location[]
+  }
   thumbnail?: string
   links: ProjectLinks
   tools: CategorizedTool[]
@@ -134,6 +151,7 @@ export default function ProjectForm({
   const router = useRouter()
   const genreSelectId = useId()
   const durationSelectId = useId()
+  const characterTypeSelectIds = useRef<Record<number, string>>({})
   
   // Helper to migrate old link format to new format
   const migrateLinks = (links?: ProjectLinks | Record<string, unknown>): ProjectLinks => {
@@ -168,6 +186,19 @@ export default function ProjectForm({
     // Migrate from old format (string array) - categorize as "other"
     return (tools as string[]).map(name => ({ name, category: 'other' as ToolCategory }))
   }
+
+  // Helper to migrate old characters format (string) to new format (Character[])
+  const migrateCharacters = (characters?: Character[] | string): Character[] => {
+    if (!characters) return []
+    
+    // If already in new format (array of Character objects)
+    if (Array.isArray(characters) && characters.length > 0 && typeof characters[0] === 'object' && 'name' in characters[0]) {
+      return characters as Character[]
+    }
+    
+    // Migrate from old format (string) - return empty array (can't convert string to structured data)
+    return []
+  }
   
   const [formData, setFormData] = useState<ProjectFormData>({
     title: initialData?.title || "",
@@ -175,6 +206,8 @@ export default function ProjectForm({
     status: (initialData?.status as ProjectFormData["status"]) || "In Progress",
     duration: initialData?.duration || "",
     genre: initialData?.genre || "",
+    characters: migrateCharacters(initialData?.characters),
+    setting: initialData?.setting || { locations: [] },
     thumbnail: initialData?.thumbnail,
     links: migrateLinks(initialData?.links),
     tools: migrateTools(initialData?.tools),
@@ -199,6 +232,12 @@ export default function ProjectForm({
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const characterFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const locationFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const [uploadingCharacterIndex, setUploadingCharacterIndex] = useState<number | null>(null)
+  const [uploadingLocationIndex, setUploadingLocationIndex] = useState<number | null>(null)
+  const [characterPreviewImages, setCharacterPreviewImages] = useState<Record<number, string>>({})
+  const [locationPreviewImages, setLocationPreviewImages] = useState<Record<number, string>>({})
   const [hasVideoTool, setHasVideoTool] = useState(() => {
     const tools = migrateTools(initialData?.tools)
     return tools.some(tool => tool.category === 'video')
@@ -348,8 +387,263 @@ export default function ProjectForm({
     return labels[category]
   }
 
+  const addCharacter = () => {
+    const newIndex = (formData.characters || []).length
+    // Generate ID for the new character's type select
+    characterTypeSelectIds.current[newIndex] = `character-type-${newIndex}-${Date.now()}`
+    const newCharacters = [...(formData.characters || []), { name: "", description: "", type: undefined as Character["type"] }]
+    setFormData({
+      ...formData,
+      characters: newCharacters,
+    })
+  }
+
+  const removeCharacter = (index: number) => {
+    const newCharacters = formData.characters?.filter((_, i) => i !== index) || []
+    setFormData({
+      ...formData,
+      characters: newCharacters,
+    })
+    // Clean up preview image and ref
+    const newPreviews = { ...characterPreviewImages }
+    delete newPreviews[index]
+    setCharacterPreviewImages(newPreviews)
+  }
+
+  const updateCharacter = (index: number, field: keyof Character, value: string | Character["type"]) => {
+    const newCharacters = [...(formData.characters || [])]
+    newCharacters[index] = { ...newCharacters[index], [field]: value }
+    setFormData({
+      ...formData,
+      characters: newCharacters,
+    })
+  }
+
+  const handleCharacterImageClick = (index: number) => {
+    characterFileInputRefs.current[index]?.click()
+  }
+
+  const handleCharacterImageChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+
+    // Validate raw file size (max 20MB - we'll compress it)
+    const maxRawSize = 20 * 1024 * 1024 // 20MB
+    if (file.size > maxRawSize) {
+      toast.error("Image must be less than 20MB")
+      return
+    }
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setCharacterPreviewImages({
+        ...characterPreviewImages,
+        [index]: reader.result as string,
+      })
+    }
+    reader.readAsDataURL(file)
+
+    // Compress and upload image
+    setUploadingCharacterIndex(index)
+    const loadingToast = toast.loading("Compressing image...")
+
+    try {
+      // Compress image client-side (16:9 aspect ratio for character images, max 1920x1080, full width display)
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
+      
+      // Validate compressed size (max 2MB)
+      const maxCompressedSize = 2 * 1024 * 1024 // 2MB
+      if (compressedFile.size > maxCompressedSize) {
+        toast.error("Compressed image is still too large. Please try a smaller image.", {
+          id: loadingToast,
+        })
+        setUploadingCharacterIndex(null)
+        return
+      }
+
+      toast.loading("Uploading character image...", { id: loadingToast })
+
+      const { uploadCharacterImage } = await import("@/lib/actions/projects")
+      const uploadFormData = new FormData()
+      uploadFormData.append("image", compressedFile)
+
+      const result = await uploadCharacterImage(uploadFormData)
+
+      if (result.success && result.imageFilename) {
+        const newCharacters = [...(formData.characters || [])]
+        newCharacters[index] = { ...newCharacters[index], image: result.imageFilename }
+        setFormData({
+          ...formData,
+          characters: newCharacters,
+        })
+        setCharacterPreviewImages({
+          ...characterPreviewImages,
+          [index]: "",
+        })
+        toast.success("Character image uploaded successfully!", {
+          id: loadingToast,
+        })
+      }
+    } catch (error) {
+      console.error("Error uploading character image:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload character image"
+      toast.error(errorMessage, {
+        id: loadingToast,
+      })
+      setCharacterPreviewImages({
+        ...characterPreviewImages,
+        [index]: "",
+      })
+    } finally {
+      setUploadingCharacterIndex(null)
+      // Reset file input
+      if (characterFileInputRefs.current[index]) {
+        characterFileInputRefs.current[index]!.value = ""
+      }
+    }
+  }
+
+  const addLocation = () => {
+    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }]
+    setFormData({
+      ...formData,
+      setting: {
+        ...formData.setting,
+        locations: newLocations,
+      },
+    })
+  }
+
+  const removeLocation = (index: number) => {
+    const newLocations = (formData.setting?.locations || []).filter((_, i) => i !== index)
+    setFormData({
+      ...formData,
+      setting: {
+        ...formData.setting,
+        locations: newLocations,
+      },
+    })
+    // Clean up preview image and ref
+    const newPreviews = { ...locationPreviewImages }
+    delete newPreviews[index]
+    setLocationPreviewImages(newPreviews)
+  }
+
+  const updateLocation = (index: number, field: keyof Location, value: string) => {
+    const newLocations = [...(formData.setting?.locations || [])]
+    newLocations[index] = { ...newLocations[index], [field]: value }
+    setFormData({
+      ...formData,
+      setting: {
+        ...formData.setting,
+        locations: newLocations,
+      },
+    })
+  }
+
+  const handleLocationImageClick = (index: number) => {
+    locationFileInputRefs.current[index]?.click()
+  }
+
+  const handleLocationImageChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+
+    // Validate raw file size (max 20MB - we'll compress it)
+    const maxRawSize = 20 * 1024 * 1024 // 20MB
+    if (file.size > maxRawSize) {
+      toast.error("Image must be less than 20MB")
+      return
+    }
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setLocationPreviewImages({
+        ...locationPreviewImages,
+        [index]: reader.result as string,
+      })
+    }
+    reader.readAsDataURL(file)
+
+    // Compress and upload image
+    setUploadingLocationIndex(index)
+    const loadingToast = toast.loading("Compressing image...")
+
+    try {
+      // Compress image client-side (16:9 aspect ratio for location images, max 1920x1080)
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
+      
+      // Validate compressed size (max 2MB)
+      const maxCompressedSize = 2 * 1024 * 1024 // 2MB
+      if (compressedFile.size > maxCompressedSize) {
+        toast.error("Compressed image is still too large. Please try a smaller image.", {
+          id: loadingToast,
+        })
+        setUploadingLocationIndex(null)
+        return
+      }
+
+      toast.loading("Uploading location image...", { id: loadingToast })
+
+      const { uploadLocationImage } = await import("@/lib/actions/projects")
+      const uploadFormData = new FormData()
+      uploadFormData.append("image", compressedFile)
+
+      const result = await uploadLocationImage(uploadFormData)
+
+      if (result.success && result.imageFilename) {
+        const newLocations = [...(formData.setting?.locations || [])]
+        newLocations[index] = { ...newLocations[index], image: result.imageFilename }
+        setFormData({
+          ...formData,
+          setting: {
+            ...formData.setting,
+            locations: newLocations,
+          },
+        })
+        setLocationPreviewImages({
+          ...locationPreviewImages,
+          [index]: "",
+        })
+        toast.success("Location image uploaded successfully!", {
+          id: loadingToast,
+        })
+      }
+    } catch (error) {
+      console.error("Error uploading location image:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload location image"
+      toast.error(errorMessage, {
+        id: loadingToast,
+      })
+      setLocationPreviewImages({
+        ...locationPreviewImages,
+        [index]: "",
+      })
+    } finally {
+      setUploadingLocationIndex(null)
+      // Reset file input
+      if (locationFileInputRefs.current[index]) {
+        locationFileInputRefs.current[index]!.value = ""
+      }
+    }
+  }
+
   // Compress image client-side before upload
-  const compressImage = (file: File, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.85): Promise<File> => {
+  const compressImage = (file: File, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.85, targetAspect?: number): Promise<File> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -371,17 +665,18 @@ export default function ProjectForm({
             }
           }
           
-          // Crop to 16:9 aspect ratio if needed
-          const targetAspect = 16 / 9
-          const currentAspect = width / height
-          
-          if (Math.abs(currentAspect - targetAspect) > 0.01) {
-            if (currentAspect > targetAspect) {
-              // Image is wider, crop horizontally
-              width = height * targetAspect
-            } else {
-              // Image is taller, crop vertically
-              height = width / targetAspect
+          // Crop to target aspect ratio if provided
+          if (targetAspect !== undefined) {
+            const currentAspect = width / height
+            
+            if (Math.abs(currentAspect - targetAspect) > 0.01) {
+              if (currentAspect > targetAspect) {
+                // Image is wider, crop horizontally
+                width = height * targetAspect
+              } else {
+                // Image is taller, crop vertically
+                height = width / targetAspect
+              }
             }
           }
           
@@ -460,7 +755,7 @@ export default function ProjectForm({
 
     try {
       // Compress image client-side (16:9 aspect ratio, max 1920x1080)
-      const compressedFile = await compressImage(file, 1920, 1080, 0.85)
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
       
       // Validate compressed size (max 2MB - should be well under this after compression)
       const maxCompressedSize = 2 * 1024 * 1024 // 2MB
@@ -625,14 +920,14 @@ export default function ProjectForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="thumbnail">Thumbnail Image</Label>
+            <Label htmlFor="thumbnail">Project Image</Label>
             <div className="space-y-4">
               {/* Thumbnail Preview */}
               <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
                 {previewImage || formData.thumbnail ? (
                   <Image
                     src={previewImage || getThumbnailUrl(formData.thumbnail, formData.username)}
-                    alt="Project thumbnail"
+                    alt="Project image"
                     fill
                     className="object-cover"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -648,7 +943,7 @@ export default function ProjectForm({
                   onClick={handleImageClick}
                   disabled={isUploadingImage}
                   className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
-                  aria-label="Upload thumbnail image"
+                  aria-label="Upload project image"
                 >
                   {isUploadingImage ? (
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
@@ -689,6 +984,252 @@ export default function ProjectForm({
                 className="hidden"
                 disabled={isUploadingImage}
               />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Characters</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Add characters to your project with images, names, and descriptions
+            </p>
+
+            <div className="space-y-4">
+              {(formData.characters || []).map((character, index) => {
+                // Generate ID for this character's type select if not already generated
+                if (!characterTypeSelectIds.current[index]) {
+                  characterTypeSelectIds.current[index] = `character-type-${index}-${Date.now()}`
+                }
+                const typeSelectId = characterTypeSelectIds.current[index]!
+                return (
+                  <Card key={index} className="bg-muted/30 border-border">
+                    <CardContent className="p-4 space-y-4">
+                      <div className="flex items-start justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeCharacter(index)}
+                          className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {/* Character Name */}
+                      <div className="space-y-2">
+                        <Label htmlFor={`character-name-${index}`}>Name</Label>
+                        <Input
+                          id={`character-name-${index}`}
+                          placeholder="Enter character name"
+                          value={character.name}
+                          onChange={(e) => updateCharacter(index, "name", e.target.value)}
+                          className="bg-background"
+                        />
+                      </div>
+
+                      {/* Character Type */}
+                      <div className="space-y-2">
+                        <Label htmlFor={typeSelectId}>Type</Label>
+                        <Select
+                          value={character.type || ""}
+                          onValueChange={(value) => {
+                            if (value) {
+                              updateCharacter(index, "type", value as Character["type"])
+                            }
+                          }}
+                          id={typeSelectId}
+                        >
+                          <SelectTrigger className="w-full bg-background" id={typeSelectId}>
+                            <SelectValue placeholder="Select character type..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Main Character">Main Character</SelectItem>
+                            <SelectItem value="Protagonist">Protagonist</SelectItem>
+                            <SelectItem value="Supporting">Supporting</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Character Image - Full Width */}
+                      <div className="space-y-2">
+                        <Label>Character Image</Label>
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                          {characterPreviewImages[index] || (character.image && formData.username) ? (
+                            <Image
+                              src={characterPreviewImages[index] || getCharacterImageUrl(character.image, formData.username) || ""}
+                              alt={character.name || "Character"}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <User className="h-12 w-12 text-muted-foreground" />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleCharacterImageClick(index)}
+                            disabled={uploadingCharacterIndex === index}
+                            className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
+                            aria-label="Upload character image"
+                          >
+                            {uploadingCharacterIndex === index ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                            ) : (
+                              <Camera className="h-8 w-8 text-white" />
+                            )}
+                          </button>
+                        </div>
+                        <input
+                          ref={(el) => {
+                            characterFileInputRefs.current[index] = el
+                          }}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleCharacterImageChange(e, index)}
+                          className="hidden"
+                          disabled={uploadingCharacterIndex === index}
+                        />
+                      </div>
+
+                      {/* Character Description */}
+                      <div className="space-y-2">
+                        <Label htmlFor={`character-description-${index}`}>Description</Label>
+                        <Textarea
+                          id={`character-description-${index}`}
+                          placeholder="Describe this character..."
+                          value={character.description}
+                          onChange={(e) => updateCharacter(index, "description", e.target.value)}
+                          rows={3}
+                          className="bg-background resize-none"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addCharacter}
+                className="w-full bg-transparent"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Character
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Setting</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Add locations to your project setting with optional images and descriptions
+            </p>
+
+            <div className="space-y-4">
+              {(formData.setting?.locations || []).map((location, index) => (
+                <Card key={index} className="bg-muted/30 border-border">
+                  <CardContent className="p-4 space-y-4">
+                    <div className="flex items-start justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeLocation(index)}
+                        className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Location Name */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`location-name-${index}`}>Name</Label>
+                      <Input
+                        id={`location-name-${index}`}
+                        placeholder="Enter location name"
+                        value={location.name}
+                        onChange={(e) => updateLocation(index, "name", e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+
+                    {/* Location Image - Optional, Full Width */}
+                    <div className="space-y-2">
+                      <Label>Location Image (Optional)</Label>
+                      <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                        {locationPreviewImages[index] || (location.image && formData.username) ? (
+                          <Image
+                            src={locationPreviewImages[index] || getLocationImageUrl(location.image, formData.username) || ""}
+                            alt={location.name || "Location"}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <MapPin className="h-12 w-12 text-muted-foreground" />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleLocationImageClick(index)}
+                          disabled={uploadingLocationIndex === index}
+                          className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
+                          aria-label="Upload location image"
+                        >
+                          {uploadingLocationIndex === index ? (
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                          ) : (
+                            <Camera className="h-8 w-8 text-white" />
+                          )}
+                        </button>
+                      </div>
+                      <input
+                        ref={(el) => {
+                          locationFileInputRefs.current[index] = el
+                        }}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleLocationImageChange(e, index)}
+                        className="hidden"
+                        disabled={uploadingLocationIndex === index}
+                      />
+                    </div>
+
+                    {/* Location Description */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`location-description-${index}`}>Description</Label>
+                      <Textarea
+                        id={`location-description-${index}`}
+                        placeholder="Describe this location..."
+                        value={location.description}
+                        onChange={(e) => updateLocation(index, "description", e.target.value)}
+                        rows={3}
+                        className="bg-background resize-none"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLocation}
+                className="w-full bg-transparent"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Location
+              </Button>
             </div>
           </div>
 

@@ -102,7 +102,7 @@ export function DashboardView({ initialProjects }: DashboardViewProps) {
               <div className="flex gap-2 mt-4">
                 {project.username && project.slug && (
                   <Link href={`/${project.username}/${project.slug}`} className="flex-1">
-                    <Button size="sm" variant="outline" className="w-full">
+                    <Button size="sm" variant="outline">
                       <Eye className="h-4 w-4 mr-2" />
                       View
                     </Button>
@@ -111,6 +111,7 @@ export function DashboardView({ initialProjects }: DashboardViewProps) {
                 <Link href={`/dashboard/projects/${project.id}/edit`}>
                   <Button size="sm" variant="outline">
                     <Edit className="h-4 w-4" />
+                    Edit
                   </Button>
                 </Link>
                 <Button
