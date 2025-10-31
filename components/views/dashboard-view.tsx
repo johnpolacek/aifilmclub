@@ -202,6 +202,13 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                             <h4 className="font-semibold text-sm">{post.title}</h4>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                              {project.username && project.slug && (
+                                <Link href={`/${project.username}/${project.slug}/posts/${post.id}`}>
+                                  <Button size="sm" variant="outline" className="text-xs gap-2 px-2! py-1! h-auto">
+                                    <Eye className="h-3 w-3" /> View
+                                  </Button>
+                                </Link>
+                              )}
                               <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
                                 <Button size="sm" variant="outline" className="text-xs gap-2 px-2! py-1! h-auto">
                                   <Edit className="h-3 w-3" /> Edit

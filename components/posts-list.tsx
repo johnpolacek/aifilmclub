@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { X, Edit, Plus, Calendar } from "lucide-react"
+import { X, Edit, Plus, Calendar, Eye } from "lucide-react"
 import type { Post } from "@/lib/posts"
 import { PostForm } from "./post-form"
 import ReactMarkdown from "react-markdown"
@@ -13,6 +13,8 @@ import rehypeRaw from "rehype-raw"
 import { PostExport } from "./post-export"
 import Image from "next/image"
 import { getPostImageUrl } from "@/lib/utils"
+import Link from "next/link"
+import { useUser } from "@clerk/nextjs"
 
 interface PostsListProps {
   projectId: string
@@ -20,9 +22,35 @@ interface PostsListProps {
   canEdit?: boolean
   projectTitle?: string
   authorName?: string
+  username?: string
+  projectSlug?: string
 }
 
-export function PostsList({ projectId, initialPosts, canEdit = false, projectTitle, authorName }: PostsListProps) {
+export function PostsList({ projectId, initialPosts, canEdit = false, projectTitle, authorName, username, projectSlug }: PostsListProps) {
+  const { user, isLoaded } = useUser()
+  const [isOwner, setIsOwner] = useState(false)
+  
+  // Check if current user is the owner when username is provided
+  useEffect(() => {
+    if (!username || !isLoaded) {
+      setIsOwner(false)
+      return
+    }
+    
+    if (!user) {
+      setIsOwner(false)
+      return
+    }
+    
+    // Get current username using the same logic as getCurrentUsername()
+    const currentUsername = user.username || user.emailAddresses[0]?.emailAddress.split("@")[0] || user.id
+    
+    // Check if current user is the owner
+    setIsOwner(currentUsername === username)
+  }, [user, isLoaded, username])
+  
+  // Use canEdit prop if provided, otherwise check ownership
+  const canEditPosts = canEdit || isOwner
   const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [showForm, setShowForm] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | undefined>(undefined)
@@ -98,7 +126,7 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
 
   return (
     <div className="space-y-6">
-      {canEdit && (
+      {canEditPosts && (
         <div>
           {!showForm ? (
             <Button onClick={() => setShowForm(true)}>
@@ -118,13 +146,13 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
 
       {posts.length === 0 ? (
         <div className="p-8 text-center">
-          <p className="text-muted-foreground">No posts yet. {canEdit && "Add your first post above!"}</p>
+          <p className="text-muted-foreground">No posts yet. {canEditPosts && "Add your first post above!"}</p>
         </div>
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (
             <Card key={post.id} className="bg-muted/30 border-border">
-              <CardContent className="p-6">
+              <CardContent className="px-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-xl font-bold mb-2">{post.title}</h3>
@@ -136,30 +164,46 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
                       )}
                     </div>
                   </div>
-                  {canEdit && (
-                    <div className="flex gap-2">
+                  <div className="flex gap-2 mr-2">
+                    {username && projectSlug && (
+                      <Link href={`/${username}/${projectSlug}/posts/${post.id}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                        >
+                          <Eye className="h-4 w-4" /> View
+                        </Button>
+                      </Link>
+                    )}
+                  {canEditPosts && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleEdit(post)}
+                        className="gap-2"
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-4 w-4" /> Edit
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(post.id, post.title)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                    )}
                     </div>
-                  )}
                   <PostExport 
                     post={post} 
                     projectTitle={projectTitle}
                     authorName={authorName}
                   />
+                  {
+                    canEditPosts && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDelete(post.id, post.title)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-2"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )
+                  }
                 </div>
                 {post.image && post.username && (
                   <div className="mb-4 rounded-md overflow-hidden border border-border">
@@ -172,7 +216,7 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
                     />
                   </div>
                 )}
-                <div className="prose prose-sm max-w-none dark:prose-invert [&_.video-container]:relative [&_.video-container]:pb-[56.25%] [&_.video-container]:h-0 [&_.video-container]:overflow-hidden [&_.video-container]:my-4 [&_.video-container_iframe]:absolute [&_.video-container_iframe]:top-0 [&_.video-container_iframe]:left-0 [&_.video-container_iframe]:w-full [&_.video-container_iframe]:h-full">
+                <div className="prose prose-sm max-w-none dark:prose-invert [&_p]:my-4 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_.video-container]:relative [&_.video-container]:pb-[56.25%] [&_.video-container]:h-0 [&_.video-container]:overflow-hidden [&_.video-container]:my-4 [&_.video-container_iframe]:absolute [&_.video-container_iframe]:top-0 [&_.video-container_iframe]:left-0 [&_.video-container_iframe]:w-full [&_.video-container_iframe]:h-full">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                     {renderVideoEmbeds(post.content)}
                   </ReactMarkdown>

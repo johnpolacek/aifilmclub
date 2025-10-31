@@ -60,6 +60,8 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
               projectId={projectId} 
               initialPosts={posts}
               canEdit={true}
+              username={projectData.username}
+              projectSlug={projectData.slug}
             />
           </div>
         </div>

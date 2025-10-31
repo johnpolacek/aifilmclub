@@ -9,6 +9,7 @@ import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/li
 import { getPostsForProject } from "@/lib/posts"
 import { PostsList } from "@/components/posts-list"
 import { notFound } from "next/navigation"
+import { EditProjectButton } from "@/components/views/edit-project-button"
 
 export default async function ProjectPage({
   params,
@@ -24,7 +25,8 @@ export default async function ProjectPage({
     notFound()
   }
 
-  const { project, id } = projectData
+  // TypeScript assertion: projectData is non-null after the check above
+  const { project, id } = projectData as NonNullable<typeof projectData>
 
   // Get creator profile
   const creatorProfile = await getUserProfile(username)
@@ -65,14 +67,17 @@ export default async function ProjectPage({
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
       <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-        {/* Back Button */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-primary mb-6 hover:opacity-80 transition-opacity"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="text-sm font-semibold">Back to Dashboard</span>
-        </Link>
+        {/* Back Button and Edit Button */}
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-primary hover:opacity-80 transition-opacity"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-semibold">Back to Dashboard</span>
+          </Link>
+          <EditProjectButton projectId={id} ownerUsername={username} />
+        </div>
 
         {/* Hero Image */}
         <div className="relative h-[400px] rounded-lg overflow-hidden mb-8">
@@ -88,7 +93,7 @@ export default async function ProjectPage({
           ) : (
             <ImagePlaceholder className="h-full rounded-lg" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <div className="flex items-center gap-3 mb-4">
               <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
@@ -258,7 +263,9 @@ export default async function ProjectPage({
                 initialPosts={posts}
                 canEdit={false}
                 projectTitle={project.title}
-                authorName={creatorProfile.name}
+                authorName={creatorProfile?.name || username}
+                username={username}
+                projectSlug={projectSlug}
               />
             </div>
           )}
@@ -271,7 +278,7 @@ export default async function ProjectPage({
                 <div className="space-y-6">
                   {projectDisplay.updates.map((update, index) => (
                     <div key={index} className="flex gap-4">
-                      <div className="flex-shrink-0 w-2 bg-primary/20 rounded-full" />
+                      <div className="shrink-0 w-2 bg-primary/20 rounded-full" />
                       <div className="flex-1">
                         <p className="text-sm text-muted-foreground mb-2">{update.date}</p>
                         <p className="leading-relaxed">{update.content}</p>

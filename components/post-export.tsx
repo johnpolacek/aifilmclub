@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Download, Copy, FileText, Code } from "lucide-react"
+import { Copy, FileText, Code, SquareArrowOutUpRight } from "lucide-react"
 import { toast } from "sonner"
 import type { Post } from "@/lib/posts"
 
@@ -148,7 +148,7 @@ export function PostExport({ post, projectTitle, authorName }: PostExportProps) 
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" disabled={isExporting}>
-          <Download className="h-4 w-4 mr-2" />
+          <SquareArrowOutUpRight className="h-4 w-4 mr-2" />
           Export
         </Button>
       </DropdownMenuTrigger>
