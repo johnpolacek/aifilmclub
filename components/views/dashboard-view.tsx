@@ -20,7 +20,6 @@ import Image from "next/image"
 import type { ProjectFormData } from "@/components/project-form"
 import type { Post } from "@/lib/posts"
 import { getThumbnailUrl } from "@/lib/utils"
-import { PostForm } from "@/components/post-form"
 
 type DashboardView = ProjectFormData & {
   id: string
@@ -34,9 +33,7 @@ interface DashboardViewProps {
 
 export function DashboardView({ initialProjects, initialPostsByProject = {} }: DashboardViewProps) {
   const [projects, setProjects] = useState<DashboardView[]>(initialProjects)
-  const [postsByProject, setPostsByProject] = useState<Record<string, Post[]>>(initialPostsByProject)
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({})
-  const [showPostForm, setShowPostForm] = useState<Record<string, boolean>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<Record<string, boolean>>({})
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null)
 
@@ -81,24 +78,8 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
     setProjectToDelete(null)
   }
 
-  const handlePostSuccess = async (projectId: string) => {
-    // Refresh posts for this project
-    try {
-      const { getProjectPosts } = await import("@/lib/actions/posts")
-      const updatedPosts = await getProjectPosts(projectId)
-      setPostsByProject({ ...postsByProject, [projectId]: updatedPosts })
-      setShowPostForm({ ...showPostForm, [projectId]: false })
-    } catch (error) {
-      console.error("Error refreshing posts:", error)
-    }
-  }
-
   const toggleExpanded = (projectId: string) => {
     setExpandedProjects({ ...expandedProjects, [projectId]: !expandedProjects[projectId] })
-  }
-
-  const togglePostForm = (projectId: string) => {
-    setShowPostForm({ ...showPostForm, [projectId]: !showPostForm[projectId] })
   }
 
   const formatDate = (dateString: string) => {
@@ -113,9 +94,8 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
   return (
     <div className="grid gap-6">
       {projects.map((project) => {
-        const posts = postsByProject[project.id] || []
+        const posts = initialPostsByProject[project.id] || []
         const isExpanded = expandedProjects[project.id]
-        const showForm = showPostForm[project.id]
         const recentPosts = posts.slice(0, 2)
 
         return (
@@ -192,7 +172,14 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                             <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
                               <div className="flex items-start justify-between mb-1">
                                 <h4 className="font-semibold text-sm">{post.title}</h4>
-                                <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                                  <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                  </Link>
+                                </div>
                               </div>
                               <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
                             </div>
@@ -206,7 +193,14 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                             <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
                               <div className="flex items-start justify-between mb-1">
                                 <h4 className="font-semibold text-sm">{post.title}</h4>
-                                <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                                  <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                  </Link>
+                                </div>
                               </div>
                               <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
                             </div>
@@ -215,28 +209,15 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                       )}
                     </div>
                   )}
-
-                  {/* Add Post Form */}
-                  {showForm && (
-                    <div className="mb-4">
-                      <PostForm
-                        projectId={project.id}
-                        onSuccess={() => handlePostSuccess(project.id)}
-                        onCancel={() => togglePostForm(project.id)}
-                      />
-                    </div>
-                  )}
                 </div>
                 <div className="flex justify-between gap-2 mt-4">
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={showForm ? "outline" : "default"}
-                      onClick={() => togglePostForm(project.id)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      {showForm ? 'Cancel' : 'Add Post'}
-                    </Button>
+                    <Link href={`/dashboard/projects/${project.id}/posts/new`}>
+                      <Button size="sm" variant="default">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        New Post
+                      </Button>
+                    </Link>
                     {project.username && project.slug && (
                       <Link href={`/${project.username}/${project.slug}`}>
                         <Button size="sm" variant="outline">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,9 +16,11 @@ interface PostFormProps {
   initialPost?: Post
   onSuccess?: () => void
   onCancel?: () => void
+  redirectPath?: string
 }
 
-export function PostForm({ projectId, initialPost, onSuccess, onCancel }: PostFormProps) {
+export function PostForm({ projectId, initialPost, onSuccess, onCancel, redirectPath }: PostFormProps) {
+  const router = useRouter()
   const [title, setTitle] = useState(initialPost?.title || "")
   const [content, setContent] = useState(initialPost?.content || "")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -48,9 +51,11 @@ export function PostForm({ projectId, initialPost, onSuccess, onCancel }: PostFo
       setTitle("")
       setContent("")
 
-      // Call success callback
+      // Call success callback or redirect
       if (onSuccess) {
         onSuccess()
+      } else if (redirectPath) {
+        router.push(redirectPath)
       }
     } catch (error) {
       console.error("Error saving post:", error)
