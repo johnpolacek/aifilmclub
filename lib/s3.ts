@@ -175,3 +175,29 @@ export async function uploadImageFromBuffer(
   }
 }
 
+/**
+ * Upload a file to S3 (non-image files like PDFs, documents, etc.)
+ */
+export async function uploadFileFromBuffer(
+  buffer: Buffer,
+  key: string,
+  contentType: string
+): Promise<string> {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    })
+
+    await s3Client.send(command)
+
+    // Return the public URL (using CloudFront if configured)
+    return getPublicUrlServer(key)
+  } catch (error) {
+    console.error("Error uploading file:", error)
+    throw error
+  }
+}
+

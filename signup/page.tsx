@@ -1,26 +1,12 @@
-import { SignUp } from "@clerk/nextjs"
+import type { Metadata } from "next"
+import { SignUpView } from "@/components/views/signup-view"
+
+export const metadata: Metadata = {
+  title: "Sign Up - AI Film Camp",
+  description: "Create your AI Film Camp account",
+}
 
 export default function SignUpPage() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 py-20">
-
-        {/* Clerk SignUp Component */}
-        <div className="flex justify-center">
-          <SignUp 
-            appearance={{
-              elements: {
-                rootBox: "w-full",
-                card: "shadow-none border border-border bg-card",
-              }
-            }}
-            routing="path"
-            path="/signup"
-            signInUrl="/signin"
-          />
-        </div>
-      </div>
-    </div>
-  )
+  return <SignUpView />
 }
 

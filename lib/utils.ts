@@ -82,3 +82,15 @@ export function getPostImageUrl(image: string | undefined, username: string | un
   const key = `posts/${username}/${image}`
   return getPublicUrl(key)
 }
+
+/**
+ * Get the project file URL
+ * Project file should be just the filename (e.g., "1761873619145-screenplay.pdf")
+ * Username is required to construct the full path
+ */
+export function getProjectFileUrl(filename: string | undefined, username: string | undefined): string {
+  if (!filename || !username) return ''
+  
+  const key = `projects/${username}/files/${filename}`
+  return getPublicUrl(key)
+}

@@ -127,6 +127,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  .prose {
+    font-size: .875rem;
+  }
 }
 
 @layer utilities {

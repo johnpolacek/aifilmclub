@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Film, Upload, LinkIcon, Plus, X, Wrench, Check, Camera, User, MapPin } from "lucide-react"
+import { Film, Upload, LinkIcon, Plus, X, Wrench, Check, Camera, User, MapPin, File } from "lucide-react"
 import Image from "next/image"
 import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils"
 
@@ -47,6 +47,13 @@ export interface Location {
   image?: string // filename only
 }
 
+export interface ProjectFile {
+  name: string // Display name (e.g., "Screenplay.pdf")
+  filename: string // S3 filename (e.g., "1761873619145-screenplay.pdf")
+  size?: number // File size in bytes
+  type?: string // MIME type (e.g., "application/pdf")
+}
+
 export interface ProjectFormData {
   title: string
   description: string
@@ -60,6 +67,7 @@ export interface ProjectFormData {
   thumbnail?: string
   links: ProjectLinks
   tools: CategorizedTool[]
+  screenplay?: ProjectFile
   username?: string
   slug?: string
 }
@@ -211,6 +219,7 @@ export default function ProjectForm({
     thumbnail: initialData?.thumbnail,
     links: migrateLinks(initialData?.links),
     tools: migrateTools(initialData?.tools),
+    screenplay: initialData?.screenplay || (initialData as any)?.files?.[0], // Migrate old files array to screenplay
     username: initialData?.username,
     slug: initialData?.slug,
   })
@@ -242,6 +251,8 @@ export default function ProjectForm({
     const tools = migrateTools(initialData?.tools)
     return tools.some(tool => tool.category === 'video')
   })
+  const projectFileInputRef = useRef<HTMLInputElement>(null)
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -640,6 +651,73 @@ export default function ProjectForm({
         locationFileInputRefs.current[index]!.value = ""
       }
     }
+  }
+
+  const handleProjectFileClick = () => {
+    projectFileInputRef.current?.click()
+  }
+
+  const handleProjectFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type (PDF only)
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please upload a PDF file")
+      return
+    }
+
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024 // 50MB
+    if (file.size > maxSize) {
+      toast.error("File must be less than 50MB")
+      return
+    }
+
+    setIsUploadingFile(true)
+    const loadingToast = toast.loading("Uploading screenplay...")
+
+    try {
+      const { uploadProjectFile } = await import("@/lib/actions/projects")
+      const uploadFormData = new FormData()
+      uploadFormData.append("file", file)
+
+      const result = await uploadProjectFile(uploadFormData)
+
+      if (result.success && result.filename) {
+        setFormData({
+          ...formData,
+          screenplay: {
+            name: result.originalName,
+            filename: result.filename,
+            size: result.size,
+            type: result.type,
+          },
+        })
+        toast.success("Screenplay uploaded successfully!", {
+          id: loadingToast,
+        })
+      }
+    } catch (error) {
+      console.error("Error uploading screenplay:", JSON.stringify(error, null, 2))
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload screenplay"
+      toast.error(errorMessage, {
+        id: loadingToast,
+      })
+    } finally {
+      setIsUploadingFile(false)
+      // Reset file input
+      if (projectFileInputRef.current) {
+        projectFileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const removeScreenplay = () => {
+    setFormData({
+      ...formData,
+      screenplay: undefined,
+    })
   }
 
   // Compress image client-side before upload
@@ -1378,6 +1456,64 @@ export default function ProjectForm({
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div className="flex items-center gap-2">
+              <File className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Screenplay / Script</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Upload a PDF of your screenplay or script
+            </p>
+
+            <div className="space-y-3">
+              {/* Display uploaded screenplay */}
+              {formData.screenplay && (
+                <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-md">
+                  <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{formData.screenplay.name}</p>
+                    {formData.screenplay.size && (
+                      <p className="text-xs text-muted-foreground">
+                        {(formData.screenplay.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeScreenplay}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Upload button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleProjectFileClick}
+                disabled={isUploadingFile}
+                className="w-full bg-transparent"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {isUploadingFile ? "Uploading..." : formData.screenplay ? "Replace Screenplay" : "Upload Screenplay"}
+              </Button>
+              
+              {/* Hidden file input */}
+              <input
+                ref={projectFileInputRef}
+                type="file"
+                onChange={handleProjectFileChange}
+                className="hidden"
+                disabled={isUploadingFile}
+                accept=".pdf,application/pdf"
+              />
             </div>
           </div>
 

@@ -287,6 +287,61 @@ export async function uploadLocationImage(formData: FormData) {
 }
 
 /**
+ * Upload a project file (PDF, documents, etc.)
+ */
+export async function uploadProjectFile(formData: FormData) {
+  const { userId } = await auth()
+
+  if (!userId) {
+    throw new Error("You must be signed in to upload a file")
+  }
+
+  try {
+    const username = await getCurrentUsername()
+    const file = formData.get("file") as File
+
+    if (!file) {
+      throw new Error("No file provided")
+    }
+
+    // Validate file size (max 50MB for project files)
+    const maxSize = 50 * 1024 * 1024 // 50MB
+    if (file.size > maxSize) {
+      throw new Error("File must be less than 50MB")
+    }
+
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // Generate a unique filename (timestamp + original filename sanitized)
+    const timestamp = Date.now()
+    const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_") // Sanitize filename
+    const filename = `${timestamp}-${originalName}`
+    const key = `projects/${username}/files/${filename}`
+
+    // Upload file to S3
+    const { uploadFileFromBuffer } = await import("@/lib/s3")
+    await uploadFileFromBuffer(buffer, key, file.type || "application/octet-stream")
+
+    // Revalidate pages that show project data
+    revalidatePath("/dashboard")
+
+    // Return filename and metadata
+    return { 
+      success: true, 
+      filename: filename,
+      originalName: file.name,
+      size: file.size,
+      type: file.type || "application/octet-stream"
+    }
+  } catch (error) {
+    console.error("Error uploading project file:", error)
+    throw new Error(error instanceof Error ? error.message : "Failed to upload file")
+  }
+}
+
+/**
  * Submit project form (create or update based on context)
  */
 export async function submitProjectForm(

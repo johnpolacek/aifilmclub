@@ -1,10 +1,23 @@
+import type { Metadata } from "next"
 import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-import { PostForm } from "@/components/post-form"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 import { getPost } from "@/lib/posts"
 import { getProject } from "@/lib/projects"
+import { EditPostView } from "@/components/views/edit-post-view"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string; postId: string }>
+}): Promise<Metadata> {
+  const { id: projectId, postId } = await params
+  const post = await getPost(postId)
+  
+  return {
+    title: post ? `Edit ${post.title} - AI Film Camp` : "Edit Post - AI Film Camp",
+    description: "Edit your project post",
+  }
+}
 
 export default async function EditPostPage({ 
   params 
@@ -33,24 +46,6 @@ export default async function EditPostPage({
     redirect("/dashboard")
   }
 
-  return (
-    <div className="min-h-screen bg-background pt-24 pb-16">
-      <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-primary mb-6 hover:opacity-80 transition-opacity"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="text-sm font-semibold">Back to Dashboard</span>
-        </Link>
-
-        <PostForm 
-          projectId={projectId}
-          initialPost={post}
-          redirectPath="/dashboard"
-        />
-      </div>
-    </div>
-  )
+  return <EditPostView projectId={projectId} post={post} />
 }
 

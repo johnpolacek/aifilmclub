@@ -5,7 +5,7 @@ import Link from "next/link"
 
 export function Hero() {
   return (
-    <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
+    <section className="relative py-24 overflow-hidden">
       {/* Background gradient effect */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-primary/20 via-background to-background" />
 
@@ -20,8 +20,8 @@ export function Hero() {
             Create. Share. Collaborate.
           </h1>
 
-          <p className="text-xl lg:text-2xl text-muted-foreground mb-10 text-pretty max-w-4xl mx-auto leading-relaxed">
-            A platform-agnostic, curated online community for AI film creators. Share your work-in-progress, get feedback, and
+          <p className="text-xl lg:text-2xl opacity-80 text-shadow-black mb-10 text-pretty max-w-4xl mx-auto leading-relaxed">
+            A tool-agnostic, curated online community and platform for AI film creators. Share your creations and
             discover groundbreaking projects.
           </p>
 
@@ -42,7 +42,7 @@ export function Hero() {
                 </Button>
               </SignUpButton>
             </SignedOut>
-            <Button size="lg" variant="outline" className="text-base px-8 bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!" asChild>
+            <Button size="lg" variant="outline" className="text-base px-8 bg-black/50! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-black/70!" asChild>
               <Link href="/projects">
                 Explore Projects
               </Link>
