@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Calendar, Clock, Wrench, ExternalLink, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, ExternalLink, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { getProjectByUsernameAndSlug } from "@/lib/projects"
@@ -107,135 +107,93 @@ export default async function ProjectPage({
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Description */}
-            <Card className="bg-card border-border">
-              <CardContent className="p-6">
-                <h2 className="text-2xl font-bold mb-4">About This Project</h2>
-                <p className="text-muted-foreground leading-relaxed">{projectDisplay.description}</p>
-              </CardContent>
-            </Card>
+        <div className="space-y-8">
+          {/* Combined Project Info */}
+          <div className="px-8 pb-5">
+            {/* Creator */}
+            <div className="mb-5">
+              <Link href={`/${projectDisplay.creator.username}`} className="inline-flex items-center gap-2 group">
+                {projectDisplay.creator.avatar ? (
+                  <Image
+                    src={projectDisplay.creator.avatar}
+                    alt={projectDisplay.creator.name}
+                    width={24}
+                    height={24}
+                    className="h-6 w-6 rounded-full object-cover"
+                  />
+                ) : (
+                  <ImagePlaceholder variant="avatar" className="h-6 w-6" />
+                )}
+                <span className="text-sm font-medium group-hover:text-primary transition-colors">{projectDisplay.creator.name}</span>
+              </Link>
+            </div>
+
+            {/* About This Project */}
+            <div className="mb-5 pb-5 border-b border-border">
+              <h2 className="text-xl font-bold mb-3">About This Project</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">{projectDisplay.description}</p>
+            </div>
 
             {/* Tools */}
             {projectDisplay.tools.length > 0 && (
-              <Card className="bg-card border-border">
-                <CardContent className="p-6">
-                  <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                    <Wrench className="h-5 w-5 text-primary" />
-                    Tools & AI Models
-                  </h2>
-                  <div className="space-y-4">
-                    {(['video', 'image', 'sound', 'other'] as const).map(category => {
-                      const toolsInCategory = projectDisplay.tools.filter(tool => tool.category === category)
-                      if (toolsInCategory.length === 0) return null
-                      
-                      const categoryLabels = {
-                        video: "Video",
-                        image: "Image",
-                        sound: "Sound",
-                        other: "Other"
-                      }
-                      
-                      return (
-                        <div key={category}>
-                          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-                            {categoryLabels[category]}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {toolsInCategory.map((tool, index) => (
-                              <span
-                                key={index}
-                                className="px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium"
-                              >
-                                {tool.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Project Updates */}
-            {projectDisplay.updates.length > 0 && (
-              <Card className="bg-card border-border">
-                <CardContent className="p-6">
-                  <h2 className="text-2xl font-bold mb-6">Project Updates</h2>
-                  <div className="space-y-6">
-                    {projectDisplay.updates.map((update, index) => (
-                      <div key={index} className="flex gap-4">
-                        <div className="flex-shrink-0 w-2 bg-primary/20 rounded-full" />
-                        <div className="flex-1">
-                          <p className="text-sm text-muted-foreground mb-2">{update.date}</p>
-                          <p className="leading-relaxed">{update.content}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <div>
+                <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Tools</h2>
+                <div className="flex flex-wrap gap-2">
+                  {projectDisplay.tools.map((tool, index) => (
+                    <span
+                      key={index}
+                      className="px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
+                    >
+                      {tool.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Creator Info */}
+          {/* Project Updates */}
+          {projectDisplay.updates.length > 0 && (
             <Card className="bg-card border-border">
               <CardContent className="p-6">
-                <h3 className="text-lg font-bold mb-4">Creator</h3>
-                <Link href={`/${projectDisplay.creator.username}`} className="block group">
-                  <div className="flex items-center gap-3 mb-3">
-                    {projectDisplay.creator.avatar ? (
-                      <Image
-                        src={projectDisplay.creator.avatar}
-                        alt={projectDisplay.creator.name}
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 rounded-full object-cover border-2 border-primary/20"
-                      />
-                    ) : (
-                      <ImagePlaceholder variant="avatar" className="h-12 w-12" />
-                    )}
-                    <div>
-                      <p className="font-semibold group-hover:text-primary transition-colors">{projectDisplay.creator.name}</p>
-                      <p className="text-sm text-muted-foreground">@{projectDisplay.creator.username}</p>
+                <h2 className="text-2xl font-bold mb-6">Project Updates</h2>
+                <div className="space-y-6">
+                  {projectDisplay.updates.map((update, index) => (
+                    <div key={index} className="flex gap-4">
+                      <div className="flex-shrink-0 w-2 bg-primary/20 rounded-full" />
+                      <div className="flex-1">
+                        <p className="text-sm text-muted-foreground mb-2">{update.date}</p>
+                        <p className="leading-relaxed">{update.content}</p>
+                      </div>
                     </div>
-                  </div>
-                  {projectDisplay.creator.bio && (
-                    <p className="text-sm text-muted-foreground leading-relaxed">{projectDisplay.creator.bio}</p>
-                  )}
-                </Link>
+                  ))}
+                </div>
               </CardContent>
             </Card>
+          )}
 
-            {/* Links */}
-            {projectDisplay.links.links.length > 0 && (
-              <Card className="bg-card border-border">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-bold mb-4">Links</h3>
-                  <div className="space-y-2">
-                    {projectDisplay.links.links.map((link, index) => (
-                      <a
-                        key={index}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/50 transition-colors group"
-                      >
-                        <span className="text-sm font-medium">{link.label}</span>
-                        <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </a>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {/* Links */}
+          {projectDisplay.links.links.length > 0 && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-bold mb-4">Links</h3>
+                <div className="space-y-2">
+                  {projectDisplay.links.links.map((link, index) => (
+                    <a
+                      key={index}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/50 transition-colors group"
+                    >
+                      <span className="text-sm font-medium">{link.label}</span>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </a>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

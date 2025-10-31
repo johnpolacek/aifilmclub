@@ -2,7 +2,6 @@ import { auth } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
 import { Film, User, Edit, Plus, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { getProjectsByUsername } from "@/lib/projects"
@@ -52,17 +51,13 @@ export default async function DashboardPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex justify-center">
-                    {userProfile.avatar ? (
-                      <Image
-                        src={userProfile.avatar}
-                        width={96}
-                        height={96}
-                        alt={userProfile.name}
-                        className="h-24 w-24 rounded-full object-cover border-2 border-primary/20"
-                      />
-                    ) : (
-                      <ImagePlaceholder variant="avatar" className="h-24 w-24" />
-                    )}
+                    <Image
+                      src={userProfile.avatar || "/placeholder.svg"}
+                      width={96}
+                      height={96}
+                      alt={userProfile.name}
+                      className="h-24 w-24 rounded-full object-cover border-2 border-primary/20"
+                    />
                   </div>
                   <div className="text-center">
                     <h3 className="text-xl font-bold">{userProfile.name}</h3>

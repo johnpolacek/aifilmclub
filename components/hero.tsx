@@ -20,8 +20,8 @@ export function Hero() {
             Create. Share. Collaborate.
           </h1>
 
-          <p className="text-xl lg:text-2xl text-muted-foreground mb-10 text-pretty max-w-2xl mx-auto leading-relaxed">
-            Join the premier online community for AI film creators. Share your work-in-progress, get feedback, and
+          <p className="text-xl lg:text-2xl text-muted-foreground mb-10 text-pretty max-w-4xl mx-auto leading-relaxed">
+            A platform-agnostic, curated online community for AI film creators. Share your work-in-progress, get feedback, and
             discover groundbreaking projects.
           </p>
 
