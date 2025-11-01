@@ -163,7 +163,7 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
               <div className="relative group">
                 {previewImage || profile.avatar ? (
                   <Image
-                    src={previewImage || profile.avatar}
+                    src={(previewImage || profile.avatar) as string}
                     alt={profile.name}
                     width={128}
                     height={128}

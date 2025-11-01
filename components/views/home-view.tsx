@@ -48,7 +48,7 @@ export function HomeView() {
       <div className="fixed top-[25vh] left-0 right-0 bottom-0 -z-10">
         <div className="relative w-full h-full">
           <Image
-            src="/aifilmcamp4.png"
+            src="/aifilmcamp.png"
             alt=""
             fill
             className="object-cover"
