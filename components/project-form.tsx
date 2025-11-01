@@ -780,7 +780,7 @@ export default function ProjectForm({
               }
               
               // Create a new File with compressed data
-              const compressedFile = new File([blob], file.name, {
+              const compressedFile = new (globalThis.File)([blob], file.name, {
                 type: 'image/jpeg',
                 lastModified: Date.now(),
               })
