@@ -17,6 +17,7 @@ export async function generateRSSFeed(
   
   // Get project description
   const description = project.description || `Posts from ${project.title}`
+  const escapedDescription = escapeXml(description)
   
   // Generate items for each post
   const items = await Promise.all(
@@ -29,7 +30,6 @@ export async function generateRSSFeed(
       
       // Escape HTML entities
       const escapedTitle = escapeXml(post.title)
-      const escapedDescription = escapeXml(description)
       const escapedContent = escapeXml(htmlContent.substring(0, 500)) // Limit description length
       
       return `    <item>

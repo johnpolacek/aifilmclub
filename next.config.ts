@@ -25,9 +25,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverActions: {
-    bodySizeLimit: '5mb', // Increased limit, but we'll compress client-side first
-  },
 };
 
 export default nextConfig;

@@ -7,10 +7,9 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 function Select({
-  id,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Root> & { id?: string }) {
-  return <SelectPrimitive.Root data-slot="select" id={id} {...props} />
+}: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  return <SelectPrimitive.Root data-slot="select" {...props} />
 }
 
 function SelectGroup({

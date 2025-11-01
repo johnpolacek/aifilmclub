@@ -1,75 +1,87 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useRef, useId } from "react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { useState, useRef, useId } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Film, Upload, LinkIcon, Plus, X, Wrench, Check, Camera, User, MapPin, File } from "lucide-react"
-import Image from "next/image"
-import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils"
+} from "@/components/ui/select";
+import {
+  Film,
+  Upload,
+  LinkIcon,
+  Plus,
+  X,
+  Wrench,
+  Check,
+  Camera,
+  User,
+  MapPin,
+  File,
+} from "lucide-react";
+import Image from "next/image";
+import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils";
 
 // Types
 export interface ProjectLinks {
-  links: Array<{ label: string; url: string }>
+  links: Array<{ label: string; url: string }>;
 }
 
-export type ToolCategory = "image" | "video" | "sound" | "other"
+export type ToolCategory = "image" | "video" | "sound" | "other";
 
 export interface CategorizedTool {
-  name: string
-  category: ToolCategory
+  name: string;
+  category: ToolCategory;
 }
 
 export interface Character {
-  name: string
-  description: string
-  type?: "Main Character" | "Protagonist" | "Supporting"
-  image?: string // filename only, similar to thumbnail
+  name: string;
+  description: string;
+  type?: "Main Character" | "Protagonist" | "Supporting";
+  image?: string; // filename only, similar to thumbnail
 }
 
 export interface Location {
-  name: string
-  description: string
-  image?: string // filename only
+  name: string;
+  description: string;
+  image?: string; // filename only
 }
 
 export interface ProjectFile {
-  name: string // Display name (e.g., "Screenplay.pdf")
-  filename: string // S3 filename (e.g., "1761873619145-screenplay.pdf")
-  size?: number // File size in bytes
-  type?: string // MIME type (e.g., "application/pdf")
+  name: string; // Display name (e.g., "Screenplay.pdf")
+  filename: string; // S3 filename (e.g., "1761873619145-screenplay.pdf")
+  size?: number; // File size in bytes
+  type?: string; // MIME type (e.g., "application/pdf")
 }
 
 export interface ProjectFormData {
-  title: string
-  description: string
-  status: "In Progress" | "Completed"
-  duration: string
-  genre: string
-  characters?: Character[]
+  title: string;
+  description: string;
+  status: "In Progress" | "Completed";
+  duration: string;
+  genre: string;
+  characters?: Character[];
   setting?: {
-    locations?: Location[]
-  }
-  thumbnail?: string
-  links: ProjectLinks
-  tools: CategorizedTool[]
-  screenplay?: ProjectFile
-  username?: string
-  slug?: string
+    locations?: Location[];
+  };
+  thumbnail?: string;
+  links: ProjectLinks;
+  tools: CategorizedTool[];
+  screenplay?: ProjectFile;
+  username?: string;
+  slug?: string;
 }
 
 // Common tools by category
@@ -82,7 +94,7 @@ const COMMON_TOOLS = {
     "Ideogram",
     "Flux",
     "Adobe Firefly",
-    "Other"
+    "Other",
   ],
   video: [
     "Runway Gen-3",
@@ -92,17 +104,9 @@ const COMMON_TOOLS = {
     "Luma Dream Machine",
     "HaiperAI",
     "Sora",
-    "Other"
+    "Other",
   ],
-  sound: [
-    "ElevenLabs",
-    "Suno",
-    "Udio",
-    "Mubert",
-    "AIVA",
-    "Soundraw",
-    "Other"
-  ],
+  sound: ["ElevenLabs", "Suno", "Udio", "Mubert", "AIVA", "Soundraw", "Other"],
   other: [
     "Adobe After Effects",
     "Adobe Premiere Pro",
@@ -118,96 +122,107 @@ const COMMON_TOOLS = {
     "Pro Tools",
     "Logic Pro",
     "Ableton Live",
-    "Other"
-  ]
-} as const
+    "Other",
+  ],
+} as const;
 
 // Helper function to infer label from URL
 function inferLabelFromUrl(url: string): string {
-  const urlLower = url.toLowerCase()
-  
-  if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) return 'YouTube'
-  if (urlLower.includes('vimeo.com')) return 'Vimeo'
-  if (urlLower.includes('x.com') || urlLower.includes('twitter.com')) return 'X (Twitter)'
-  if (urlLower.includes('instagram.com')) return 'Instagram'
-  if (urlLower.includes('tiktok.com')) return 'TikTok'
-  if (urlLower.includes('facebook.com')) return 'Facebook'
-  if (urlLower.includes('linkedin.com')) return 'LinkedIn'
-  
+  const urlLower = url.toLowerCase();
+
+  if (urlLower.includes("youtube.com") || urlLower.includes("youtu.be")) return "YouTube";
+  if (urlLower.includes("vimeo.com")) return "Vimeo";
+  if (urlLower.includes("x.com") || urlLower.includes("twitter.com")) return "X (Twitter)";
+  if (urlLower.includes("instagram.com")) return "Instagram";
+  if (urlLower.includes("tiktok.com")) return "TikTok";
+  if (urlLower.includes("facebook.com")) return "Facebook";
+  if (urlLower.includes("linkedin.com")) return "LinkedIn";
+
   // For other URLs, try to extract domain name
   try {
-    const domain = new URL(url).hostname.replace('www.', '')
-    return domain.charAt(0).toUpperCase() + domain.slice(1)
+    const domain = new URL(url).hostname.replace("www.", "");
+    return domain.charAt(0).toUpperCase() + domain.slice(1);
   } catch {
-    return 'Website'
+    return "Website";
   }
 }
 
 interface ProjectFormProps {
-  initialData?: Partial<ProjectFormData>
-  projectId?: string
-  isEditing?: boolean
-  redirectPath?: string
+  initialData?: Partial<ProjectFormData>;
+  projectId?: string;
+  isEditing?: boolean;
+  redirectPath?: string;
 }
 
-export default function ProjectForm({ 
-  initialData, 
-  projectId, 
+export default function ProjectForm({
+  initialData,
+  projectId,
   isEditing = false,
-  redirectPath = "/dashboard"
+  redirectPath = "/dashboard",
 }: ProjectFormProps) {
-  const router = useRouter()
-  const genreSelectId = useId()
-  const durationSelectId = useId()
-  const characterTypeSelectIds = useRef<Record<number, string>>({})
-  
+  const router = useRouter();
+  const genreSelectId = useId();
+  const durationSelectId = useId();
+  const characterTypeSelectIds = useRef<Record<number, string>>({});
+
   // Helper to migrate old link format to new format
   const migrateLinks = (links?: ProjectLinks | Record<string, unknown>): ProjectLinks => {
-    if (!links) return { links: [] }
-    
+    if (!links) return { links: [] };
+
     // If already in new format
-    if ('links' in links && Array.isArray(links.links)) return links as ProjectLinks
-    
+    if ("links" in links && Array.isArray(links.links)) return links as ProjectLinks;
+
     // Migrate from old format
-    const migratedLinks: Array<{ label: string; url: string }> = []
-    const oldLinks = links as Record<string, unknown>
-    
-    if (typeof oldLinks.youtube === 'string') migratedLinks.push({ label: 'YouTube', url: oldLinks.youtube })
-    if (typeof oldLinks.vimeo === 'string') migratedLinks.push({ label: 'Vimeo', url: oldLinks.vimeo })
-    if (typeof oldLinks.x === 'string') migratedLinks.push({ label: 'X (Twitter)', url: oldLinks.x })
-    if (typeof oldLinks.instagram === 'string') migratedLinks.push({ label: 'Instagram', url: oldLinks.instagram })
-    if (typeof oldLinks.website === 'string') migratedLinks.push({ label: 'Website', url: oldLinks.website })
-    if (Array.isArray(oldLinks.custom)) migratedLinks.push(...oldLinks.custom as Array<{ label: string; url: string }>)
-    
-    return { links: migratedLinks }
-  }
+    const migratedLinks: Array<{ label: string; url: string }> = [];
+    const oldLinks = links as Record<string, unknown>;
+
+    if (typeof oldLinks.youtube === "string")
+      migratedLinks.push({ label: "YouTube", url: oldLinks.youtube });
+    if (typeof oldLinks.vimeo === "string")
+      migratedLinks.push({ label: "Vimeo", url: oldLinks.vimeo });
+    if (typeof oldLinks.x === "string")
+      migratedLinks.push({ label: "X (Twitter)", url: oldLinks.x });
+    if (typeof oldLinks.instagram === "string")
+      migratedLinks.push({ label: "Instagram", url: oldLinks.instagram });
+    if (typeof oldLinks.website === "string")
+      migratedLinks.push({ label: "Website", url: oldLinks.website });
+    if (Array.isArray(oldLinks.custom))
+      migratedLinks.push(...(oldLinks.custom as Array<{ label: string; url: string }>));
+
+    return { links: migratedLinks };
+  };
 
   // Helper to migrate old tools format (string[]) to new format (CategorizedTool[])
   const migrateTools = (tools?: CategorizedTool[] | string[]): CategorizedTool[] => {
-    if (!tools || tools.length === 0) return []
-    
+    if (!tools || tools.length === 0) return [];
+
     // If already in new format (has category property)
-    if (typeof tools[0] === 'object' && 'category' in tools[0]) {
-      return tools as CategorizedTool[]
+    if (typeof tools[0] === "object" && "category" in tools[0]) {
+      return tools as CategorizedTool[];
     }
-    
+
     // Migrate from old format (string array) - categorize as "other"
-    return (tools as string[]).map(name => ({ name, category: 'other' as ToolCategory }))
-  }
+    return (tools as string[]).map((name) => ({ name, category: "other" as ToolCategory }));
+  };
 
   // Helper to migrate old characters format (string) to new format (Character[])
   const migrateCharacters = (characters?: Character[] | string): Character[] => {
-    if (!characters) return []
-    
+    if (!characters) return [];
+
     // If already in new format (array of Character objects)
-    if (Array.isArray(characters) && characters.length > 0 && typeof characters[0] === 'object' && 'name' in characters[0]) {
-      return characters as Character[]
+    if (
+      Array.isArray(characters) &&
+      characters.length > 0 &&
+      typeof characters[0] === "object" &&
+      "name" in characters[0]
+    ) {
+      return characters as Character[];
     }
-    
+
     // Migrate from old format (string) - return empty array (can't convert string to structured data)
-    return []
-  }
-  
+    return [];
+  };
+
   const [formData, setFormData] = useState<ProjectFormData>({
     title: initialData?.title || "",
     description: initialData?.description || "",
@@ -222,51 +237,51 @@ export default function ProjectForm({
     screenplay: initialData?.screenplay || (initialData as any)?.files?.[0], // Migrate old files array to screenplay
     username: initialData?.username,
     slug: initialData?.slug,
-  })
+  });
 
-  const [newLinkUrl, setNewLinkUrl] = useState("")
+  const [newLinkUrl, setNewLinkUrl] = useState("");
   const [selectedTool, setSelectedTool] = useState<Record<ToolCategory, string>>({
     video: "",
     image: "",
     sound: "",
-    other: ""
-  })
+    other: "",
+  });
   const [customToolInput, setCustomToolInput] = useState<Record<ToolCategory, string>>({
     video: "",
     image: "",
     sound: "",
-    other: ""
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const characterFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
-  const locationFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
-  const [uploadingCharacterIndex, setUploadingCharacterIndex] = useState<number | null>(null)
-  const [uploadingLocationIndex, setUploadingLocationIndex] = useState<number | null>(null)
-  const [characterPreviewImages, setCharacterPreviewImages] = useState<Record<number, string>>({})
-  const [locationPreviewImages, setLocationPreviewImages] = useState<Record<number, string>>({})
+    other: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const characterFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const locationFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [uploadingCharacterIndex, setUploadingCharacterIndex] = useState<number | null>(null);
+  const [uploadingLocationIndex, setUploadingLocationIndex] = useState<number | null>(null);
+  const [characterPreviewImages, setCharacterPreviewImages] = useState<Record<number, string>>({});
+  const [locationPreviewImages, setLocationPreviewImages] = useState<Record<number, string>>({});
   const [hasVideoTool, setHasVideoTool] = useState(() => {
-    const tools = migrateTools(initialData?.tools)
-    return tools.some(tool => tool.category === 'video')
-  })
-  const projectFileInputRef = useRef<HTMLInputElement>(null)
-  const [isUploadingFile, setIsUploadingFile] = useState(false)
+    const tools = migrateTools(initialData?.tools);
+    return tools.some((tool) => tool.category === "video");
+  });
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+    e.preventDefault();
+
     // Validate that at least one video tool is added
     if (!hasVideoTool) {
-      toast.error("Please add at least one Video Generation tool")
-      return
+      toast.error("Please add at least one Video Generation tool");
+      return;
     }
-    
-    setIsSubmitting(true)
+
+    setIsSubmitting(true);
 
     // Show loading toast
-    const loadingToast = toast.loading(isEditing ? "Updating project..." : "Creating project...")
+    const loadingToast = toast.loading(isEditing ? "Updating project..." : "Creating project...");
 
     try {
       // Generate slug for new projects
@@ -274,68 +289,69 @@ export default function ProjectForm({
         const slug = formData.title
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "")
-        formData.slug = slug
+          .replace(/(^-|-$)/g, "");
+        formData.slug = slug;
       }
 
       // Import and call the Server Action
-      const { submitProjectForm } = await import("@/lib/actions/projects")
-      
+      const { submitProjectForm } = await import("@/lib/actions/projects");
+
       // This will handle both create and update, plus authentication
-      const result = await submitProjectForm(formData, projectId, redirectPath)
+      const result = await submitProjectForm(formData, projectId, redirectPath);
 
       // If there's an error result (not a redirect), show it
       if (result && !result.success) {
-        throw new Error(result.error || "Failed to save project")
+        throw new Error(result.error || "Failed to save project");
       }
 
       // Dismiss loading and show success
       toast.success(isEditing ? "Project updated successfully!" : "Project created successfully!", {
         id: loadingToast,
-      })
+      });
 
       // If we get here and didn't redirect, navigate manually
       // (though submitProjectForm should redirect on success)
-      router.push(redirectPath)
+      router.push(redirectPath);
     } catch (error) {
       // Check if this is a Next.js redirect error - if so, let it propagate
-      if (error && typeof error === 'object' && 'digest' in error) {
-        const errorDigest = String(error.digest || '')
-        if (errorDigest.includes('NEXT_REDIRECT')) {
+      if (error && typeof error === "object" && "digest" in error) {
+        const errorDigest = String(error.digest || "");
+        if (errorDigest.includes("NEXT_REDIRECT")) {
           // Re-throw redirect errors to let Next.js handle them
           // Don't reset submitting state here as redirect will navigate away
-          throw error
+          throw error;
         }
       }
 
-      console.error("Error submitting project:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to save project. Please try again."
-      
+      console.error("Error submitting project:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save project. Please try again.";
+
       // Dismiss loading and show error
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleCancel = () => {
-    router.push(redirectPath)
-  }
+    router.push(redirectPath);
+  };
 
   const addLink = () => {
     if (newLinkUrl.trim()) {
-      const label = inferLabelFromUrl(newLinkUrl)
+      const label = inferLabelFromUrl(newLinkUrl);
       setFormData({
         ...formData,
         links: {
           links: [...formData.links.links, { label, url: newLinkUrl.trim() }],
         },
-      })
-      setNewLinkUrl("")
+      });
+      setNewLinkUrl("");
     }
-  }
+  };
 
   const removeLink = (index: number) => {
     setFormData({
@@ -343,346 +359,365 @@ export default function ProjectForm({
       links: {
         links: formData.links.links.filter((_, i) => i !== index),
       },
-    })
-  }
+    });
+  };
 
   const addTool = (category: ToolCategory, toolName?: string) => {
-    const nameToAdd = toolName || (selectedTool[category] === "Other" ? customToolInput[category].trim() : selectedTool[category])
-    
+    const nameToAdd =
+      toolName ||
+      (selectedTool[category] === "Other"
+        ? customToolInput[category].trim()
+        : selectedTool[category]);
+
     if (nameToAdd) {
-      const newTools = [...formData.tools, { name: nameToAdd, category }]
+      const newTools = [...formData.tools, { name: nameToAdd, category }];
       setFormData({
         ...formData,
         tools: newTools,
-      })
-      
+      });
+
       // Reset the inputs
       if (selectedTool[category] === "Other") {
-        setCustomToolInput({ ...customToolInput, [category]: "" })
+        setCustomToolInput({ ...customToolInput, [category]: "" });
       }
-      setSelectedTool({ ...selectedTool, [category]: "" })
-      
+      setSelectedTool({ ...selectedTool, [category]: "" });
+
       // Update video tool tracker
-      if (category === 'video') {
-        setHasVideoTool(true)
+      if (category === "video") {
+        setHasVideoTool(true);
       }
     }
-  }
+  };
 
   const removeTool = (index: number) => {
-    const toolToRemove = formData.tools[index]
-    const newTools = formData.tools.filter((_, i) => i !== index)
-    
+    const toolToRemove = formData.tools[index];
+    const newTools = formData.tools.filter((_, i) => i !== index);
+
     setFormData({
       ...formData,
       tools: newTools,
-    })
-    
+    });
+
     // Update video tool tracker if we removed a video tool
-    if (toolToRemove.category === 'video') {
-      setHasVideoTool(newTools.some(tool => tool.category === 'video'))
+    if (toolToRemove.category === "video") {
+      setHasVideoTool(newTools.some((tool) => tool.category === "video"));
     }
-  }
+  };
 
   const getToolsByCategory = (category: ToolCategory) => {
-    return formData.tools.filter(tool => tool.category === category)
-  }
+    return formData.tools.filter((tool) => tool.category === category);
+  };
 
   const getCategoryLabel = (category: ToolCategory): string => {
     const labels = {
       image: "Image Generation",
       video: "Video Generation",
       sound: "Sound Generation",
-      other: "Multimedia"
-    }
-    return labels[category]
-  }
+      other: "Multimedia",
+    };
+    return labels[category];
+  };
 
   const addCharacter = () => {
-    const newIndex = (formData.characters || []).length
+    const newIndex = (formData.characters || []).length;
     // Generate ID for the new character's type select
-    characterTypeSelectIds.current[newIndex] = `character-type-${newIndex}-${Date.now()}`
-    const newCharacters = [...(formData.characters || []), { name: "", description: "", type: undefined as Character["type"] }]
+    characterTypeSelectIds.current[newIndex] = `character-type-${newIndex}-${Date.now()}`;
+    const newCharacters = [
+      ...(formData.characters || []),
+      { name: "", description: "", type: undefined as Character["type"] },
+    ];
     setFormData({
       ...formData,
       characters: newCharacters,
-    })
-  }
+    });
+  };
 
   const removeCharacter = (index: number) => {
-    const newCharacters = formData.characters?.filter((_, i) => i !== index) || []
+    const newCharacters = formData.characters?.filter((_, i) => i !== index) || [];
     setFormData({
       ...formData,
       characters: newCharacters,
-    })
+    });
     // Clean up preview image and ref
-    const newPreviews = { ...characterPreviewImages }
-    delete newPreviews[index]
-    setCharacterPreviewImages(newPreviews)
-  }
+    const newPreviews = { ...characterPreviewImages };
+    delete newPreviews[index];
+    setCharacterPreviewImages(newPreviews);
+  };
 
-  const updateCharacter = (index: number, field: keyof Character, value: string | Character["type"]) => {
-    const newCharacters = [...(formData.characters || [])]
-    newCharacters[index] = { ...newCharacters[index], [field]: value }
+  const updateCharacter = (
+    index: number,
+    field: keyof Character,
+    value: string | Character["type"]
+  ) => {
+    const newCharacters = [...(formData.characters || [])];
+    newCharacters[index] = { ...newCharacters[index], [field]: value };
     setFormData({
       ...formData,
       characters: newCharacters,
-    })
-  }
+    });
+  };
 
   const handleCharacterImageClick = (index: number) => {
-    characterFileInputRefs.current[index]?.click()
-  }
+    characterFileInputRefs.current[index]?.click();
+  };
 
-  const handleCharacterImageChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleCharacterImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
-      return
+      toast.error("Please select an image file");
+      return;
     }
 
     // Validate raw file size (max 20MB - we'll compress it)
-    const maxRawSize = 20 * 1024 * 1024 // 20MB
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
     if (file.size > maxRawSize) {
-      toast.error("Image must be less than 20MB")
-      return
+      toast.error("Image must be less than 20MB");
+      return;
     }
 
     // Create preview
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onloadend = () => {
       setCharacterPreviewImages({
         ...characterPreviewImages,
         [index]: reader.result as string,
-      })
-    }
-    reader.readAsDataURL(file)
+      });
+    };
+    reader.readAsDataURL(file);
 
     // Compress and upload image
-    setUploadingCharacterIndex(index)
-    const loadingToast = toast.loading("Compressing image...")
+    setUploadingCharacterIndex(index);
+    const loadingToast = toast.loading("Compressing image...");
 
     try {
       // Compress image client-side (16:9 aspect ratio for character images, max 1920x1080, full width display)
-      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
-      
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16 / 9);
+
       // Validate compressed size (max 2MB)
-      const maxCompressedSize = 2 * 1024 * 1024 // 2MB
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
       if (compressedFile.size > maxCompressedSize) {
         toast.error("Compressed image is still too large. Please try a smaller image.", {
           id: loadingToast,
-        })
-        setUploadingCharacterIndex(null)
-        return
+        });
+        setUploadingCharacterIndex(null);
+        return;
       }
 
-      toast.loading("Uploading character image...", { id: loadingToast })
+      toast.loading("Uploading character image...", { id: loadingToast });
 
-      const { uploadCharacterImage } = await import("@/lib/actions/projects")
-      const uploadFormData = new FormData()
-      uploadFormData.append("image", compressedFile)
+      const { uploadCharacterImage } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
 
-      const result = await uploadCharacterImage(uploadFormData)
+      const result = await uploadCharacterImage(uploadFormData);
 
       if (result.success && result.imageFilename) {
-        const newCharacters = [...(formData.characters || [])]
-        newCharacters[index] = { ...newCharacters[index], image: result.imageFilename }
+        const newCharacters = [...(formData.characters || [])];
+        newCharacters[index] = { ...newCharacters[index], image: result.imageFilename };
         setFormData({
           ...formData,
           characters: newCharacters,
-        })
+        });
         setCharacterPreviewImages({
           ...characterPreviewImages,
           [index]: "",
-        })
+        });
         toast.success("Character image uploaded successfully!", {
           id: loadingToast,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error uploading character image:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload character image"
+      console.error("Error uploading character image:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload character image";
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
       setCharacterPreviewImages({
         ...characterPreviewImages,
         [index]: "",
-      })
+      });
     } finally {
-      setUploadingCharacterIndex(null)
+      setUploadingCharacterIndex(null);
       // Reset file input
       if (characterFileInputRefs.current[index]) {
-        characterFileInputRefs.current[index]!.value = ""
+        characterFileInputRefs.current[index]!.value = "";
       }
     }
-  }
+  };
 
   const addLocation = () => {
-    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }]
+    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }];
     setFormData({
       ...formData,
       setting: {
         ...formData.setting,
         locations: newLocations,
       },
-    })
-  }
+    });
+  };
 
   const removeLocation = (index: number) => {
-    const newLocations = (formData.setting?.locations || []).filter((_, i) => i !== index)
+    const newLocations = (formData.setting?.locations || []).filter((_, i) => i !== index);
     setFormData({
       ...formData,
       setting: {
         ...formData.setting,
         locations: newLocations,
       },
-    })
+    });
     // Clean up preview image and ref
-    const newPreviews = { ...locationPreviewImages }
-    delete newPreviews[index]
-    setLocationPreviewImages(newPreviews)
-  }
+    const newPreviews = { ...locationPreviewImages };
+    delete newPreviews[index];
+    setLocationPreviewImages(newPreviews);
+  };
 
   const updateLocation = (index: number, field: keyof Location, value: string) => {
-    const newLocations = [...(formData.setting?.locations || [])]
-    newLocations[index] = { ...newLocations[index], [field]: value }
+    const newLocations = [...(formData.setting?.locations || [])];
+    newLocations[index] = { ...newLocations[index], [field]: value };
     setFormData({
       ...formData,
       setting: {
         ...formData.setting,
         locations: newLocations,
       },
-    })
-  }
+    });
+  };
 
   const handleLocationImageClick = (index: number) => {
-    locationFileInputRefs.current[index]?.click()
-  }
+    locationFileInputRefs.current[index]?.click();
+  };
 
-  const handleLocationImageChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleLocationImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
-      return
+      toast.error("Please select an image file");
+      return;
     }
 
     // Validate raw file size (max 20MB - we'll compress it)
-    const maxRawSize = 20 * 1024 * 1024 // 20MB
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
     if (file.size > maxRawSize) {
-      toast.error("Image must be less than 20MB")
-      return
+      toast.error("Image must be less than 20MB");
+      return;
     }
 
     // Create preview
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onloadend = () => {
       setLocationPreviewImages({
         ...locationPreviewImages,
         [index]: reader.result as string,
-      })
-    }
-    reader.readAsDataURL(file)
+      });
+    };
+    reader.readAsDataURL(file);
 
     // Compress and upload image
-    setUploadingLocationIndex(index)
-    const loadingToast = toast.loading("Compressing image...")
+    setUploadingLocationIndex(index);
+    const loadingToast = toast.loading("Compressing image...");
 
     try {
       // Compress image client-side (16:9 aspect ratio for location images, max 1920x1080)
-      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
-      
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16 / 9);
+
       // Validate compressed size (max 2MB)
-      const maxCompressedSize = 2 * 1024 * 1024 // 2MB
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
       if (compressedFile.size > maxCompressedSize) {
         toast.error("Compressed image is still too large. Please try a smaller image.", {
           id: loadingToast,
-        })
-        setUploadingLocationIndex(null)
-        return
+        });
+        setUploadingLocationIndex(null);
+        return;
       }
 
-      toast.loading("Uploading location image...", { id: loadingToast })
+      toast.loading("Uploading location image...", { id: loadingToast });
 
-      const { uploadLocationImage } = await import("@/lib/actions/projects")
-      const uploadFormData = new FormData()
-      uploadFormData.append("image", compressedFile)
+      const { uploadLocationImage } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
 
-      const result = await uploadLocationImage(uploadFormData)
+      const result = await uploadLocationImage(uploadFormData);
 
       if (result.success && result.imageFilename) {
-        const newLocations = [...(formData.setting?.locations || [])]
-        newLocations[index] = { ...newLocations[index], image: result.imageFilename }
+        const newLocations = [...(formData.setting?.locations || [])];
+        newLocations[index] = { ...newLocations[index], image: result.imageFilename };
         setFormData({
           ...formData,
           setting: {
             ...formData.setting,
             locations: newLocations,
           },
-        })
+        });
         setLocationPreviewImages({
           ...locationPreviewImages,
           [index]: "",
-        })
+        });
         toast.success("Location image uploaded successfully!", {
           id: loadingToast,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error uploading location image:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload location image"
+      console.error("Error uploading location image:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload location image";
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
       setLocationPreviewImages({
         ...locationPreviewImages,
         [index]: "",
-      })
+      });
     } finally {
-      setUploadingLocationIndex(null)
+      setUploadingLocationIndex(null);
       // Reset file input
       if (locationFileInputRefs.current[index]) {
-        locationFileInputRefs.current[index]!.value = ""
+        locationFileInputRefs.current[index]!.value = "";
       }
     }
-  }
+  };
 
   const handleProjectFileClick = () => {
-    projectFileInputRef.current?.click()
-  }
+    projectFileInputRef.current?.click();
+  };
 
   const handleProjectFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type (PDF only)
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Please upload a PDF file")
-      return
+      toast.error("Please upload a PDF file");
+      return;
     }
 
     // Validate file size (max 50MB)
-    const maxSize = 50 * 1024 * 1024 // 50MB
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      toast.error("File must be less than 50MB")
-      return
+      toast.error("File must be less than 50MB");
+      return;
     }
 
-    setIsUploadingFile(true)
-    const loadingToast = toast.loading("Uploading screenplay...")
+    setIsUploadingFile(true);
+    const loadingToast = toast.loading("Uploading screenplay...");
 
     try {
-      const { uploadProjectFile } = await import("@/lib/actions/projects")
-      const uploadFormData = new FormData()
-      uploadFormData.append("file", file)
+      const { uploadProjectFile } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
 
-      const result = await uploadProjectFile(uploadFormData)
+      const result = await uploadProjectFile(uploadFormData);
 
       if (result.success && result.filename) {
         setFormData({
@@ -693,191 +728,197 @@ export default function ProjectForm({
             size: result.size,
             type: result.type,
           },
-        })
+        });
         toast.success("Screenplay uploaded successfully!", {
           id: loadingToast,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error uploading screenplay:", JSON.stringify(error, null, 2))
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload screenplay"
+      console.error("Error uploading screenplay:", JSON.stringify(error, null, 2));
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload screenplay";
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
     } finally {
-      setIsUploadingFile(false)
+      setIsUploadingFile(false);
       // Reset file input
       if (projectFileInputRef.current) {
-        projectFileInputRef.current.value = ""
+        projectFileInputRef.current.value = "";
       }
     }
-  }
+  };
 
   const removeScreenplay = () => {
     setFormData({
       ...formData,
       screenplay: undefined,
-    })
-  }
+    });
+  };
 
   // Compress image client-side before upload
-  const compressImage = (file: File, maxWidth: number = 1920, maxHeight: number = 1080, quality: number = 0.85, targetAspect?: number): Promise<File> => {
+  const compressImage = (
+    file: File,
+    maxWidth: number = 1920,
+    maxHeight: number = 1080,
+    quality: number = 0.85,
+    targetAspect?: number
+  ): Promise<File> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = (e) => {
-        const img = document.createElement('img')
+        const img = document.createElement("img");
         img.onload = () => {
           // Calculate new dimensions maintaining aspect ratio
-          let width = img.width
-          let height = img.height
-          
+          let width = img.width;
+          let height = img.height;
+
           // Resize if needed
           if (width > maxWidth || height > maxHeight) {
-            const aspectRatio = width / height
+            const aspectRatio = width / height;
             if (width > height) {
-              width = Math.min(width, maxWidth)
-              height = width / aspectRatio
+              width = Math.min(width, maxWidth);
+              height = width / aspectRatio;
             } else {
-              height = Math.min(height, maxHeight)
-              width = height * aspectRatio
+              height = Math.min(height, maxHeight);
+              width = height * aspectRatio;
             }
           }
-          
+
           // Crop to target aspect ratio if provided
           if (targetAspect !== undefined) {
-            const currentAspect = width / height
-            
+            const currentAspect = width / height;
+
             if (Math.abs(currentAspect - targetAspect) > 0.01) {
               if (currentAspect > targetAspect) {
                 // Image is wider, crop horizontally
-                width = height * targetAspect
+                width = height * targetAspect;
               } else {
                 // Image is taller, crop vertically
-                height = width / targetAspect
+                height = width / targetAspect;
               }
             }
           }
-          
+
           // Create canvas and draw resized image
-          const canvas = document.createElement('canvas')
-          canvas.width = width
-          canvas.height = height
-          const ctx = canvas.getContext('2d')
-          
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+
           if (!ctx) {
-            reject(new Error('Could not get canvas context'))
-            return
+            reject(new Error("Could not get canvas context"));
+            return;
           }
-          
-          ctx.drawImage(img, 0, 0, width, height)
-          
+
+          ctx.drawImage(img, 0, 0, width, height);
+
           // Convert to blob and then to File
           canvas.toBlob(
             (blob) => {
               if (!blob) {
-                reject(new Error('Failed to compress image'))
-                return
+                reject(new Error("Failed to compress image"));
+                return;
               }
-              
+
               // Create a new File with compressed data
-              const compressedFile = new (globalThis.File)([blob], file.name, {
-                type: 'image/jpeg',
+              const compressedFile = new globalThis.File([blob], file.name, {
+                type: "image/jpeg",
                 lastModified: Date.now(),
-              })
-              
-              resolve(compressedFile)
+              });
+
+              resolve(compressedFile);
             },
-            'image/jpeg',
+            "image/jpeg",
             quality
-          )
-        }
-        img.onerror = () => reject(new Error('Failed to load image'))
-        img.src = e.target?.result as string
-      }
-      reader.onerror = () => reject(new Error('Failed to read file'))
-      reader.readAsDataURL(file)
-    })
-  }
+          );
+        };
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleImageClick = () => {
-    fileInputRef.current?.click()
-  }
+    fileInputRef.current?.click();
+  };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
-      return
+      toast.error("Please select an image file");
+      return;
     }
 
     // Validate raw file size (max 20MB - we'll compress it)
-    const maxRawSize = 20 * 1024 * 1024 // 20MB
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
     if (file.size > maxRawSize) {
-      toast.error("Image must be less than 20MB")
-      return
+      toast.error("Image must be less than 20MB");
+      return;
     }
 
     // Create preview
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onloadend = () => {
-      setPreviewImage(reader.result as string)
-    }
-    reader.readAsDataURL(file)
+      setPreviewImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
 
     // Compress and upload image
-    setIsUploadingImage(true)
-    const loadingToast = toast.loading("Compressing image...")
+    setIsUploadingImage(true);
+    const loadingToast = toast.loading("Compressing image...");
 
     try {
       // Compress image client-side (16:9 aspect ratio, max 1920x1080)
-      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16/9)
-      
+      const compressedFile = await compressImage(file, 1920, 1080, 0.85, 16 / 9);
+
       // Validate compressed size (max 2MB - should be well under this after compression)
-      const maxCompressedSize = 2 * 1024 * 1024 // 2MB
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
       if (compressedFile.size > maxCompressedSize) {
         toast.error("Compressed image is still too large. Please try a smaller image.", {
           id: loadingToast,
-        })
-        setIsUploadingImage(false)
-        return
+        });
+        setIsUploadingImage(false);
+        return;
       }
 
-      toast.loading("Uploading thumbnail...", { id: loadingToast })
+      toast.loading("Uploading thumbnail...", { id: loadingToast });
 
-      const { uploadProjectThumbnail } = await import("@/lib/actions/projects")
-      const uploadFormData = new FormData()
-      uploadFormData.append("image", compressedFile)
+      const { uploadProjectThumbnail } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
 
-      const result = await uploadProjectThumbnail(uploadFormData)
+      const result = await uploadProjectThumbnail(uploadFormData);
 
       if (result.success && result.thumbnailFilename) {
         setFormData({
           ...formData,
           thumbnail: result.thumbnailFilename,
-        })
-        setPreviewImage(null)
+        });
+        setPreviewImage(null);
         toast.success("Thumbnail uploaded successfully!", {
           id: loadingToast,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error uploading thumbnail:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload thumbnail"
+      console.error("Error uploading thumbnail:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload thumbnail";
       toast.error(errorMessage, {
         id: loadingToast,
-      })
-      setPreviewImage(null)
+      });
+      setPreviewImage(null);
     } finally {
-      setIsUploadingImage(false)
+      setIsUploadingImage(false);
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+        fileInputRef.current.value = "";
       }
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit}>
@@ -888,7 +929,9 @@ export default function ProjectForm({
             {isEditing ? "Edit Project" : "Create New Project"}
           </CardTitle>
           <CardDescription>
-            {isEditing ? "Update your project details" : "Add a new AI film project to your portfolio"}
+            {isEditing
+              ? "Update your project details"
+              : "Add a new AI film project to your portfolio"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -919,27 +962,27 @@ export default function ProjectForm({
 
           <div className="space-y-2">
             <Label htmlFor="status">Project Status *</Label>
-            <ToggleGroup 
-              type="single" 
+            <ToggleGroup
+              type="single"
               value={formData.status}
               onValueChange={(value) => {
                 if (value) {
-                  setFormData({ ...formData, status: value as ProjectFormData["status"] })
+                  setFormData({ ...formData, status: value as ProjectFormData["status"] });
                 }
               }}
               variant="outline"
               spacing={0}
               className="w-full justify-start"
             >
-              <ToggleGroupItem 
-                value="In Progress" 
+              <ToggleGroupItem
+                value="In Progress"
                 className="flex-1 transition-all ease-in-out data-[state=off]:cursor-pointer data-[state=off]:hover:bg-white data-[state=off]:hover:text-black data-[state=on]:bg-foreground data-[state=on]:text-background"
               >
                 {formData.status === "In Progress" && <Check className="h-4 w-4 mr-2" />}
                 In Progress
               </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="Completed" 
+              <ToggleGroupItem
+                value="Completed"
                 className="flex-1 transition-all ease-in-out data-[state=off]:cursor-pointer data-[state=off]:hover:bg-white data-[state=off]:hover:text-black data-[state=on]:bg-foreground data-[state=on]:text-background"
               >
                 {formData.status === "Completed" && <Check className="h-4 w-4 mr-2" />}
@@ -954,7 +997,6 @@ export default function ProjectForm({
               <Select
                 value={formData.genre}
                 onValueChange={(value) => setFormData({ ...formData, genre: value })}
-                id={genreSelectId}
               >
                 <SelectTrigger className="w-full bg-background" id={genreSelectId}>
                   <SelectValue placeholder="Select genre..." />
@@ -981,7 +1023,6 @@ export default function ProjectForm({
               <Select
                 value={formData.duration}
                 onValueChange={(value) => setFormData({ ...formData, duration: value })}
-                id={durationSelectId}
               >
                 <SelectTrigger className="w-full bg-background" id={durationSelectId}>
                   <SelectValue placeholder="Select duration..." />
@@ -1011,9 +1052,7 @@ export default function ProjectForm({
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    
-                  </div>
+                  <div className="w-full h-full flex items-center justify-center"></div>
                 )}
                 {/* Upload overlay */}
                 <button
@@ -1035,24 +1074,28 @@ export default function ProjectForm({
                   )}
                 </button>
               </div>
-              
+
               {/* Upload Button */}
               <div className="flex items-center gap-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={handleImageClick}
                   disabled={isUploadingImage}
                   className="bg-transparent"
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  {isUploadingImage ? "Uploading..." : formData.thumbnail ? "Change Image" : "Upload Image"}
+                  {isUploadingImage
+                    ? "Uploading..."
+                    : formData.thumbnail
+                      ? "Change Image"
+                      : "Upload Image"}
                 </Button>
                 <span className="text-sm text-muted-foreground">
                   {formData.thumbnail ? "Image uploaded" : "No image selected"}
                 </span>
               </div>
-              
+
               {/* Hidden file input */}
               <input
                 ref={fileInputRef}
@@ -1078,9 +1121,9 @@ export default function ProjectForm({
               {(formData.characters || []).map((character, index) => {
                 // Generate ID for this character's type select if not already generated
                 if (!characterTypeSelectIds.current[index]) {
-                  characterTypeSelectIds.current[index] = `character-type-${index}-${Date.now()}`
+                  characterTypeSelectIds.current[index] = `character-type-${index}-${Date.now()}`;
                 }
-                const typeSelectId = characterTypeSelectIds.current[index]!
+                const typeSelectId = characterTypeSelectIds.current[index]!;
                 return (
                   <Card key={index} className="bg-muted/30 border-border">
                     <CardContent className="p-4 space-y-4">
@@ -1115,10 +1158,9 @@ export default function ProjectForm({
                           value={character.type || ""}
                           onValueChange={(value) => {
                             if (value) {
-                              updateCharacter(index, "type", value as Character["type"])
+                              updateCharacter(index, "type", value as Character["type"]);
                             }
                           }}
-                          id={typeSelectId}
                         >
                           <SelectTrigger className="w-full bg-background" id={typeSelectId}>
                             <SelectValue placeholder="Select character type..." />
@@ -1135,9 +1177,14 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label>Character Image</Label>
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                          {characterPreviewImages[index] || (character.image && formData.username) ? (
+                          {characterPreviewImages[index] ||
+                          (character.image && formData.username) ? (
                             <Image
-                              src={characterPreviewImages[index] || getCharacterImageUrl(character.image, formData.username) || ""}
+                              src={
+                                characterPreviewImages[index] ||
+                                getCharacterImageUrl(character.image, formData.username) ||
+                                ""
+                              }
                               alt={character.name || "Character"}
                               fill
                               className="object-cover"
@@ -1164,7 +1211,7 @@ export default function ProjectForm({
                         </div>
                         <input
                           ref={(el) => {
-                            characterFileInputRefs.current[index] = el
+                            characterFileInputRefs.current[index] = el;
                           }}
                           type="file"
                           accept="image/*"
@@ -1188,7 +1235,7 @@ export default function ProjectForm({
                       </div>
                     </CardContent>
                   </Card>
-                )
+                );
               })}
 
               <Button
@@ -1246,7 +1293,11 @@ export default function ProjectForm({
                       <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
                         {locationPreviewImages[index] || (location.image && formData.username) ? (
                           <Image
-                            src={locationPreviewImages[index] || getLocationImageUrl(location.image, formData.username) || ""}
+                            src={
+                              locationPreviewImages[index] ||
+                              getLocationImageUrl(location.image, formData.username) ||
+                              ""
+                            }
                             alt={location.name || "Location"}
                             fill
                             className="object-cover"
@@ -1273,7 +1324,7 @@ export default function ProjectForm({
                       </div>
                       <input
                         ref={(el) => {
-                          locationFileInputRefs.current[index] = el
+                          locationFileInputRefs.current[index] = el;
                         }}
                         type="file"
                         accept="image/*"
@@ -1346,13 +1397,18 @@ export default function ProjectForm({
                   onChange={(e) => setNewLinkUrl(e.target.value)}
                   onKeyPress={(e) => {
                     if (e.key === "Enter") {
-                      e.preventDefault()
-                      addLink()
+                      e.preventDefault();
+                      addLink();
                     }
                   }}
                   className="bg-background"
                 />
-                <Button type="button" variant="outline" onClick={addLink} className="bg-transparent">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addLink}
+                  className="bg-transparent"
+                >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -1364,23 +1420,27 @@ export default function ProjectForm({
               <Wrench className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Tools</h3>
             </div>
-            <p className="text-sm text-muted-foreground">Add the tools you used, organized by category</p>
+            <p className="text-sm text-muted-foreground">
+              Add the tools you used, organized by category
+            </p>
 
             {/* Add tools by category */}
             <div className="space-y-4">
-              {(['video', 'image', 'sound', 'other'] as ToolCategory[]).map(category => {
-                const toolsInCategory = getToolsByCategory(category)
+              {(["video", "image", "sound", "other"] as ToolCategory[]).map((category) => {
+                const toolsInCategory = getToolsByCategory(category);
                 return (
                   <div key={category} className="space-y-2">
                     <Label htmlFor={`tool-${category}`}>
                       {getCategoryLabel(category)}
-                      {category === 'video' && !hasVideoTool && <span className="text-destructive ml-1">*</span>}
+                      {category === "video" && !hasVideoTool && (
+                        <span className="text-destructive ml-1">*</span>
+                      )}
                     </Label>
                     {/* Display added tools for this category */}
                     {toolsInCategory.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {toolsInCategory.map((tool, index) => {
-                          const globalIndex = formData.tools.indexOf(tool)
+                          const globalIndex = formData.tools.indexOf(tool);
                           return (
                             <div
                               key={`${category}-${index}`}
@@ -1395,7 +1455,7 @@ export default function ProjectForm({
                                 <X className="h-3 w-3" />
                               </button>
                             </div>
-                          )
+                          );
                         })}
                       </div>
                     )}
@@ -1403,21 +1463,23 @@ export default function ProjectForm({
                       <Select
                         value={selectedTool[category]}
                         onValueChange={(value) => {
-                          setSelectedTool({ ...selectedTool, [category]: value })
+                          setSelectedTool({ ...selectedTool, [category]: value });
                           if (value !== "Other") {
                             // Auto-add tool when selected (not "Other")
-                            addTool(category, value)
+                            addTool(category, value);
                           } else {
-                            setCustomToolInput({ ...customToolInput, [category]: "" })
+                            setCustomToolInput({ ...customToolInput, [category]: "" });
                           }
                         }}
                         key={`tool-select-${category}`}
                       >
                         <SelectTrigger className="w-full bg-background">
-                          <SelectValue placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`} />
+                          <SelectValue
+                            placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
+                          />
                         </SelectTrigger>
                         <SelectContent>
-                          {COMMON_TOOLS[category].map(tool => (
+                          {COMMON_TOOLS[category].map((tool) => (
                             <SelectItem key={tool} value={tool}>
                               {tool}
                             </SelectItem>
@@ -1429,18 +1491,20 @@ export default function ProjectForm({
                           <Input
                             placeholder="Enter custom tool"
                             value={customToolInput[category]}
-                            onChange={(e) => setCustomToolInput({ ...customToolInput, [category]: e.target.value })}
+                            onChange={(e) =>
+                              setCustomToolInput({ ...customToolInput, [category]: e.target.value })
+                            }
                             onKeyPress={(e) => {
                               if (e.key === "Enter") {
-                                e.preventDefault()
-                                addTool(category)
+                                e.preventDefault();
+                                addTool(category);
                               }
                             }}
                             className="flex-1 bg-background"
                           />
-                          <Button 
-                            type="button" 
-                            variant="outline" 
+                          <Button
+                            type="button"
+                            variant="outline"
                             onClick={() => addTool(category)}
                             disabled={!customToolInput[category].trim()}
                             className="bg-transparent"
@@ -1450,11 +1514,13 @@ export default function ProjectForm({
                         </div>
                       )}
                     </div>
-                    {category === 'video' && !hasVideoTool && (
-                      <p className="text-xs text-destructive pb-2">* At least one Video Generation tool is required</p>
+                    {category === "video" && !hasVideoTool && (
+                      <p className="text-xs text-destructive pb-2">
+                        * At least one Video Generation tool is required
+                      </p>
                     )}
                   </div>
-                )
+                );
               })}
             </div>
           </div>
@@ -1502,9 +1568,13 @@ export default function ProjectForm({
                 className="w-full bg-transparent"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                {isUploadingFile ? "Uploading..." : formData.screenplay ? "Replace Screenplay" : "Upload Screenplay"}
+                {isUploadingFile
+                  ? "Uploading..."
+                  : formData.screenplay
+                    ? "Replace Screenplay"
+                    : "Upload Screenplay"}
               </Button>
-              
+
               {/* Hidden file input */}
               <input
                 ref={projectFileInputRef}
@@ -1518,17 +1588,17 @@ export default function ProjectForm({
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={isSubmitting}
             >
               {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Create Project"}
             </Button>
-            <Button 
-              type="button" 
-              onClick={handleCancel} 
-              variant="outline" 
+            <Button
+              type="button"
+              onClick={handleCancel}
+              variant="outline"
               className="flex-1 bg-transparent"
               disabled={isSubmitting}
             >
@@ -1538,5 +1608,5 @@ export default function ProjectForm({
         </CardContent>
       </Card>
     </form>
-  )
+  );
 }
