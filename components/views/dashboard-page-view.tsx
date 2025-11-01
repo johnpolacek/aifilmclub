@@ -1,20 +1,24 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Film, Edit, Plus, ExternalLink } from "lucide-react"
-import Link from "next/link"
-import { DashboardView } from "@/components/views/dashboard-view"
-import Image from "next/image"
-import type { UserProfile } from "@/lib/profiles"
-import type { ProjectFormData } from "@/components/project-form"
-import type { Post } from "@/lib/posts"
+import { Edit, ExternalLink, Film, Plus } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import type { ProjectFormData } from "@/components/project-form";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardView } from "@/components/views/dashboard-view";
+import type { Post } from "@/lib/posts";
+import type { UserProfile } from "@/lib/profiles";
 
 interface DashboardPageViewProps {
-  userProfile: UserProfile
-  projects: (ProjectFormData & { id: string })[]
-  postsByProject: Record<string, Post[]>
+  userProfile: UserProfile;
+  projects: (ProjectFormData & { id: string })[];
+  postsByProject: Record<string, Post[]>;
 }
 
-export function DashboardPageView({ userProfile, projects, postsByProject }: DashboardPageViewProps) {
+export function DashboardPageView({
+  userProfile,
+  projects,
+  postsByProject,
+}: DashboardPageViewProps) {
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
       <div className="container mx-auto px-4 lg:px-8">
@@ -70,7 +74,11 @@ export function DashboardPageView({ userProfile, projects, postsByProject }: Das
                   </div>
                   <div className="pt-4 border-t">
                     <Link href="/dashboard/profile" className="w-full">
-                      <Button variant="ghost" size="sm" className="w-full justify-center text-muted-foreground hover:text-foreground">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-center text-muted-foreground hover:text-foreground"
+                      >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Profile
                       </Button>
@@ -114,7 +122,10 @@ export function DashboardPageView({ userProfile, projects, postsByProject }: Das
                     </Link>
                   </div>
                 ) : (
-                  <DashboardView initialProjects={projects} initialPostsByProject={postsByProject} />
+                  <DashboardView
+                    initialProjects={projects}
+                    initialPostsByProject={postsByProject}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -122,6 +133,5 @@ export function DashboardPageView({ userProfile, projects, postsByProject }: Das
         </div>
       </div>
     </div>
-  )
+  );
 }
-

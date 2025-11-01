@@ -1,16 +1,16 @@
-import { Image as ImageIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Image as ImageIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ImagePlaceholderProps {
-  className?: string
-  variant?: "default" | "avatar"
-  text?: string
+  className?: string;
+  variant?: "default" | "avatar";
+  text?: string;
 }
 
-export function ImagePlaceholder({ 
-  className, 
+export function ImagePlaceholder({
+  className,
   variant = "default",
-  text = "No image provided" 
+  text = "No image provided",
 }: ImagePlaceholderProps) {
   if (variant === "avatar") {
     return (
@@ -22,7 +22,7 @@ export function ImagePlaceholder({
       >
         <ImageIcon className="h-4 w-4 text-muted-foreground" />
       </div>
-    )
+    );
   }
 
   return (
@@ -37,6 +37,5 @@ export function ImagePlaceholder({
         <span className="text-sm text-muted-foreground">{text}</span>
       </div>
     </div>
-  )
+  );
 }
-

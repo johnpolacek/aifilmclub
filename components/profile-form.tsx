@@ -1,151 +1,151 @@
-"use client"
+"use client";
 
-import { useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { User, Plus, X, LinkIcon, Camera } from "lucide-react"
-import Image from "next/image"
-import type { UserProfile } from "@/lib/profiles"
+import { Camera, LinkIcon, Plus, User, X } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import type { UserProfile } from "@/lib/profiles";
 
 interface ProfileFormProps {
-  initialData: UserProfile
-  isRequired?: boolean
+  initialData: UserProfile;
+  isRequired?: boolean;
 }
 
 export default function ProfileForm({ initialData, isRequired = false }: ProfileFormProps) {
-  const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [profile, setProfile] = useState<UserProfile>(initialData)
-  const [newLink, setNewLink] = useState({ text: "", url: "" })
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profile, setProfile] = useState<UserProfile>(initialData);
+  const [newLink, setNewLink] = useState({ text: "", url: "" });
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+    e.preventDefault();
+
     // Validate about field if required
     if (isRequired && (!profile.about || profile.about.trim() === "")) {
-      toast.error("Please fill out the 'About' field to continue")
-      return
+      toast.error("Please fill out the 'About' field to continue");
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
-    const loadingToast = toast.loading("Updating profile...")
+    const loadingToast = toast.loading("Updating profile...");
 
     try {
-      const { updateUserProfile } = await import("@/lib/actions/profiles")
-      await updateUserProfile(profile)
+      const { updateUserProfile } = await import("@/lib/actions/profiles");
+      await updateUserProfile(profile);
 
       toast.success("Profile updated successfully!", {
         id: loadingToast,
-      })
+      });
 
-      router.push("/dashboard")
+      router.push("/dashboard");
     } catch (error) {
-      console.error("Error updating profile:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to update profile"
-      
+      console.error("Error updating profile:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update profile";
+
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleCancel = () => {
-    router.push("/dashboard")
-  }
+    router.push("/dashboard");
+  };
 
   const addLink = () => {
     if (newLink.text && newLink.url) {
       setProfile({
         ...profile,
         links: [...profile.links, newLink],
-      })
-      setNewLink({ text: "", url: "" })
+      });
+      setNewLink({ text: "", url: "" });
     }
-  }
+  };
 
   const removeLink = (index: number) => {
     setProfile({
       ...profile,
       links: profile.links.filter((_, i) => i !== index),
-    })
-  }
+    });
+  };
 
   const handleImageClick = () => {
-    fileInputRef.current?.click()
-  }
+    fileInputRef.current?.click();
+  };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file")
-      return
+      toast.error("Please select an image file");
+      return;
     }
 
     // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      toast.error("Image must be less than 5MB")
-      return
+      toast.error("Image must be less than 5MB");
+      return;
     }
 
     // Create preview
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onloadend = () => {
-      setPreviewImage(reader.result as string)
-    }
-    reader.readAsDataURL(file)
+      setPreviewImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
 
     // Upload image
-    setIsUploadingImage(true)
-    const loadingToast = toast.loading("Uploading image...")
+    setIsUploadingImage(true);
+    const loadingToast = toast.loading("Uploading image...");
 
     try {
-      const { uploadProfileImage } = await import("@/lib/actions/profiles")
-      const formData = new FormData()
-      formData.append("image", file)
+      const { uploadProfileImage } = await import("@/lib/actions/profiles");
+      const formData = new FormData();
+      formData.append("image", file);
 
-      const result = await uploadProfileImage(formData)
+      const result = await uploadProfileImage(formData);
 
       if (result.success && result.avatarUrl) {
         setProfile({
           ...profile,
           avatar: result.avatarUrl,
-        })
-        setPreviewImage(null)
+        });
+        setPreviewImage(null);
         toast.success("Profile image updated!", {
           id: loadingToast,
-        })
+        });
       }
     } catch (error) {
-      console.error("Error uploading image:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to upload image"
+      console.error("Error uploading image:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload image";
       toast.error(errorMessage, {
         id: loadingToast,
-      })
-      setPreviewImage(null)
+      });
+      setPreviewImage(null);
     } finally {
-      setIsUploadingImage(false)
+      setIsUploadingImage(false);
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+        fileInputRef.current.value = "";
       }
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit}>
@@ -218,12 +218,7 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
 
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={profile.username}
-                  className="bg-muted"
-                  disabled
-                />
+                <Input id="username" value={profile.username} className="bg-muted" disabled />
                 <p className="text-xs text-muted-foreground">
                   Your profile will be available at: /{profile.username}
                 </p>
@@ -305,7 +300,12 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
                     onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
                     className="bg-background"
                   />
-                  <Button type="button" variant="outline" onClick={addLink} className="bg-transparent">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addLink}
+                    className="bg-transparent"
+                  >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -316,7 +316,7 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
             <div className="flex gap-3 pt-4">
               <Button
                 type="submit"
-                className={isRequired ? "w-full" : "flex-1"} 
+                className={isRequired ? "w-full" : "flex-1"}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Saving..." : isRequired ? "Complete Profile" : "Save Changes"}
@@ -337,6 +337,5 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
         </CardContent>
       </Card>
     </form>
-  )
+  );
 }
-

@@ -1,11 +1,11 @@
-import { ArrowLeft, AlertCircle } from "lucide-react"
-import Link from "next/link"
-import ProfileForm from "@/components/profile-form"
-import type { UserProfile } from "@/lib/profiles"
+import { AlertCircle, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import ProfileForm from "@/components/profile-form";
+import type { UserProfile } from "@/lib/profiles";
 
 interface ProfileViewProps {
-  userProfile: UserProfile
-  isRequired: boolean
+  userProfile: UserProfile;
+  isRequired: boolean;
 }
 
 export function ProfileView({ userProfile, isRequired }: ProfileViewProps) {
@@ -27,7 +27,7 @@ export function ProfileView({ userProfile, isRequired }: ProfileViewProps) {
             {isRequired ? "Complete Your Profile" : "Edit Profile"}
           </h1>
           <p className="text-lg text-muted-foreground">
-            {isRequired 
+            {isRequired
               ? "Please tell us about yourself before continuing"
               : "Update your personal information"}
           </p>
@@ -40,8 +40,8 @@ export function ProfileView({ userProfile, isRequired }: ProfileViewProps) {
             <div>
               <h3 className="font-semibold text-primary mb-1">Profile Completion Required</h3>
               <p className="text-sm text-muted-foreground">
-                Before you can access your dashboard, please add a brief description about yourself 
-                in the &quot;About&quot; field below. This helps other filmmakers in the community 
+                Before you can access your dashboard, please add a brief description about yourself
+                in the &quot;About&quot; field below. This helps other filmmakers in the community
                 get to know you!
               </p>
             </div>
@@ -51,6 +51,5 @@ export function ProfileView({ userProfile, isRequired }: ProfileViewProps) {
         <ProfileForm initialData={userProfile} isRequired={isRequired} />
       </div>
     </div>
-  )
+  );
 }
-

@@ -1,16 +1,16 @@
-import { getObjectFromS3, putObjectToS3, listObjectsInS3 } from "./s3"
+import { getObjectFromS3, listObjectsInS3, putObjectToS3 } from "./s3";
 
-const POSTS_PREFIX = "posts/"
+const POSTS_PREFIX = "posts/";
 
 export interface Post {
-  id: string
-  projectId: string
-  title: string
-  content: string
-  image?: string
-  createdAt: string
-  updatedAt?: string
-  username?: string
+  id: string;
+  projectId: string;
+  title: string;
+  content: string;
+  image?: string;
+  createdAt: string;
+  updatedAt?: string;
+  username?: string;
 }
 
 /**
@@ -18,17 +18,17 @@ export interface Post {
  */
 export async function getPost(postId: string): Promise<Post | null> {
   try {
-    const key = `${POSTS_PREFIX}${postId}.json`
-    const data = await getObjectFromS3(key)
-    
+    const key = `${POSTS_PREFIX}${postId}.json`;
+    const data = await getObjectFromS3(key);
+
     if (!data) {
-      return null
+      return null;
     }
 
-    return JSON.parse(data) as Post
+    return JSON.parse(data) as Post;
   } catch (error) {
-    console.error("Error getting post:", error)
-    return null
+    console.error("Error getting post:", error);
+    return null;
   }
 }
 
@@ -37,13 +37,13 @@ export async function getPost(postId: string): Promise<Post | null> {
  */
 export async function savePost(postId: string, postData: Post): Promise<void> {
   try {
-    const key = `${POSTS_PREFIX}${postId}.json`
-    const body = JSON.stringify(postData, null, 2)
-    
-    await putObjectToS3(key, body)
+    const key = `${POSTS_PREFIX}${postId}.json`;
+    const body = JSON.stringify(postData, null, 2);
+
+    await putObjectToS3(key, body);
   } catch (error) {
-    console.error("Error saving post:", error)
-    throw error
+    console.error("Error saving post:", error);
+    throw error;
   }
 }
 
@@ -52,11 +52,11 @@ export async function savePost(postId: string, postData: Post): Promise<void> {
  */
 export async function listPostIdsForProject(projectId: string): Promise<string[]> {
   try {
-    const posts = await getPostsForProject(projectId)
-    return posts.map(post => post.id)
+    const posts = await getPostsForProject(projectId);
+    return posts.map((post) => post.id);
   } catch (error) {
-    console.error("Error listing posts:", error)
-    return []
+    console.error("Error listing posts:", error);
+    return [];
   }
 }
 
@@ -65,45 +65,45 @@ export async function listPostIdsForProject(projectId: string): Promise<string[]
  */
 export async function getPostsForProjects(projectIds: string[]): Promise<Record<string, Post[]>> {
   try {
-    const keys = await listObjectsInS3(POSTS_PREFIX)
-    const postsByProject: Record<string, Post[]> = {}
+    const keys = await listObjectsInS3(POSTS_PREFIX);
+    const postsByProject: Record<string, Post[]> = {};
 
     // Initialize empty arrays for all projects
-    projectIds.forEach(id => {
-      postsByProject[id] = []
-    })
+    projectIds.forEach((id) => {
+      postsByProject[id] = [];
+    });
 
     await Promise.all(
       keys
-        .filter(key => key.endsWith(".json"))
+        .filter((key) => key.endsWith(".json"))
         .map(async (key) => {
           try {
-            const data = await getObjectFromS3(key)
-            if (!data) return
-            const post = JSON.parse(data) as Post
+            const data = await getObjectFromS3(key);
+            if (!data) return;
+            const post = JSON.parse(data) as Post;
             if (projectIds.includes(post.projectId)) {
               if (!postsByProject[post.projectId]) {
-                postsByProject[post.projectId] = []
+                postsByProject[post.projectId] = [];
               }
-              postsByProject[post.projectId].push(post)
+              postsByProject[post.projectId].push(post);
             }
           } catch (error) {
-            console.error(`Error reading post from ${key}:`, error)
+            console.error(`Error reading post from ${key}:`, error);
           }
         })
-    )
+    );
 
     // Sort posts by createdAt descending (newest first) for each project
-    Object.keys(postsByProject).forEach(projectId => {
-      postsByProject[projectId].sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-    })
+    Object.keys(postsByProject).forEach((projectId) => {
+      postsByProject[projectId].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
 
-    return postsByProject
+    return postsByProject;
   } catch (error) {
-    console.error("Error getting posts for projects:", error)
-    return {}
+    console.error("Error getting posts for projects:", error);
+    return {};
   }
 }
 
@@ -112,33 +112,31 @@ export async function getPostsForProjects(projectIds: string[]): Promise<Record<
  */
 export async function getPostsForProject(projectId: string): Promise<Post[]> {
   try {
-    const keys = await listObjectsInS3(POSTS_PREFIX)
-    const posts: Post[] = []
+    const keys = await listObjectsInS3(POSTS_PREFIX);
+    const posts: Post[] = [];
 
     await Promise.all(
       keys
-        .filter(key => key.endsWith(".json"))
+        .filter((key) => key.endsWith(".json"))
         .map(async (key) => {
           try {
-            const data = await getObjectFromS3(key)
-            if (!data) return
-            const post = JSON.parse(data) as Post
+            const data = await getObjectFromS3(key);
+            if (!data) return;
+            const post = JSON.parse(data) as Post;
             if (post.projectId === projectId) {
-              posts.push(post)
+              posts.push(post);
             }
           } catch (error) {
-            console.error(`Error reading post from ${key}:`, error)
+            console.error(`Error reading post from ${key}:`, error);
           }
         })
-    )
+    );
 
     // Sort by createdAt descending (newest first)
-    return posts.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+    return posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
-    console.error("Error getting posts for project:", error)
-    return []
+    console.error("Error getting posts for project:", error);
+    return [];
   }
 }
 
@@ -147,19 +145,18 @@ export async function getPostsForProject(projectId: string): Promise<Post[]> {
  */
 export async function deletePost(postId: string): Promise<void> {
   try {
-    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3")
-    const { s3Client, BUCKET_NAME } = await import("./s3")
-    
-    const key = `${POSTS_PREFIX}${postId}.json`
+    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const { s3Client, BUCKET_NAME } = await import("./s3");
+
+    const key = `${POSTS_PREFIX}${postId}.json`;
     const command = new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
-    })
+    });
 
-    await s3Client.send(command)
+    await s3Client.send(command);
   } catch (error) {
-    console.error("Error deleting post:", error)
-    throw error
+    console.error("Error deleting post:", error);
+    throw error;
   }
 }
-

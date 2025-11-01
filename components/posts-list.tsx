@@ -1,128 +1,137 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { X, Edit, Plus, Calendar, Eye } from "lucide-react"
-import type { Post } from "@/lib/posts"
-import { PostForm } from "./post-form"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import rehypeRaw from "rehype-raw"
-import { PostExport } from "./post-export"
-import Image from "next/image"
-import { getPostImageUrl } from "@/lib/utils"
-import Link from "next/link"
-import { useUser } from "@clerk/nextjs"
+import { useUser } from "@clerk/nextjs";
+import { Calendar, Edit, Eye, Plus, X } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import type { Post } from "@/lib/posts";
+import { getPostImageUrl } from "@/lib/utils";
+import { PostExport } from "./post-export";
+import { PostForm } from "./post-form";
 
 interface PostsListProps {
-  projectId: string
-  initialPosts: Post[]
-  canEdit?: boolean
-  projectTitle?: string
-  authorName?: string
-  username?: string
-  projectSlug?: string
+  projectId: string;
+  initialPosts: Post[];
+  canEdit?: boolean;
+  projectTitle?: string;
+  authorName?: string;
+  username?: string;
+  projectSlug?: string;
 }
 
-export function PostsList({ projectId, initialPosts, canEdit = false, projectTitle, authorName, username, projectSlug }: PostsListProps) {
-  const { user, isLoaded } = useUser()
-  const [isOwner, setIsOwner] = useState(false)
-  
+export function PostsList({
+  projectId,
+  initialPosts,
+  canEdit = false,
+  projectTitle,
+  authorName,
+  username,
+  projectSlug,
+}: PostsListProps) {
+  const { user, isLoaded } = useUser();
+  const [isOwner, setIsOwner] = useState(false);
+
   // Check if current user is the owner when username is provided
   useEffect(() => {
     if (!username || !isLoaded) {
-      setIsOwner(false)
-      return
+      setIsOwner(false);
+      return;
     }
-    
+
     if (!user) {
-      setIsOwner(false)
-      return
+      setIsOwner(false);
+      return;
     }
-    
+
     // Get current username using the same logic as getCurrentUsername()
-    const currentUsername = user.username || user.emailAddresses[0]?.emailAddress.split("@")[0] || user.id
-    
+    const currentUsername =
+      user.username || user.emailAddresses[0]?.emailAddress.split("@")[0] || user.id;
+
     // Check if current user is the owner
-    setIsOwner(currentUsername === username)
-  }, [user, isLoaded, username])
-  
+    setIsOwner(currentUsername === username);
+  }, [user, isLoaded, username]);
+
   // Use canEdit prop if provided, otherwise check ownership
-  const canEditPosts = canEdit || isOwner
-  const [posts, setPosts] = useState<Post[]>(initialPosts)
-  const [showForm, setShowForm] = useState(false)
-  const [editingPost, setEditingPost] = useState<Post | undefined>(undefined)
+  const canEditPosts = canEdit || isOwner;
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [showForm, setShowForm] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | undefined>(undefined);
 
   const handleDelete = async (postId: string, title: string) => {
     if (!confirm(`Are you sure you want to delete "${title}"?`)) {
-      return
+      return;
     }
 
-    const loadingToast = toast.loading(`Deleting "${title}"...`)
+    const loadingToast = toast.loading(`Deleting "${title}"...`);
 
     try {
-      const { deletePost } = await import("@/lib/actions/posts")
-      await deletePost(postId)
-      
-      setPosts(posts.filter((p) => p.id !== postId))
-      toast.success(`"${title}" deleted successfully!`, { id: loadingToast })
+      const { deletePost } = await import("@/lib/actions/posts");
+      await deletePost(postId);
+
+      setPosts(posts.filter((p) => p.id !== postId));
+      toast.success(`"${title}" deleted successfully!`, { id: loadingToast });
     } catch (error) {
-      console.error("Error deleting post:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete post"
-      toast.error(errorMessage, { id: loadingToast })
+      console.error("Error deleting post:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete post";
+      toast.error(errorMessage, { id: loadingToast });
     }
-  }
+  };
 
   const handleFormSuccess = async () => {
     // Refresh posts
     try {
-      const { getProjectPosts } = await import("@/lib/actions/posts")
-      const updatedPosts = await getProjectPosts(projectId)
-      setPosts(updatedPosts)
+      const { getProjectPosts } = await import("@/lib/actions/posts");
+      const updatedPosts = await getProjectPosts(projectId);
+      setPosts(updatedPosts);
     } catch (error) {
-      console.error("Error refreshing posts:", error)
+      console.error("Error refreshing posts:", error);
     }
-    
-    setShowForm(false)
-    setEditingPost(undefined)
-  }
+
+    setShowForm(false);
+    setEditingPost(undefined);
+  };
 
   const handleEdit = (post: Post) => {
-    setEditingPost(post)
-    setShowForm(true)
-  }
+    setEditingPost(post);
+    setShowForm(true);
+  };
 
   const handleCancel = () => {
-    setShowForm(false)
-    setEditingPost(undefined)
-  }
+    setShowForm(false);
+    setEditingPost(undefined);
+  };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
-    })
-  }
+    });
+  };
 
   const renderVideoEmbeds = (content: string): string => {
     // Replace [youtube:VIDEO_ID] with HTML embed
     content = content.replace(
       /\[youtube:([^\]]+)\]/g,
       '<div class="video-container"><iframe width="100%" height="315" src="https://www.youtube.com/embed/$1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
-    )
-    
+    );
+
     // Replace [vimeo:VIDEO_ID] with HTML embed
     content = content.replace(
       /\[vimeo:([^\]]+)\]/g,
       '<div class="video-container"><iframe src="https://player.vimeo.com/video/$1" width="100%" height="315" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>'
-    )
-    
-    return content
-  }
+    );
+
+    return content;
+  };
 
   return (
     <div className="space-y-6">
@@ -146,7 +155,9 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
 
       {posts.length === 0 ? (
         <div className="p-8 text-center">
-          <p className="text-muted-foreground">No posts yet. {canEditPosts && "Add your first post above!"}</p>
+          <p className="text-muted-foreground">
+            No posts yet. {canEditPosts && "Add your first post above!"}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -167,16 +178,12 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
                   <div className="flex gap-2 mr-2">
                     {username && projectSlug && (
                       <Link href={`/${username}/${projectSlug}/posts/${post.id}`}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-2"
-                        >
+                        <Button size="sm" variant="outline" className="gap-2">
                           <Eye className="h-4 w-4" /> View
                         </Button>
                       </Link>
                     )}
-                  {canEditPosts && (
+                    {canEditPosts && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -186,24 +193,18 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
                         <Edit className="h-4 w-4" /> Edit
                       </Button>
                     )}
-                    </div>
-                  <PostExport 
-                    post={post} 
-                    projectTitle={projectTitle}
-                    authorName={authorName}
-                  />
-                  {
-                    canEditPosts && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(post.id, post.title)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-2"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )
-                  }
+                  </div>
+                  <PostExport post={post} projectTitle={projectTitle} authorName={authorName} />
+                  {canEditPosts && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDelete(post.id, post.title)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-2"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 {post.image && post.username && (
                   <div className="mb-4 rounded-md overflow-hidden border border-border">
@@ -227,6 +228,5 @@ export function PostsList({ projectId, initialPosts, canEdit = false, projectTit
         </div>
       )}
     </div>
-  )
+  );
 }
-

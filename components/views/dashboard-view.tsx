@@ -1,11 +1,14 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
+import { Calendar, Clock, Edit, Eye, MessageSquare, X } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { ProjectFormData } from "@/components/project-form";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,91 +16,94 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Edit, X, Eye, Calendar, Clock, MessageSquare } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
-import type { ProjectFormData } from "@/components/project-form"
-import type { Post } from "@/lib/posts"
-import { getThumbnailUrl } from "@/lib/utils"
+} from "@/components/ui/dialog";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import type { Post } from "@/lib/posts";
+import { getThumbnailUrl } from "@/lib/utils";
 
 type DashboardView = ProjectFormData & {
-  id: string
-  lastUpdated?: string
-}
+  id: string;
+  lastUpdated?: string;
+};
 
 interface DashboardViewProps {
-  initialProjects: DashboardView[]
-  initialPostsByProject?: Record<string, Post[]>
+  initialProjects: DashboardView[];
+  initialPostsByProject?: Record<string, Post[]>;
 }
 
 export function DashboardView({ initialProjects, initialPostsByProject = {} }: DashboardViewProps) {
-  const [projects, setProjects] = useState<DashboardView[]>(initialProjects)
-  const [visiblePostsCount, setVisiblePostsCount] = useState<Record<string, number>>({})
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState<Record<string, boolean>>({})
-  const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(null)
+  const [projects, setProjects] = useState<DashboardView[]>(initialProjects);
+  const [visiblePostsCount, setVisiblePostsCount] = useState<Record<string, number>>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<Record<string, boolean>>({});
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; title: string } | null>(
+    null
+  );
 
   const handleDeleteProject = async (id: string, title: string) => {
     // Show loading toast
-    const loadingToast = toast.loading(`Deleting "${title}"...`)
+    const loadingToast = toast.loading(`Deleting "${title}"...`);
 
     try {
       // Import and call the Server Action
-      const { deleteProject } = await import("@/lib/actions/projects")
-      await deleteProject(id)
-      
+      const { deleteProject } = await import("@/lib/actions/projects");
+      await deleteProject(id);
+
       // Remove from local state
-      setProjects(projects.filter((p) => p.id !== id))
-      
+      setProjects(projects.filter((p) => p.id !== id));
+
       // Close dialog
-      setDeleteDialogOpen({ ...deleteDialogOpen, [id]: false })
-      setProjectToDelete(null)
-      
+      setDeleteDialogOpen({ ...deleteDialogOpen, [id]: false });
+      setProjectToDelete(null);
+
       // Show success toast
       toast.success(`"${title}" deleted successfully!`, {
         id: loadingToast,
-      })
+      });
     } catch (error) {
-      console.error("Error deleting project:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete project. Please try again."
-      
+      console.error("Error deleting project:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete project. Please try again.";
+
       // Show error toast
       toast.error(errorMessage, {
         id: loadingToast,
-      })
+      });
     }
-  }
+  };
 
   const openDeleteDialog = (id: string, title: string) => {
-    setProjectToDelete({ id, title })
-    setDeleteDialogOpen({ ...deleteDialogOpen, [id]: true })
-  }
+    setProjectToDelete({ id, title });
+    setDeleteDialogOpen({ ...deleteDialogOpen, [id]: true });
+  };
 
   const closeDeleteDialog = (id: string) => {
-    setDeleteDialogOpen({ ...deleteDialogOpen, [id]: false })
-    setProjectToDelete(null)
-  }
+    setDeleteDialogOpen({ ...deleteDialogOpen, [id]: false });
+    setProjectToDelete(null);
+  };
 
   const showMorePosts = (projectId: string) => {
-    setVisiblePostsCount({ ...visiblePostsCount, [projectId]: (visiblePostsCount[projectId] || 1) + 3 })
-  }
+    setVisiblePostsCount({
+      ...visiblePostsCount,
+      [projectId]: (visiblePostsCount[projectId] || 1) + 3,
+    });
+  };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
-    })
-  }
+    });
+  };
 
   return (
     <div className="grid gap-6">
       {projects.map((project) => {
-        const posts = initialPostsByProject[project.id] || []
-        const visibleCount = visiblePostsCount[project.id] || 1
-        const visiblePosts = posts.slice(0, visibleCount)
-        const hasMorePosts = visibleCount < posts.length
+        const posts = initialPostsByProject[project.id] || [];
+        const visibleCount = visiblePostsCount[project.id] || 1;
+        const visiblePosts = posts.slice(0, visibleCount);
+        const hasMorePosts = visibleCount < posts.length;
 
         return (
           <Card key={project.id} className="bg-muted/30 border-border overflow-hidden">
@@ -116,13 +122,16 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                   <ImagePlaceholder className="h-full rounded" />
                 )}
               </div>
-              
+
               {/* Right: Project Info */}
               <div className="flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-bold">{project.title}</h3>
-                    <Badge variant="secondary" className="bg-sky-800 font-mono uppercase text-white/50! font-bold -mt-2 text-xxs">
+                    <Badge
+                      variant="secondary"
+                      className="bg-sky-800 font-mono uppercase text-white/50! font-bold -mt-2 text-xxs"
+                    >
                       {project.status}
                     </Badge>
                   </div>
@@ -145,7 +154,7 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                     {posts.length > 0 && (
                       <div className="flex items-center gap-1">
                         <MessageSquare className="h-3 w-3" />
-                        {posts.length} {posts.length === 1 ? 'post' : 'posts'}
+                        {posts.length} {posts.length === 1 ? "post" : "posts"}
                       </div>
                     )}
                   </div>
@@ -185,38 +194,59 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                   </div>
                 </div>
               </div>
-              
+
               {/* Posts Section - Full Width */}
               <div className="col-span-2">
                 {posts.length === 0 ? (
                   <div className="text-center py-8">
                     <MessageSquare className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                    <p className="text-sm text-muted-foreground">No posts yet. Create your first post to get started!</p>
+                    <p className="text-sm text-muted-foreground">
+                      No posts yet. Create your first post to get started!
+                    </p>
                   </div>
                 ) : (
                   <div>
                     <div className="space-y-2">
                       {visiblePosts.map((post) => (
-                        <div key={post.id} className="p-3 bg-background/50 rounded border border-border">
+                        <div
+                          key={post.id}
+                          className="p-3 bg-background/50 rounded border border-border"
+                        >
                           <div className="flex items-start justify-between mb-1">
                             <h4 className="font-semibold text-sm">{post.title}</h4>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">{formatDate(post.createdAt)}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDate(post.createdAt)}
+                              </span>
                               {project.username && project.slug && (
-                                <Link href={`/${project.username}/${project.slug}/posts/${post.id}`}>
-                                  <Button size="sm" variant="outline" className="text-xs gap-2 px-2! py-1! h-auto">
+                                <Link
+                                  href={`/${project.username}/${project.slug}/posts/${post.id}`}
+                                >
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs gap-2 px-2! py-1! h-auto"
+                                  >
                                     <Eye className="h-3 w-3" /> View
                                   </Button>
                                 </Link>
                               )}
-                              <Link href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}>
-                                <Button size="sm" variant="outline" className="text-xs gap-2 px-2! py-1! h-auto">
+                              <Link
+                                href={`/dashboard/projects/${project.id}/posts/${post.id}/edit`}
+                              >
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs gap-2 px-2! py-1! h-auto"
+                                >
                                   <Edit className="h-3 w-3" /> Edit
                                 </Button>
                               </Link>
                             </div>
                           </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {post.content}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -228,7 +258,8 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                           onClick={() => showMorePosts(project.id)}
                           className="w-full"
                         >
-                          Show {Math.min(3, posts.length - visibleCount)} More {posts.length - visibleCount === 1 ? 'Post' : 'Posts'}
+                          Show {Math.min(3, posts.length - visibleCount)} More{" "}
+                          {posts.length - visibleCount === 1 ? "Post" : "Posts"}
                         </Button>
                       </div>
                     )}
@@ -236,26 +267,30 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                 )}
               </div>
             </div>
-            
+
             {/* Delete Confirmation Dialog */}
-            <Dialog open={deleteDialogOpen[project.id] || false} onOpenChange={(open) => !open && closeDeleteDialog(project.id)}>
+            <Dialog
+              open={deleteDialogOpen[project.id] || false}
+              onOpenChange={(open) => !open && closeDeleteDialog(project.id)}
+            >
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Delete Project</DialogTitle>
                   <DialogDescription>
-                    Are you sure you want to delete &ldquo;{project.title}&rdquo;? This action cannot be undone.
+                    Are you sure you want to delete &ldquo;{project.title}&rdquo;? This action
+                    cannot be undone.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => closeDeleteDialog(project.id)}
-                  >
+                  <Button variant="outline" onClick={() => closeDeleteDialog(project.id)}>
                     Cancel
                   </Button>
                   <Button
                     variant="destructive"
-                    onClick={() => projectToDelete && handleDeleteProject(projectToDelete.id, projectToDelete.title)}
+                    onClick={() =>
+                      projectToDelete &&
+                      handleDeleteProject(projectToDelete.id, projectToDelete.title)
+                    }
                   >
                     Delete
                   </Button>
@@ -263,9 +298,8 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
               </DialogContent>
             </Dialog>
           </Card>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
-

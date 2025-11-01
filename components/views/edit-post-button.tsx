@@ -1,36 +1,37 @@
-"use client"
+"use client";
 
-import { useUser } from "@clerk/nextjs"
-import { Edit } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react"
+import { useUser } from "@clerk/nextjs";
+import { Edit } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface EditPostButtonProps {
-  projectId: string
-  postId: string
-  ownerUsername: string
+  projectId: string;
+  postId: string;
+  ownerUsername: string;
 }
 
 export function EditPostButton({ projectId, postId, ownerUsername }: EditPostButtonProps) {
-  const { user, isLoaded } = useUser()
-  const [isOwner, setIsOwner] = useState(false)
-  
+  const { user, isLoaded } = useUser();
+  const [isOwner, setIsOwner] = useState(false);
+
   useEffect(() => {
     if (!isLoaded || !user) {
-      setIsOwner(false)
-      return
+      setIsOwner(false);
+      return;
     }
-    
+
     // Get current username using the same logic as getCurrentUsername()
-    const currentUsername = user.username || user.emailAddresses[0]?.emailAddress.split("@")[0] || user.id
-    
+    const currentUsername =
+      user.username || user.emailAddresses[0]?.emailAddress.split("@")[0] || user.id;
+
     // Check if current user is the owner
-    setIsOwner(currentUsername === ownerUsername)
-  }, [user, isLoaded, ownerUsername])
+    setIsOwner(currentUsername === ownerUsername);
+  }, [user, isLoaded, ownerUsername]);
 
   if (!isOwner) {
-    return null
+    return null;
   }
 
   return (
@@ -40,6 +41,5 @@ export function EditPostButton({ projectId, postId, ownerUsername }: EditPostBut
         Edit Post
       </Button>
     </Link>
-  )
+  );
 }
-

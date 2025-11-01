@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Flame } from "lucide-react"
-import { SignedIn, SignedOut, SignUpButton } from "@clerk/nextjs"
-import Link from "next/link"
+import { SignedIn, SignedOut, SignUpButton } from "@clerk/nextjs";
+import { ArrowRight, Flame } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export function Hero() {
   return (
@@ -21,13 +21,17 @@ export function Hero() {
           </h1>
 
           <p className="text-xl lg:text-2xl opacity-80 text-shadow-black mb-10 text-pretty max-w-4xl mx-auto leading-relaxed">
-            A tool-agnostic, curated online community and platform for AI film creators. Share your creations and
-            discover groundbreaking projects.
+            A tool-agnostic, curated online community and platform for AI film creators. Share your
+            creations and discover groundbreaking projects.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <SignedIn>
-              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8" asChild>
+              <Button
+                size="lg"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8"
+                asChild
+              >
                 <Link href="/dashboard">
                   Start Creating
                   <ArrowRight className="ml-2 h-5 w-5" />
@@ -36,20 +40,26 @@ export function Hero() {
             </SignedIn>
             <SignedOut>
               <SignUpButton mode="modal">
-                <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8">
+                <Button
+                  size="lg"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8"
+                >
                   Start Creating
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </SignUpButton>
             </SignedOut>
-            <Button size="lg" variant="outline" className="text-base px-8 bg-black/50! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-black/70!" asChild>
-              <Link href="/projects">
-                Explore Projects
-              </Link>
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-base px-8 bg-black/50! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-black/70!"
+              asChild
+            >
+              <Link href="/projects">Explore Projects</Link>
             </Button>
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

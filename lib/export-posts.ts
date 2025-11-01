@@ -1,26 +1,29 @@
-import type { Post } from "./posts"
-import { remark } from "remark"
-import remarkGfm from "remark-gfm"
-import remarkHtml from "remark-html"
-import stripMarkdown from "strip-markdown"
+import { remark } from "remark";
+import remarkGfm from "remark-gfm";
+import remarkHtml from "remark-html";
+import stripMarkdown from "strip-markdown";
+import type { Post } from "./posts";
 
 /**
  * Export a post as HTML (server-side)
  */
 export async function exportPostAsHTML(post: Post): Promise<string> {
-  const processor = remark().use(remarkGfm).use(remarkHtml)
-  const result = await processor.process(post.content)
-  return result.toString()
+  const processor = remark().use(remarkGfm).use(remarkHtml);
+  const result = await processor.process(post.content);
+  return result.toString();
 }
 
 /**
  * Export a post as formatted HTML document
  */
-export async function exportPostAsHTMLDocument(post: Post, options?: { title?: string; author?: string }): Promise<string> {
-  const htmlContent = await exportPostAsHTML(post)
-  const title = options?.title || post.title
-  const author = options?.author || ""
-  
+export async function exportPostAsHTMLDocument(
+  post: Post,
+  options?: { title?: string; author?: string }
+): Promise<string> {
+  const htmlContent = await exportPostAsHTML(post);
+  const title = options?.title || post.title;
+  const author = options?.author || "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,23 +81,23 @@ export async function exportPostAsHTMLDocument(post: Post, options?: { title?: s
     </div>
   </article>
 </body>
-</html>`
+</html>`;
 }
 
 /**
  * Export a post as Markdown
  */
 export function exportPostAsMarkdown(post: Post): string {
-  return post.content
+  return post.content;
 }
 
 /**
  * Export a post as plain text (strips markdown)
  */
 export async function exportPostAsPlainText(post: Post): Promise<string> {
-  const processor = remark().use(stripMarkdown)
-  const result = await processor.process(post.content)
-  return result.toString()
+  const processor = remark().use(stripMarkdown);
+  const result = await processor.process(post.content);
+  return result.toString();
 }
 
 /**
@@ -106,7 +109,5 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
+    .replace(/'/g, "&#039;");
 }
-
-

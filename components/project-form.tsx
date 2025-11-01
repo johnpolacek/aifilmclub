@@ -1,16 +1,27 @@
 "use client";
 
-import type React from "react";
-
-import { useState, useRef, useId } from "react";
+import {
+  Camera,
+  Check,
+  File,
+  Film,
+  LinkIcon,
+  MapPin,
+  Plus,
+  Upload,
+  User,
+  Wrench,
+  X,
+} from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import type React from "react";
+import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -18,21 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Film,
-  Upload,
-  LinkIcon,
-  Plus,
-  X,
-  Wrench,
-  Check,
-  Camera,
-  User,
-  MapPin,
-  File,
-} from "lucide-react";
-import Image from "next/image";
-import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { getCharacterImageUrl, getLocationImageUrl, getThumbnailUrl } from "@/lib/utils";
 
 // Types
 export interface ProjectLinks {

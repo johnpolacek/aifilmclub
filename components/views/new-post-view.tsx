@@ -1,9 +1,9 @@
-import { PostForm } from "@/components/post-form"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { PostForm } from "@/components/post-form";
 
 interface NewPostViewProps {
-  projectId: string
+  projectId: string;
 }
 
 export function NewPostView({ projectId }: NewPostViewProps) {
@@ -18,12 +18,8 @@ export function NewPostView({ projectId }: NewPostViewProps) {
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </Link>
 
-        <PostForm 
-          projectId={projectId}
-          redirectPath="/dashboard"
-        />
+        <PostForm projectId={projectId} redirectPath="/dashboard" />
       </div>
     </div>
-  )
+  );
 }
-

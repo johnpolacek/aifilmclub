@@ -1,7 +1,7 @@
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Play, Heart, MessageCircle } from "lucide-react"
+import { Heart, MessageCircle, Play } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 
 const projects = [
   {
@@ -34,7 +34,7 @@ const projects = [
     comments: 67,
     tags: ["Abstract", "Sci-Fi", "Thriller"],
   },
-]
+];
 
 export function FeaturedProjects() {
   return (
@@ -101,5 +101,5 @@ export function FeaturedProjects() {
         </div>
       </div>
     </section>
-  )
+  );
 }

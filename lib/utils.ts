@@ -1,8 +1,8 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 /**
@@ -12,27 +12,27 @@ export function cn(...inputs: ClassValue[]) {
 export function getPublicUrl(key: string): string {
   // Client-side: use NEXT_PUBLIC_ prefixed env var
   // Server-side: use regular env var (fallback to NEXT_PUBLIC_)
-  const cloudfrontDomain = 
-    typeof window === 'undefined' 
+  const cloudfrontDomain =
+    typeof window === "undefined"
       ? process.env.AWS_CLOUDFRONT_DOMAIN || process.env.NEXT_PUBLIC_AWS_CLOUDFRONT_DOMAIN
-      : process.env.NEXT_PUBLIC_AWS_CLOUDFRONT_DOMAIN
-  
+      : process.env.NEXT_PUBLIC_AWS_CLOUDFRONT_DOMAIN;
+
   if (cloudfrontDomain) {
-    return `https://${cloudfrontDomain}/${key}`
+    return `https://${cloudfrontDomain}/${key}`;
   }
-  
+
   // Fallback to S3 URL (need bucket name from env)
-  const bucketName = 
-    typeof window === 'undefined'
+  const bucketName =
+    typeof window === "undefined"
       ? process.env.AWS_S3_BUCKET_NAME || process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME
-      : process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME
-  
+      : process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME;
+
   if (bucketName) {
-    return `https://${bucketName}.s3.amazonaws.com/${key}`
+    return `https://${bucketName}.s3.amazonaws.com/${key}`;
   }
-  
+
   // If neither is available, return the key as-is (shouldn't happen in production)
-  return key
+  return key;
 }
 
 /**
@@ -40,11 +40,14 @@ export function getPublicUrl(key: string): string {
  * Thumbnail should be just the filename (e.g., "1761873619145.jpg")
  * Username is required to construct the full path
  */
-export function getThumbnailUrl(thumbnail: string | undefined, username: string | undefined): string {
-  if (!thumbnail || !username) return ''
-  
-  const key = `thumbnails/${username}/${thumbnail}`
-  return getPublicUrl(key)
+export function getThumbnailUrl(
+  thumbnail: string | undefined,
+  username: string | undefined
+): string {
+  if (!thumbnail || !username) return "";
+
+  const key = `thumbnails/${username}/${thumbnail}`;
+  return getPublicUrl(key);
 }
 
 /**
@@ -52,11 +55,14 @@ export function getThumbnailUrl(thumbnail: string | undefined, username: string 
  * Character image should be just the filename (e.g., "1761873619145.jpg")
  * Username is required to construct the full path
  */
-export function getCharacterImageUrl(image: string | undefined, username: string | undefined): string {
-  if (!image || !username) return ''
-  
-  const key = `characters/${username}/${image}`
-  return getPublicUrl(key)
+export function getCharacterImageUrl(
+  image: string | undefined,
+  username: string | undefined
+): string {
+  if (!image || !username) return "";
+
+  const key = `characters/${username}/${image}`;
+  return getPublicUrl(key);
 }
 
 /**
@@ -64,11 +70,14 @@ export function getCharacterImageUrl(image: string | undefined, username: string
  * Location image should be just the filename (e.g., "1761873619145.jpg")
  * Username is required to construct the full path
  */
-export function getLocationImageUrl(image: string | undefined, username: string | undefined): string {
-  if (!image || !username) return ''
-  
-  const key = `locations/${username}/${image}`
-  return getPublicUrl(key)
+export function getLocationImageUrl(
+  image: string | undefined,
+  username: string | undefined
+): string {
+  if (!image || !username) return "";
+
+  const key = `locations/${username}/${image}`;
+  return getPublicUrl(key);
 }
 
 /**
@@ -77,10 +86,10 @@ export function getLocationImageUrl(image: string | undefined, username: string 
  * Username is required to construct the full path
  */
 export function getPostImageUrl(image: string | undefined, username: string | undefined): string {
-  if (!image || !username) return ''
-  
-  const key = `posts/${username}/${image}`
-  return getPublicUrl(key)
+  if (!image || !username) return "";
+
+  const key = `posts/${username}/${image}`;
+  return getPublicUrl(key);
 }
 
 /**
@@ -88,9 +97,12 @@ export function getPostImageUrl(image: string | undefined, username: string | un
  * Project file should be just the filename (e.g., "1761873619145-screenplay.pdf")
  * Username is required to construct the full path
  */
-export function getProjectFileUrl(filename: string | undefined, username: string | undefined): string {
-  if (!filename || !username) return ''
-  
-  const key = `projects/${username}/files/${filename}`
-  return getPublicUrl(key)
+export function getProjectFileUrl(
+  filename: string | undefined,
+  username: string | undefined
+): string {
+  if (!filename || !username) return "";
+
+  const key = `projects/${username}/files/${filename}`;
+  return getPublicUrl(key);
 }

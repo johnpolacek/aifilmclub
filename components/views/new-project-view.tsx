@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import ProjectForm from "@/components/project-form"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import ProjectForm from "@/components/project-form";
 
 export function NewProjectView() {
   return (
@@ -19,6 +19,5 @@ export function NewProjectView() {
         <ProjectForm redirectPath="/dashboard" />
       </div>
     </div>
-  )
+  );
 }
-

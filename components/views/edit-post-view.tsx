@@ -1,11 +1,11 @@
-import { PostForm } from "@/components/post-form"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
-import type { Post } from "@/lib/posts"
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { PostForm } from "@/components/post-form";
+import type { Post } from "@/lib/posts";
 
 interface EditPostViewProps {
-  projectId: string
-  post: Post | null
+  projectId: string;
+  post: Post | null;
 }
 
 export function EditPostView({ projectId, post }: EditPostViewProps) {
@@ -22,11 +22,13 @@ export function EditPostView({ projectId, post }: EditPostViewProps) {
           </Link>
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold mb-2">Post Not Found</h2>
-            <p className="text-muted-foreground">The post you&apos;re looking for doesn&apos;t exist.</p>
+            <p className="text-muted-foreground">
+              The post you&apos;re looking for doesn&apos;t exist.
+            </p>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -40,13 +42,8 @@ export function EditPostView({ projectId, post }: EditPostViewProps) {
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </Link>
 
-        <PostForm 
-          projectId={projectId}
-          initialPost={post}
-          redirectPath="/dashboard"
-        />
+        <PostForm projectId={projectId} initialPost={post} redirectPath="/dashboard" />
       </div>
     </div>
-  )
+  );
 }
-

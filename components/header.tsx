@@ -1,7 +1,7 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Flame } from "lucide-react"
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { Flame } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export function Header() {
   return (
@@ -14,27 +14,45 @@ export function Header() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/projects" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              href="/projects"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               Projects
             </Link>
-            <Link href="/resources" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              href="/resources"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               Resources
             </Link>
-            <Link href="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link
+              href="/about"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
               About
             </Link>
           </nav>
 
           <div className="flex items-center gap-3">
             <SignedIn>
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex hover:bg-primary/20! hover:text-white!" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:inline-flex hover:bg-primary/20! hover:text-white!"
+                asChild
+              >
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               <UserButton />
             </SignedIn>
             <SignedOut>
               <SignInButton mode="modal">
-                <Button variant="outline" className="bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!" size="sm">
+                <Button
+                  variant="outline"
+                  className="bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!"
+                  size="sm"
+                >
                   Sign In
                 </Button>
               </SignInButton>
@@ -48,5 +66,5 @@ export function Header() {
         </div>
       </div>
     </header>
-  )
+  );
 }

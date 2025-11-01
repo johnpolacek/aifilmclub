@@ -8,20 +8,20 @@ const nextConfig: NextConfig = {
     unoptimized: true,
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'aifilmcamp-public.s3.us-east-1.amazonaws.com',
+        protocol: "https",
+        hostname: "aifilmcamp-public.s3.us-east-1.amazonaws.com",
       },
       {
-        protocol: 'https',
-        hostname: 'aifilmcamp-public.s3.amazonaws.com',
+        protocol: "https",
+        hostname: "aifilmcamp-public.s3.amazonaws.com",
       },
       {
-        protocol: 'https',
-        hostname: 'img.clerk.com',
+        protocol: "https",
+        hostname: "img.clerk.com",
       },
       {
-        protocol: 'https',
-        hostname: '*.cloudfront.net',
+        protocol: "https",
+        hostname: "*.cloudfront.net",
       },
     ],
   },

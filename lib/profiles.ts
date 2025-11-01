@@ -1,20 +1,20 @@
-import { getObjectFromS3, putObjectToS3 } from "./s3"
+import { getObjectFromS3, putObjectToS3 } from "./s3";
 
-const PROFILES_PREFIX = "profiles/"
+const PROFILES_PREFIX = "profiles/";
 
 export interface UserProfileLink {
-  text: string
-  url: string
+  text: string;
+  url: string;
 }
 
 export interface UserProfile {
-  username: string
-  name: string
-  email: string
-  avatar?: string
-  about?: string
-  links: UserProfileLink[]
-  updatedAt: string
+  username: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  about?: string;
+  links: UserProfileLink[];
+  updatedAt: string;
 }
 
 /**
@@ -22,17 +22,17 @@ export interface UserProfile {
  */
 export async function getUserProfile(username: string): Promise<UserProfile | null> {
   try {
-    const key = `${PROFILES_PREFIX}${username}.json`
-    const data = await getObjectFromS3(key)
-    
+    const key = `${PROFILES_PREFIX}${username}.json`;
+    const data = await getObjectFromS3(key);
+
     if (!data) {
-      return null
+      return null;
     }
 
-    return JSON.parse(data) as UserProfile
+    return JSON.parse(data) as UserProfile;
   } catch (error) {
-    console.error("Error getting user profile:", error)
-    return null
+    console.error("Error getting user profile:", error);
+    return null;
   }
 }
 
@@ -41,16 +41,16 @@ export async function getUserProfile(username: string): Promise<UserProfile | nu
  */
 export async function saveUserProfile(username: string, profileData: UserProfile): Promise<void> {
   try {
-    const key = `${PROFILES_PREFIX}${username}.json`
-    
+    const key = `${PROFILES_PREFIX}${username}.json`;
+
     // Add/update timestamp
-    profileData.updatedAt = new Date().toISOString()
-    
-    const body = JSON.stringify(profileData, null, 2)
-    await putObjectToS3(key, body)
+    profileData.updatedAt = new Date().toISOString();
+
+    const body = JSON.stringify(profileData, null, 2);
+    await putObjectToS3(key, body);
   } catch (error) {
-    console.error("Error saving user profile:", error)
-    throw error
+    console.error("Error saving user profile:", error);
+    throw error;
   }
 }
 
@@ -71,6 +71,5 @@ export function createDefaultProfile(
     about: "",
     links: [],
     updatedAt: new Date().toISOString(),
-  }
+  };
 }
-

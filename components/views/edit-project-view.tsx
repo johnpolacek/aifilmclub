@@ -1,19 +1,25 @@
-import ProjectForm from "@/components/project-form"
-import { PostsList } from "@/components/posts-list"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
-import type { ProjectFormData } from "@/components/project-form"
-import type { Post } from "@/lib/posts"
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { PostsList } from "@/components/posts-list";
+import type { ProjectFormData } from "@/components/project-form";
+import ProjectForm from "@/components/project-form";
+import type { Post } from "@/lib/posts";
 
 interface EditProjectViewProps {
-  projectData: ProjectFormData | null
-  projectId: string
-  posts: Post[]
-  username: string
-  projectSlug: string
+  projectData: ProjectFormData | null;
+  projectId: string;
+  posts: Post[];
+  username: string;
+  projectSlug: string;
 }
 
-export function EditProjectView({ projectData, projectId, posts, username, projectSlug }: EditProjectViewProps) {
+export function EditProjectView({
+  projectData,
+  projectId,
+  posts,
+  username,
+  projectSlug,
+}: EditProjectViewProps) {
   if (!projectData) {
     return (
       <div className="min-h-screen bg-background pt-24 pb-16">
@@ -27,11 +33,13 @@ export function EditProjectView({ projectData, projectId, posts, username, proje
           </Link>
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold mb-2">Project Not Found</h2>
-            <p className="text-muted-foreground">The project you&apos;re looking for doesn&apos;t exist.</p>
+            <p className="text-muted-foreground">
+              The project you&apos;re looking for doesn&apos;t exist.
+            </p>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -46,17 +54,17 @@ export function EditProjectView({ projectData, projectId, posts, username, proje
         </Link>
 
         <div className="space-y-8">
-          <ProjectForm 
-            initialData={projectData} 
+          <ProjectForm
+            initialData={projectData}
             projectId={projectId}
-            isEditing 
+            isEditing
             redirectPath="/dashboard"
           />
-          
+
           <div>
             <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
-            <PostsList 
-              projectId={projectId} 
+            <PostsList
+              projectId={projectId}
               initialPosts={posts}
               canEdit={true}
               username={username}
@@ -66,6 +74,5 @@ export function EditProjectView({ projectData, projectId, posts, username, proje
         </div>
       </div>
     </div>
-  )
+  );
 }
-

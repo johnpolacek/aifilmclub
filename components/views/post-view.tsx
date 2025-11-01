@@ -1,49 +1,49 @@
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Calendar, Clock, ExternalLink } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
-import { getPostImageUrl } from "@/lib/utils"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import rehypeRaw from "rehype-raw"
-import type { Post } from "@/lib/posts"
-import type { ProjectFormData } from "@/components/project-form"
-import type { UserProfile } from "@/lib/profiles"
-import { EditPostButton } from "@/components/views/edit-post-button"
+import { Calendar, Clock, ExternalLink } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
+import type { ProjectFormData } from "@/components/project-form";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { EditPostButton } from "@/components/views/edit-post-button";
+import type { Post } from "@/lib/posts";
+import type { UserProfile } from "@/lib/profiles";
+import { getPostImageUrl } from "@/lib/utils";
 
 interface PostViewProps {
-  post: Post
-  project: ProjectFormData & { username: string }
-  creatorProfile: UserProfile | null
-  username: string
-  projectSlug: string
+  post: Post;
+  project: ProjectFormData & { username: string };
+  creatorProfile: UserProfile | null;
+  username: string;
+  projectSlug: string;
 }
 
 export function PostView({ post, project, creatorProfile, username, projectSlug }: PostViewProps) {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
-    })
-  }
+    });
+  };
 
   const renderVideoEmbeds = (content: string): string => {
     // Replace [youtube:VIDEO_ID] with HTML embed
     content = content.replace(
       /\[youtube:([^\]]+)\]/g,
       '<div class="video-container"><iframe width="100%" height="315" src="https://www.youtube.com/embed/$1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
-    )
-    
+    );
+
     // Replace [vimeo:VIDEO_ID] with HTML embed
     content = content.replace(
       /\[vimeo:([^\]]+)\]/g,
       '<div class="video-container"><iframe src="https://player.vimeo.com/video/$1" width="100%" height="315" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>'
-    )
-    
-    return content
-  }
+    );
+
+    return content;
+  };
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
@@ -58,9 +58,7 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
               </span>
             )}
             {project.genre && (
-              <span className="px-2 py-0.5 bg-muted/50 rounded-full text-xs">
-                {project.genre}
-              </span>
+              <span className="px-2 py-0.5 bg-muted/50 rounded-full text-xs">{project.genre}</span>
             )}
             {project.duration && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -82,13 +80,9 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
           {/* Post Title */}
           <div className="flex items-start justify-between gap-4 mb-4">
             <h1 className="text-3xl md:text-4xl font-bold text-pretty">{post.title}</h1>
-            <EditPostButton 
-              projectId={post.projectId} 
-              postId={post.id} 
-              ownerUsername={username} 
-            />
+            <EditPostButton projectId={post.projectId} postId={post.id} ownerUsername={username} />
           </div>
-          
+
           {/* Post Meta */}
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -136,6 +130,5 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
         </div>
       </div>
     </div>
-  )
+  );
 }
-

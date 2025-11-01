@@ -1,8 +1,8 @@
-import { Header } from "@/components/header"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Film, Clock, User } from "lucide-react"
+import { Clock, Film, User } from "lucide-react";
+import { Header } from "@/components/header";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 
 export function ProjectsView() {
   // Placeholder projects data
@@ -10,7 +10,8 @@ export function ProjectsView() {
     {
       id: "1",
       title: "The Last Algorithm",
-      description: "A sci-fi short exploring AI consciousness through the eyes of a self-aware algorithm discovering its own mortality.",
+      description:
+        "A sci-fi short exploring AI consciousness through the eyes of a self-aware algorithm discovering its own mortality.",
       thumbnail: "",
       creator: "filmmaker_xyz",
       status: "Completed",
@@ -25,7 +26,8 @@ export function ProjectsView() {
     {
       id: "2",
       title: "Memories in Motion",
-      description: "An experimental documentary blending AI-generated visuals with real family photographs to explore themes of memory and time.",
+      description:
+        "An experimental documentary blending AI-generated visuals with real family photographs to explore themes of memory and time.",
       thumbnail: "",
       creator: "creative_soul",
       status: "In Progress",
@@ -39,7 +41,8 @@ export function ProjectsView() {
     {
       id: "3",
       title: "Urban Dreams",
-      description: "A visual poem capturing the essence of city life through AI-generated imagery and soundscapes.",
+      description:
+        "A visual poem capturing the essence of city life through AI-generated imagery and soundscapes.",
       thumbnail: "",
       creator: "city_artist",
       status: "Post-Production",
@@ -50,7 +53,7 @@ export function ProjectsView() {
         { name: "Suno", category: "sound" as const },
       ],
     },
-  ]
+  ];
 
   return (
     <main className="min-h-screen">
@@ -62,7 +65,8 @@ export function ProjectsView() {
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 text-balance">Community Projects</h1>
             <p className="text-lg lg:text-xl text-muted-foreground text-pretty">
-              Explore groundbreaking AI films from creators around the world. Get inspired, learn, and collaborate.
+              Explore groundbreaking AI films from creators around the world. Get inspired, learn,
+              and collaborate.
             </p>
           </div>
         </div>
@@ -84,6 +88,5 @@ export function ProjectsView() {
         </div>
       </section>
     </main>
-  )
+  );
 }
-

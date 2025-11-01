@@ -1,23 +1,28 @@
-import { Card, CardContent } from "@/components/ui/card"
-import { ImagePlaceholder } from "@/components/ui/image-placeholder"
-import { Button } from "@/components/ui/button"
-import { Calendar, Clock, ExternalLink, ArrowLeft, Rss, FileDown } from "lucide-react"
-import Link from "next/link"
-import Image from "next/image"
-import { PostsList } from "@/components/posts-list"
-import { EditProjectButton } from "@/components/views/edit-project-button"
-import { getThumbnailUrl, getCharacterImageUrl, getLocationImageUrl, getProjectFileUrl } from "@/lib/utils"
-import type { ProjectFormData } from "@/components/project-form"
-import type { Post } from "@/lib/posts"
-import type { UserProfile } from "@/lib/profiles"
+import { ArrowLeft, Calendar, Clock, ExternalLink, FileDown, Rss } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { PostsList } from "@/components/posts-list";
+import type { ProjectFormData } from "@/components/project-form";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { EditProjectButton } from "@/components/views/edit-project-button";
+import type { Post } from "@/lib/posts";
+import type { UserProfile } from "@/lib/profiles";
+import {
+  getCharacterImageUrl,
+  getLocationImageUrl,
+  getProjectFileUrl,
+  getThumbnailUrl,
+} from "@/lib/utils";
 
 interface ProjectViewProps {
-  projectId: string
-  project: ProjectFormData & { slug: string }
-  username: string
-  projectSlug: string
-  creatorProfile: UserProfile | null
-  posts: Post[]
+  projectId: string;
+  project: ProjectFormData & { slug: string };
+  username: string;
+  projectSlug: string;
+  creatorProfile: UserProfile | null;
+  posts: Post[];
 }
 
 export function ProjectView({
@@ -29,12 +34,10 @@ export function ProjectView({
   posts,
 }: ProjectViewProps) {
   // Transform thumbnail URL
-  const thumbnailUrl = project.thumbnail 
-    ? getThumbnailUrl(project.thumbnail, username)
-    : ""
+  const thumbnailUrl = project.thumbnail ? getThumbnailUrl(project.thumbnail, username) : "";
 
   // Format last updated (we'll use a placeholder since ProjectFormData doesn't have updatedAt)
-  const lastUpdated = "recently"
+  const lastUpdated = "recently";
 
   // Transform project data to match page expectations
   const projectDisplay = {
@@ -56,7 +59,7 @@ export function ProjectView({
     links: project.links || { links: [] },
     tools: project.tools || [],
     updates: [] as Array<{ date: string; content: string }>,
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
@@ -94,10 +97,14 @@ export function ProjectView({
                 {projectDisplay.status}
               </span>
               {projectDisplay.genre && (
-                <span className="px-3 py-1 bg-muted/50 backdrop-blur-sm rounded-full text-sm">{projectDisplay.genre}</span>
+                <span className="px-3 py-1 bg-muted/50 backdrop-blur-sm rounded-full text-sm">
+                  {projectDisplay.genre}
+                </span>
               )}
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-2 text-balance">{projectDisplay.title}</h1>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2 text-balance">
+              {projectDisplay.title}
+            </h1>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
@@ -116,7 +123,10 @@ export function ProjectView({
           <div className="px-8 pb-5">
             {/* Creator */}
             <div className="mb-5">
-              <Link href={`/${projectDisplay.creator.username}`} className="inline-flex items-center gap-2 group">
+              <Link
+                href={`/${projectDisplay.creator.username}`}
+                className="inline-flex items-center gap-2 group"
+              >
                 {projectDisplay.creator.avatar ? (
                   <Image
                     src={projectDisplay.creator.avatar}
@@ -128,14 +138,18 @@ export function ProjectView({
                 ) : (
                   <ImagePlaceholder variant="avatar" className="h-6 w-6" />
                 )}
-                <span className="text-sm font-medium group-hover:text-primary transition-colors">{projectDisplay.creator.name}</span>
+                <span className="text-sm font-medium group-hover:text-primary transition-colors">
+                  {projectDisplay.creator.name}
+                </span>
               </Link>
             </div>
 
             {/* About This Project */}
             <div className="mb-5 pb-5 border-b border-border">
               <h2 className="text-xl font-bold mb-3">About This Project</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">{projectDisplay.description}</p>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                {projectDisplay.description}
+              </p>
             </div>
 
             {/* Characters */}
@@ -159,11 +173,13 @@ export function ProjectView({
                               />
                             </div>
                           )}
-                          
+
                           {/* Character Info */}
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-sm">{character.name || "Unnamed Character"}</h3>
+                              <h3 className="font-semibold text-sm">
+                                {character.name || "Unnamed Character"}
+                              </h3>
                               {character.type && (
                                 <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
                                   {character.type}
@@ -171,7 +187,9 @@ export function ProjectView({
                               )}
                             </div>
                             {character.description && (
-                              <p className="text-muted-foreground text-sm leading-relaxed">{character.description}</p>
+                              <p className="text-muted-foreground text-sm leading-relaxed">
+                                {character.description}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -203,12 +221,16 @@ export function ProjectView({
                               />
                             </div>
                           )}
-                          
+
                           {/* Location Info */}
                           <div>
-                            <h3 className="font-semibold mb-1 text-sm">{location.name || "Unnamed Location"}</h3>
+                            <h3 className="font-semibold mb-1 text-sm">
+                              {location.name || "Unnamed Location"}
+                            </h3>
                             {location.description && (
-                              <p className="text-muted-foreground text-sm leading-relaxed">{location.description}</p>
+                              <p className="text-muted-foreground text-sm leading-relaxed">
+                                {location.description}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -224,26 +246,18 @@ export function ProjectView({
               <div className="mb-5 pb-5 border-b border-border">
                 {(() => {
                   // Support both new screenplay field and old files array for backwards compatibility
-                  const screenplay = project.screenplay || (project as any).files?.[0]
-                  if (!screenplay) return null
-                  
-                  const fileUrl = getProjectFileUrl(screenplay.filename, username)
+                  const screenplay = project.screenplay || (project as any).files?.[0];
+                  if (!screenplay) return null;
+
+                  const fileUrl = getProjectFileUrl(screenplay.filename, username);
                   return (
-                    <a
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download
-                    >
-                      <Button
-                        variant="outline"
-                        className="bg-transparent"
-                      >
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download>
+                      <Button variant="outline" className="bg-transparent">
                         <FileDown className="h-4 w-4 mr-2 text-primary" />
                         Download Screenplay
                       </Button>
                     </a>
-                  )
+                  );
                 })()}
               </div>
             )}
@@ -251,7 +265,9 @@ export function ProjectView({
             {/* Tools */}
             {projectDisplay.tools.length > 0 && (
               <div>
-                <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Tools</h2>
+                <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                  Tools
+                </h2>
                 <div className="flex flex-wrap gap-2">
                   {projectDisplay.tools.map((tool, index) => (
                     <span
@@ -281,8 +297,8 @@ export function ProjectView({
                   RSS Feed
                 </a>
               </div>
-              <PostsList 
-                projectId={projectId} 
+              <PostsList
+                projectId={projectId}
                 initialPosts={posts}
                 canEdit={false}
                 projectTitle={project.title}
@@ -313,31 +329,30 @@ export function ProjectView({
             </Card>
           )}
 
-            {/* Links */}
-            {projectDisplay.links.links.length > 0 && (
-              <Card className="bg-card border-border">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-bold mb-4">Links</h3>
-                  <div className="space-y-2">
-                    {projectDisplay.links.links.map((link, index) => (
-                      <a
-                        key={index}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/50 transition-colors group"
-                      >
-                        <span className="text-sm font-medium">{link.label}</span>
-                        <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </a>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          {/* Links */}
+          {projectDisplay.links.links.length > 0 && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-bold mb-4">Links</h3>
+                <div className="space-y-2">
+                  {projectDisplay.links.links.map((link, index) => (
+                    <a
+                      key={index}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-md hover:bg-muted/50 transition-colors group"
+                    >
+                      <span className="text-sm font-medium">{link.label}</span>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </a>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }
-

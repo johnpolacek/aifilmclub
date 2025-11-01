@@ -1,112 +1,111 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { Code, Copy, FileText, SquareArrowOutUpRight } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Copy, FileText, Code, SquareArrowOutUpRight } from "lucide-react"
-import { toast } from "sonner"
-import type { Post } from "@/lib/posts"
+} from "@/components/ui/dropdown-menu";
+import type { Post } from "@/lib/posts";
 
 interface PostExportProps {
-  post: Post
-  projectTitle?: string
-  authorName?: string
+  post: Post;
+  projectTitle?: string;
+  authorName?: string;
 }
 
 export function PostExport({ post, projectTitle, authorName }: PostExportProps) {
-  const [isExporting, setIsExporting] = useState(false)
+  const [isExporting, setIsExporting] = useState(false);
 
   const copyToClipboard = async (text: string) => {
     try {
       if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text)
-        return true
+        await navigator.clipboard.writeText(text);
+        return true;
       } else {
         // Fallback for older browsers
-        const textArea = document.createElement("textarea")
-        textArea.value = text
-        textArea.style.position = "fixed"
-        textArea.style.left = "-999999px"
-        document.body.appendChild(textArea)
-        textArea.focus()
-        textArea.select()
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
         try {
-          document.execCommand("copy")
-          document.body.removeChild(textArea)
-          return true
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+          return true;
         } catch (err) {
-          document.body.removeChild(textArea)
-          return false
+          document.body.removeChild(textArea);
+          return false;
         }
       }
     } catch (err) {
-      console.error("Failed to copy to clipboard:", err)
-      return false
+      console.error("Failed to copy to clipboard:", err);
+      return false;
     }
-  }
+  };
 
   const downloadFile = (content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
-
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleCopyHTML = async () => {
-    setIsExporting(true)
+    setIsExporting(true);
     try {
       // Call API to convert markdown to HTML
       const response = await fetch("/api/export/html", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ markdown: post.content }),
-      })
-      const { html } = await response.json()
-      
-      const success = await copyToClipboard(html)
+      });
+      const { html } = await response.json();
+
+      const success = await copyToClipboard(html);
       if (success) {
-        toast.success("HTML copied to clipboard!")
+        toast.success("HTML copied to clipboard!");
       } else {
-        toast.error("Failed to copy to clipboard")
+        toast.error("Failed to copy to clipboard");
       }
     } catch (error) {
-      console.error("Error copying HTML:", error)
-      toast.error("Failed to copy HTML")
+      console.error("Error copying HTML:", error);
+      toast.error("Failed to copy HTML");
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   const handleCopyMarkdown = async () => {
-    setIsExporting(true)
+    setIsExporting(true);
     try {
-      const success = await copyToClipboard(post.content)
+      const success = await copyToClipboard(post.content);
       if (success) {
-        toast.success("Markdown copied to clipboard!")
+        toast.success("Markdown copied to clipboard!");
       } else {
-        toast.error("Failed to copy to clipboard")
+        toast.error("Failed to copy to clipboard");
       }
     } catch (error) {
-      console.error("Error copying markdown:", error)
-      toast.error("Failed to copy markdown")
+      console.error("Error copying markdown:", error);
+      toast.error("Failed to copy markdown");
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   const handleDownloadHTML = async () => {
-    setIsExporting(true)
+    setIsExporting(true);
     try {
       const response = await fetch("/api/export/html", {
         method: "POST",
@@ -116,33 +115,33 @@ export function PostExport({ post, projectTitle, authorName }: PostExportProps) 
           title: post.title,
           author: authorName,
         }),
-      })
-      const { html } = await response.json()
-      
-      const filename = `${post.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`
-      downloadFile(html, filename, "text/html")
-      toast.success("HTML file downloaded!")
+      });
+      const { html } = await response.json();
+
+      const filename = `${post.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`;
+      downloadFile(html, filename, "text/html");
+      toast.success("HTML file downloaded!");
     } catch (error) {
-      console.error("Error downloading HTML:", error)
-      toast.error("Failed to download HTML")
+      console.error("Error downloading HTML:", error);
+      toast.error("Failed to download HTML");
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   const handleDownloadMarkdown = () => {
-    setIsExporting(true)
+    setIsExporting(true);
     try {
-      const filename = `${post.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`
-      downloadFile(post.content, filename, "text/markdown")
-      toast.success("Markdown file downloaded!")
+      const filename = `${post.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+      downloadFile(post.content, filename, "text/markdown");
+      toast.success("Markdown file downloaded!");
     } catch (error) {
-      console.error("Error downloading markdown:", error)
-      toast.error("Failed to download markdown")
+      console.error("Error downloading markdown:", error);
+      toast.error("Failed to download markdown");
     } finally {
-      setIsExporting(false)
+      setIsExporting(false);
     }
-  }
+  };
 
   return (
     <DropdownMenu>
@@ -171,6 +170,5 @@ export function PostExport({ post, projectTitle, authorName }: PostExportProps) 
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
-
