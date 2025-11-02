@@ -28,52 +28,6 @@ export function AboutView() {
           </div>
         </div>
       </section>
-
-      {/* CTA Section */}
-      <section className="pb-20 lg:pb-32">
-        <div className="container mx-auto px-4 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl lg:text-5xl font-bold mb-6">Ready to Join the Movement?</h2>
-            <p className="text-lg text-muted-foreground mb-10 leading-relaxed">
-              Be part of the future of filmmaking. Start sharing your projects and connecting with
-              creators today.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <SignedIn>
-                <Button
-                  size="lg"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8"
-                  asChild
-                >
-                  <Link href="/dashboard">
-                    Go to Dashboard
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-              </SignedIn>
-              <SignedOut>
-                <SignUpButton mode="modal">
-                  <Button
-                    size="lg"
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8"
-                  >
-                    Get Started
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </SignUpButton>
-              </SignedOut>
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-base px-8 bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!"
-                asChild
-              >
-                <Link href="/projects">Browse Projects</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
   );
 }
