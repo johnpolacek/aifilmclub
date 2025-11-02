@@ -32,12 +32,7 @@ export function Footer() {
               </li>
               <li>
                 <Link href="#" className="hover:text-foreground transition-colors">
-                  Challenges
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition-colors">
-                  Gallery
+                  Contact
                 </Link>
               </li>
             </ul>
@@ -47,30 +42,25 @@ export function Footer() {
             <h3 className="font-semibold mb-4">Resources</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <Link href="#" className="hover:text-foreground transition-colors">
+                <Link href="/about" className="hover:text-foreground transition-colors">
                   About
                 </Link>
               </li>
               <li>
                 <Link href="#" className="hover:text-foreground transition-colors">
-                  Guidelines
+                  Privacy Policy
                 </Link>
               </li>
               <li>
                 <Link href="#" className="hover:text-foreground transition-colors">
-                  Support
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition-colors">
-                  Contact
+                  Terms of Use
                 </Link>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="pt-8 border-t border-white/10 border-border text-center text-sm text-muted-foreground">
+        <div className="pt-8 border-t border-border text-center text-sm text-muted-foreground">
           <p>&copy; 2025 AI Film Camp. All rights reserved.</p>
         </div>
       </div>

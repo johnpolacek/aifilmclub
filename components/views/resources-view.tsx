@@ -23,110 +23,24 @@ import { Card } from "@/components/ui/card";
 export function ResourcesView() {
   const resourceCategories = [
     {
-      icon: FileText,
-      title: "Ideation & Scriptwriting",
-      description: "AI-powered tools for brainstorming and writing scripts",
-      resources: [
-        {
-          name: "NoteGPT.io",
-          description: "AI note-taking and organization",
-          link: "https://notegpt.io/",
-        },
-        {
-          name: "Ideanote",
-          description: "Ideation and brainstorming platform",
-          link: "https://ideanote.io/",
-        },
-        {
-          name: "OwlyWriter AI",
-          description: "Content writing assistant by Hootsuite",
-          link: "https://www.hootsuite.com/platform/owly-writer-ai",
-        },
-        {
-          name: "Shortly AI",
-          description: "AI writing assistant",
-          link: "https://www.shortlyai.com/",
-        },
-        {
-          name: "Studiovity",
-          description: "Production management and scriptwriting",
-          link: "https://studiovity.com/",
-        },
-        {
-          name: "Celtx",
-          description: "Professional scriptwriting software",
-          link: "https://www.celtx.com/",
-        },
-        {
-          name: "NolanAI",
-          description: "AI script analysis and feedback",
-          link: "https://nolanai.com/",
-        },
-        {
-          name: "Saga",
-          description: "AI-powered writing platform",
-          link: "https://writeonsaga.com/",
-        },
-        {
-          name: "ChatGPT",
-          description: "Versatile AI assistant for scriptwriting",
-          link: "https://chatgpt.com/",
-        },
-        {
-          name: "GravityWrite",
-          description: "AI content generation",
-          link: "https://gravitywrite.com/",
-        },
-      ],
-    },
-    {
-      icon: Image,
-      title: "Storyboarding & Pre-visualization",
-      description: "Tools for visualizing your film before production",
-      resources: [
-        {
-          name: "Katalist.ai",
-          description: "AI storyboard generation",
-          link: "https://www.katalist.ai/",
-        },
-        {
-          name: "Storyboarder",
-          description: "Open-source storyboarding tool",
-          link: "https://wonderunit.com/storyboarder/",
-        },
-        {
-          name: "Saga",
-          description: "Storyboarding and visualization",
-          link: "https://writeonsaga.com/",
-        },
-        {
-          name: "Studiovity",
-          description: "AI-powered storyboarding features",
-          link: "https://studiovity.com/",
-        },
-      ],
-    },
-    {
-      icon: Calendar,
-      title: "Logistics & Planning",
-      description: "Production management and scheduling tools",
-      resources: [
-        {
-          name: "Studiovity",
-          description: "Script breakdown, scheduling, and call sheets",
-          link: "https://studiovity.com/",
-        },
-      ],
-    },
-    {
       icon: Film,
       title: "Video Generation",
       description: "AI tools for creating video content",
       resources: [
         {
+          name: "Google VEO",
+          description: "Google's video generation model",
+          link: "https://deepmind.google/models/veo/",
+        },
+        {
           name: "Runway",
           description: "Advanced video generation platform",
           link: "https://runwayml.com/",
+        },
+        {
+          name: "Kling",
+          description: "AI video generation platform",
+          link: "https://klingai.com/",
         },
         {
           name: "Synthesia",
@@ -138,16 +52,6 @@ export function ResourcesView() {
           name: "OpenAI Sora",
           description: "Cutting-edge video generation model",
           link: "https://openai.com/sora",
-        },
-        {
-          name: "Google VEO",
-          description: "Google's video generation model",
-          link: "https://deepmind.google/models/veo/",
-        },
-        {
-          name: "Kling",
-          description: "AI video generation platform",
-          link: "https://klingai.com/",
         },
         {
           name: "MovieFlow",
@@ -277,33 +181,6 @@ export function ResourcesView() {
           name: "Unreal Engine",
           description: "Real-time 3D creation for film",
           link: "https://www.unrealengine.com/",
-        },
-      ],
-    },
-    {
-      icon: Headphones,
-      title: "Audio Repair & Mixing",
-      description: "Professional audio processing tools",
-      resources: [
-        {
-          name: "iZotope RX",
-          description: "Audio repair and restoration",
-          link: "https://www.izotope.com/",
-        },
-        {
-          name: "CrumplePop",
-          description: "Audio cleanup tools by Boris FX",
-          link: "https://borisfx.com/products/crumplepop/",
-        },
-        {
-          name: "Resemble AI",
-          description: "AI voice cloning and audio",
-          link: "https://www.resemble.ai/",
-        },
-        {
-          name: "Adobe Audition",
-          description: "Professional audio editing",
-          link: "https://www.adobe.com/products/audition.html",
         },
       ],
     },
@@ -503,7 +380,7 @@ export function ResourcesView() {
       </section>
 
       {/* Resource Categories */}
-      <section className="py-20 lg:py-32">
+      <section className="pb-20 lg:pbx-32">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="grid gap-16">
             {resourceCategories.map((category) => {
