@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ProjectFormData } from "@/components/project-form";
 import { PostView } from "@/components/views/post-view";
-import { getPost, type Post } from "@/lib/posts";
+import { getPost } from "@/lib/posts";
 import { getUserProfile } from "@/lib/profiles";
 import { getProject } from "@/lib/projects";
 
@@ -49,7 +49,7 @@ export default async function PostPage({
   }
 
   // Verify the post belongs to a project with matching username and slug
-  const project = await getProject(post!.projectId);
+  const project = await getProject(post?.projectId);
 
   if (!project || project.username !== username || project.slug !== projectSlug) {
     notFound();
@@ -60,7 +60,7 @@ export default async function PostPage({
 
   return (
     <PostView
-      post={post!}
+      post={post}
       project={{ ...project, username } as ProjectFormData & { username: string }}
       creatorProfile={creatorProfile}
       username={username}

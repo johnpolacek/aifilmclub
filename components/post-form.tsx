@@ -17,7 +17,6 @@ import {
   Loader2,
   Plus,
   Rss,
-  Trash2,
   Video,
   X,
   Youtube,
@@ -497,7 +496,7 @@ export function PostForm({
     ];
     for (const pattern of patterns) {
       const match = url.match(pattern);
-      if (match && match[1]) {
+      if (match?.[1]) {
         return match[1];
       }
     }
@@ -508,7 +507,7 @@ export function PostForm({
     const patterns = [/(?:vimeo\.com\/)(\d+)/, /(?:player\.vimeo\.com\/video\/)(\d+)/];
     for (const pattern of patterns) {
       const match = url.match(pattern);
-      if (match && match[1]) {
+      if (match?.[1]) {
         return match[1];
       }
     }
@@ -632,7 +631,7 @@ export function PostForm({
   };
 
   const insertHeading = (level: number) => {
-    const heading = "#".repeat(level) + " ";
+    const heading = `${"#".repeat(level)} `;
     insertMarkdown(heading, "");
   };
 
@@ -677,7 +676,7 @@ export function PostForm({
     const lines = content.substring(0, start).split("\n");
     const currentLine = lines[lines.length - 1];
     const indent = currentLine.match(/^(\s*)/)?.[1] || "";
-    const newContent = content.substring(0, start) + `${indent}- ` + content.substring(start);
+    const newContent = `${content.substring(0, start)}${indent}- ${content.substring(start)}`;
     setContent(newContent);
 
     setTimeout(() => {
@@ -704,7 +703,7 @@ export function PostForm({
           document.execCommand("copy");
           document.body.removeChild(textArea);
           return true;
-        } catch (err) {
+        } catch (_err) {
           document.body.removeChild(textArea);
           return false;
         }

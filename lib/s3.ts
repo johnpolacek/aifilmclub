@@ -150,7 +150,7 @@ export async function uploadImageFromUrl(
 export async function uploadImageFromBuffer(
   buffer: Buffer,
   key: string,
-  contentType?: string,
+  _contentType?: string,
   options?: { isAvatar?: boolean; isThumbnail?: boolean }
 ): Promise<string> {
   try {

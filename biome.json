@@ -20,6 +20,11 @@
       "!**/package-lock.json"
     ]
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -36,7 +41,8 @@
       },
       "style": {
         "useImportType": "error",
-        "useConst": "error"
+        "useConst": "error",
+        "noNonNullAssertion": "warn"
       },
       "suspicious": {
         "noExplicitAny": "warn",
@@ -67,6 +73,16 @@
       "includes": ["**/*.config.*", "**/*.config.*.*"],
       "formatter": {
         "lineWidth": 120
+      }
+    },
+    {
+      "includes": ["lib/s3.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
       }
     }
   ]

@@ -128,7 +128,7 @@
     @apply bg-background text-foreground;
   }
   .prose {
-    font-size: .875rem;
+    font-size: 0.875rem;
   }
 }
 

@@ -12,8 +12,8 @@ export function Footer() {
               <span>AI Film Camp</span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-              The premier online community for AI film creators to share, collaborate, and showcase
-              their work-in-progress projects.
+              An online community for AI film creators to share, collaborate, and showcase their
+              work-in-progress projects.
             </p>
           </div>
 

@@ -53,7 +53,6 @@ export async function optimizeImage(
       optimizedBuffer = await sharpInstance.png({ quality, compressionLevel: 9 }).toBuffer();
       contentType = "image/png";
       break;
-    case "jpeg":
     default:
       // Convert to JPEG (smaller file size for photos)
       optimizedBuffer = await sharpInstance.jpeg({ quality, mozjpeg: true }).toBuffer();

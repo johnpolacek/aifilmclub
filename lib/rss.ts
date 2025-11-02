@@ -13,7 +13,7 @@ export async function generateRSSFeed(
   baseUrl: string
 ): Promise<string> {
   const projectUrl = `${baseUrl}/${userProfile.username}/${project.slug}`;
-  const rssUrl = `${baseUrl}/api/rss/${userProfile.username}/${project.slug}`;
+  const _rssUrl = `${baseUrl}/api/rss/${userProfile.username}/${project.slug}`;
 
   // Get project description
   const description = project.description || `Posts from ${project.title}`;

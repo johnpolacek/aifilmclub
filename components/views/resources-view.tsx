@@ -87,13 +87,13 @@ export function ResourcesView() {
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 bg-gradient-to-b from-background to-muted/30">
+      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 bg-linear-to-b from-background to-muted/30">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 text-balance">
               Resources for AI Filmmakers
             </h1>
-            <p className="text-lg lg:text-xl text-muted-foreground text-pretty">
+            <p className="text-lg lg:text-xl text-muted-foreground text-balance">
               Everything you need to create stunning AI films. Tools, tutorials, inspiration, and
               community support.
             </p>

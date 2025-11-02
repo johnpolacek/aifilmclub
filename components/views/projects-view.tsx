@@ -1,12 +1,9 @@
-import { Clock, Film, User } from "lucide-react";
+import { Film } from "lucide-react";
 import { Header } from "@/components/header";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 
 export function ProjectsView() {
   // Placeholder projects data
-  const placeholderProjects = [
+  const _placeholderProjects = [
     {
       id: "1",
       title: "The Last Algorithm",
@@ -64,7 +61,7 @@ export function ProjectsView() {
         <div className="container mx-auto px-4 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 text-balance">Community Projects</h1>
-            <p className="text-lg lg:text-xl text-muted-foreground text-pretty">
+            <p className="text-lg lg:text-xl text-muted-foreground text-balance">
               Explore groundbreaking AI films from creators around the world. Get inspired, learn,
               and collaborate.
             </p>
@@ -81,7 +78,7 @@ export function ProjectsView() {
               <Film className="h-8 w-8 text-primary" />
             </div>
             <h3 className="text-2xl font-bold mb-2">Coming Soon</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
+            <p className="text-muted-foreground max-w-md mx-auto text-balance">
               This is just a preview. Join the community and share your own AI film projects!
             </p>
           </div>

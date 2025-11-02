@@ -18,7 +18,7 @@ interface PostExportProps {
   authorName?: string;
 }
 
-export function PostExport({ post, projectTitle, authorName }: PostExportProps) {
+export function PostExport({ post, projectTitle: _projectTitle, authorName }: PostExportProps) {
   const [isExporting, setIsExporting] = useState(false);
 
   const copyToClipboard = async (text: string) => {
@@ -39,7 +39,7 @@ export function PostExport({ post, projectTitle, authorName }: PostExportProps) 
           document.execCommand("copy");
           document.body.removeChild(textArea);
           return true;
-        } catch (err) {
+        } catch (_err) {
           document.body.removeChild(textArea);
           return false;
         }

@@ -1,4 +1,5 @@
 import { Heart, MessageCircle, Play } from "lucide-react";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
@@ -55,10 +56,11 @@ export function FeaturedProjects() {
             >
               <div className="relative aspect-video overflow-hidden">
                 {project.thumbnail ? (
-                  <img
+                  <Image
                     src={project.thumbnail}
                     alt={project.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <ImagePlaceholder className="h-full" />
