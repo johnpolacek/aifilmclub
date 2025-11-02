@@ -18,10 +18,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
+import { PostContent } from "@/components/post-content";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -581,22 +579,6 @@ export function PostForm({
     setVideoUrl("");
   };
 
-  const renderVideoEmbeds = (content: string): string => {
-    // Replace [youtube:VIDEO_ID] with HTML embed
-    content = content.replace(
-      /\[youtube:([^\]]+)\]/g,
-      '<div class="video-container"><iframe width="100%" height="315" src="https://www.youtube.com/embed/$1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
-    );
-
-    // Replace [vimeo:VIDEO_ID] with HTML embed
-    content = content.replace(
-      /\[vimeo:([^\]]+)\]/g,
-      '<div class="video-container"><iframe src="https://player.vimeo.com/video/$1" width="100%" height="315" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>'
-    );
-
-    return content;
-  };
-
   // Markdown formatting helpers
   const insertMarkdown = (before: string, after: string = "") => {
     const textarea = document.getElementById("post-content") as HTMLTextAreaElement;
@@ -890,11 +872,9 @@ export function PostForm({
                 />
               </TabsContent>
               <TabsContent value="preview">
-                <div className="prose prose-sm max-w-none dark:prose-invert border rounded-md p-4 min-h-[200px] bg-background [&_.video-container]:relative [&_.video-container]:pb-[56.25%] [&_.video-container]:h-0 [&_.video-container]:overflow-hidden [&_.video-container]:my-4 [&_.video-container_iframe]:absolute [&_.video-container_iframe]:top-0 [&_.video-container_iframe]:left-0 [&_.video-container_iframe]:w-full [&_.video-container_iframe]:h-full">
+                <div className="border rounded-md p-4 min-h-[200px] bg-background">
                   {content ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                      {renderVideoEmbeds(content)}
-                    </ReactMarkdown>
+                    <PostContent content={content} />
                   ) : (
                     <p className="text-muted-foreground italic">Nothing to preview yet...</p>
                   )}
