@@ -58,7 +58,7 @@ export function DashboardPageView({
                         <div className="space-y-2">
                           {userProfile.links.map((link, index) => (
                             <a
-                              key={index}
+                              key={`${link.text}-${link.url}-${index}`}
                               href={link.url}
                               target="_blank"
                               rel="noopener noreferrer"

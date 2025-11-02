@@ -270,7 +270,10 @@ export default function ProfileForm({ initialData, isRequired = false }: Profile
 
               <div className="space-y-3">
                 {profile.links.map((link, index) => (
-                  <div key={index} className="flex items-center gap-2 p-3 bg-muted/30 rounded-md">
+                  <div
+                    key={`${link.text}-${link.url}-${index}`}
+                    className="flex items-center gap-2 p-3 bg-muted/30 rounded-md"
+                  >
                     <div className="flex-1">
                       <p className="text-sm font-medium">{link.text}</p>
                       <p className="text-xs text-muted-foreground truncate">{link.url}</p>

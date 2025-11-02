@@ -81,6 +81,8 @@ export interface ProjectFormData {
   screenplay?: ProjectFile;
   username?: string;
   slug?: string;
+  // Legacy field for backwards compatibility
+  files?: ProjectFile[];
 }
 
 // Common tools by category
@@ -233,7 +235,7 @@ export default function ProjectForm({
     thumbnail: initialData?.thumbnail,
     links: migrateLinks(initialData?.links),
     tools: migrateTools(initialData?.tools),
-    screenplay: initialData?.screenplay || (initialData as any)?.files?.[0], // Migrate old files array to screenplay
+    screenplay: initialData?.screenplay || initialData?.files?.[0], // Migrate old files array to screenplay
     username: initialData?.username,
     slug: initialData?.slug,
   });
@@ -545,8 +547,9 @@ export default function ProjectForm({
     } finally {
       setUploadingCharacterIndex(null);
       // Reset file input
-      if (characterFileInputRefs.current[index]) {
-        characterFileInputRefs.current[index]!.value = "";
+      const fileInput = characterFileInputRefs.current[index];
+      if (fileInput) {
+        fileInput.value = "";
       }
     }
   };
@@ -681,8 +684,9 @@ export default function ProjectForm({
     } finally {
       setUploadingLocationIndex(null);
       // Reset file input
-      if (locationFileInputRefs.current[index]) {
-        locationFileInputRefs.current[index]!.value = "";
+      const fileInput = locationFileInputRefs.current[index];
+      if (fileInput) {
+        fileInput.value = "";
       }
     }
   };
@@ -1131,9 +1135,13 @@ export default function ProjectForm({
                 if (!characterTypeSelectIds.current[index]) {
                   characterTypeSelectIds.current[index] = `character-type-${index}-${Date.now()}`;
                 }
-                const typeSelectId = characterTypeSelectIds.current[index]!;
+                const typeSelectId = characterTypeSelectIds.current[index];
+                if (!typeSelectId) return null;
                 return (
-                  <Card key={index} className="bg-muted/30 border-border">
+                  <Card
+                    key={`character-${character.name}-${index}`}
+                    className="bg-muted/30 border-border"
+                  >
                     <CardContent className="p-4 space-y-4">
                       <div className="flex items-start justify-end">
                         <Button
@@ -1274,7 +1282,10 @@ export default function ProjectForm({
 
             <div className="space-y-4">
               {(formData.setting?.locations || []).map((location, index) => (
-                <Card key={index} className="bg-muted/30 border-border">
+                <Card
+                  key={`location-${location.name}-${index}`}
+                  className="bg-muted/30 border-border"
+                >
                   <CardContent className="p-4 space-y-4">
                     <div className="flex items-start justify-end">
                       <Button
@@ -1392,7 +1403,10 @@ export default function ProjectForm({
 
             <div className="space-y-3">
               {formData.links.links.map((link, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 bg-muted/30 rounded-md">
+                <div
+                  key={`${link.label}-${link.url}-${index}`}
+                  className="flex items-center gap-2 p-3 bg-muted/30 rounded-md"
+                >
                   <div className="flex-1">
                     <p className="text-sm font-medium">{link.label}</p>
                     <p className="text-xs text-muted-foreground truncate">{link.url}</p>
@@ -1458,11 +1472,11 @@ export default function ProjectForm({
                     {/* Display added tools for this category */}
                     {toolsInCategory.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {toolsInCategory.map((tool, index) => {
+                        {toolsInCategory.map((tool, _index) => {
                           const globalIndex = formData.tools.indexOf(tool);
                           return (
                             <div
-                              key={`${category}-${index}`}
+                              key={`${category}-${tool.name}-${globalIndex}`}
                               className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm"
                             >
                               <span>{tool.name}</span>

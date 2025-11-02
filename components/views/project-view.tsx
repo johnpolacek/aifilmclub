@@ -154,7 +154,10 @@ export function ProjectView({
                 <h2 className="text-xl font-bold mb-4">Characters</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {project.characters.map((character, index) => (
-                    <Card key={index} className="bg-muted/30 border-border">
+                    <Card
+                      key={`character-${character.name}-${index}`}
+                      className="bg-muted/30 border-border"
+                    >
                       <CardContent className="p-4">
                         <div className="space-y-3">
                           {/* Character Image - Full Width */}
@@ -204,7 +207,10 @@ export function ProjectView({
                 <h2 className="text-xl font-bold mb-4">Setting</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {project.setting.locations.map((location, index) => (
-                    <Card key={index} className="bg-muted/30 border-border">
+                    <Card
+                      key={`location-${location.name}-${index}`}
+                      className="bg-muted/30 border-border"
+                    >
                       <CardContent className="p-4">
                         <div className="space-y-3">
                           {/* Location Image - Full Width (if exists) */}
@@ -242,11 +248,11 @@ export function ProjectView({
             )}
 
             {/* Screenplay / Script */}
-            {(project.screenplay || (project as any).files?.[0]) && (
+            {(project.screenplay || project.files?.[0]) && (
               <div className="mb-5 pb-5 border-b border-border">
                 {(() => {
                   // Support both new screenplay field and old files array for backwards compatibility
-                  const screenplay = project.screenplay || (project as any).files?.[0];
+                  const screenplay = project.screenplay || project.files?.[0];
                   if (!screenplay) return null;
 
                   const fileUrl = getProjectFileUrl(screenplay.filename, username);
@@ -271,7 +277,7 @@ export function ProjectView({
                 <div className="flex flex-wrap gap-2">
                   {projectDisplay.tools.map((tool, index) => (
                     <span
-                      key={index}
+                      key={`tool-${tool.name}-${tool.category}-${index}`}
                       className="px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
                     >
                       {tool.name}
@@ -316,7 +322,7 @@ export function ProjectView({
                 <h2 className="text-2xl font-bold mb-6">Project Updates</h2>
                 <div className="space-y-6">
                   {projectDisplay.updates.map((update, index) => (
-                    <div key={index} className="flex gap-4">
+                    <div key={`update-${update.date}-${index}`} className="flex gap-4">
                       <div className="shrink-0 w-2 bg-primary/20 rounded-full" />
                       <div className="flex-1">
                         <p className="text-sm text-muted-foreground mb-2">{update.date}</p>
@@ -337,7 +343,7 @@ export function ProjectView({
                 <div className="space-y-2">
                   {projectDisplay.links.links.map((link, index) => (
                     <a
-                      key={index}
+                      key={`${link.label}-${link.url}-${index}`}
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"

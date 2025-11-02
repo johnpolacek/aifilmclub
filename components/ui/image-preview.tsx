@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import Image from "next/image";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 import { cn } from "@/lib/utils";
 
@@ -58,16 +59,12 @@ export function ImagePreview({
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : src ? (
-        <img
+        <Image
           src={src}
           alt={alt}
-          className={cn(
-            "w-full h-full",
-            objectFit === "contain" ? "object-contain" : "object-cover"
-          )}
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = "none";
+          fill
+          className={cn(objectFit === "contain" ? "object-contain" : "object-cover")}
+          onError={() => {
             if (onError) {
               onError();
             }
