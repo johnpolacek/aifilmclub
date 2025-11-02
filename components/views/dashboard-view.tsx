@@ -1,7 +1,6 @@
 "use client";
 
 import { Calendar, Clock, Edit, Eye, MessageSquare, X } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -17,9 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import type { Post } from "@/lib/posts";
-import { getThumbnailUrl } from "@/lib/utils";
 
 type DashboardView = ProjectFormData & {
   id: string;
@@ -110,17 +108,16 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
             <div className="grid grid-cols-2 gap-4 p-4">
               {/* Left: Image */}
               <div className="relative aspect-video">
-                {project.thumbnail ? (
-                  <Image
-                    src={getThumbnailUrl(project.thumbnail, project.username)}
-                    alt={project.title}
-                    fill
-                    className="object-cover rounded"
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                  />
-                ) : (
-                  <ImagePlaceholder className="h-full rounded" />
-                )}
+                <OptimizedImage
+                  type="thumbnail"
+                  filename={project.thumbnail}
+                  username={project.username}
+                  alt={project.title}
+                  fill
+                  className="rounded"
+                  objectFit="cover"
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                />
               </div>
 
               {/* Right: Project Info */}

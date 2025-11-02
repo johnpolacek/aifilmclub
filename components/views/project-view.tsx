@@ -6,15 +6,11 @@ import type { ProjectFormData } from "@/components/project-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import { EditProjectButton } from "@/components/views/edit-project-button";
 import type { Post } from "@/lib/posts";
 import type { UserProfile } from "@/lib/profiles";
-import {
-  getCharacterImageUrl,
-  getLocationImageUrl,
-  getProjectFileUrl,
-  getThumbnailUrl,
-} from "@/lib/utils";
+import { getProjectFileUrl, getThumbnailUrl } from "@/lib/utils";
 
 interface ProjectViewProps {
   projectId: string;
@@ -164,11 +160,13 @@ export function ProjectView({
                           {/* Character Image - Full Width */}
                           {character.image && (
                             <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                              <Image
-                                src={getCharacterImageUrl(character.image, username)}
+                              <OptimizedImage
+                                type="character"
+                                filename={character.image}
+                                username={username}
                                 alt={character.name || "Character"}
                                 fill
-                                className="object-cover"
+                                objectFit="cover"
                                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               />
                             </div>
@@ -212,11 +210,13 @@ export function ProjectView({
                           {/* Location Image - Full Width (if exists) */}
                           {location.image && (
                             <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                              <Image
-                                src={getLocationImageUrl(location.image, username)}
+                              <OptimizedImage
+                                type="location"
+                                filename={location.image}
+                                username={username}
                                 alt={location.name || "Location"}
                                 fill
-                                className="object-cover"
+                                objectFit="cover"
                                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               />
                             </div>

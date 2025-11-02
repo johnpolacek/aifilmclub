@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ImagePreview } from "@/components/ui/image-preview";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -974,33 +975,15 @@ export function PostForm({
               />
               {(image || previewImage || isUploadingImage) && (
                 <div className="mb-2 relative">
-                  <div className="relative w-full aspect-video rounded-md overflow-hidden border border-border bg-muted">
-                    {isUploadingImage ? (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
-                    ) : previewImage ? (
-                      <img
-                        src={previewImage}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback: show error message
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = "none";
-                          const parent = target.parentElement;
-                          if (parent) {
-                            parent.innerHTML =
-                              '<div class="w-full h-full flex items-center justify-center text-muted-foreground text-sm">Failed to load image</div>';
-                          }
-                        }}
-                      />
-                    ) : image ? (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                        Image uploaded successfully
-                      </div>
-                    ) : null}
-                  </div>
+                  <ImagePreview
+                    src={previewImage || undefined}
+                    isUploading={isUploadingImage}
+                    isUploaded={!!image}
+                    alt="Preview"
+                    aspectRatio="video"
+                    objectFit="cover"
+                    errorMessage={image ? "Image uploaded successfully" : undefined}
+                  />
                   {!isUploadingImage && (
                     <Button
                       type="button"

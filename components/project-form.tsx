@@ -13,15 +13,16 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImagePreview } from "@/components/ui/image-preview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import {
   Select,
   SelectContent,
@@ -31,7 +32,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { getCharacterImageUrl, getLocationImageUrl, getThumbnailUrl } from "@/lib/utils";
 
 // Types
 export interface ProjectLinks {
@@ -1042,17 +1042,26 @@ export default function ProjectForm({
             <div className="space-y-4">
               {/* Thumbnail Preview */}
               <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                {previewImage || formData.thumbnail ? (
-                  <Image
-                    src={previewImage || getThumbnailUrl(formData.thumbnail, formData.username)}
+                {previewImage ? (
+                  <ImagePreview
+                    src={previewImage}
+                    isUploading={isUploadingImage}
+                    isUploaded={!!formData.thumbnail}
+                    alt="Project image"
+                    aspectRatio="video"
+                    objectFit="cover"
+                  />
+                ) : formData.thumbnail && formData.username ? (
+                  <OptimizedImage
+                    type="thumbnail"
+                    filename={formData.thumbnail}
+                    username={formData.username}
                     alt="Project image"
                     fill
-                    className="object-cover"
+                    objectFit="cover"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center"></div>
-                )}
+                ) : null}
                 {/* Upload overlay */}
                 <button
                   type="button"
@@ -1176,17 +1185,22 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label>Character Image</Label>
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                          {characterPreviewImages[index] ||
-                          (character.image && formData.username) ? (
-                            <Image
-                              src={
-                                characterPreviewImages[index] ||
-                                getCharacterImageUrl(character.image, formData.username) ||
-                                ""
-                              }
+                          {characterPreviewImages[index] ? (
+                            <ImagePreview
+                              src={characterPreviewImages[index]}
+                              isUploading={uploadingCharacterIndex === index}
+                              alt={character.name || "Character"}
+                              aspectRatio="video"
+                              objectFit="cover"
+                            />
+                          ) : character.image && formData.username ? (
+                            <OptimizedImage
+                              type="character"
+                              filename={character.image}
+                              username={formData.username}
                               alt={character.name || "Character"}
                               fill
-                              className="object-cover"
+                              objectFit="cover"
                               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             />
                           ) : (
@@ -1290,16 +1304,22 @@ export default function ProjectForm({
                     <div className="space-y-2">
                       <Label>Location Image (Optional)</Label>
                       <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                        {locationPreviewImages[index] || (location.image && formData.username) ? (
-                          <Image
-                            src={
-                              locationPreviewImages[index] ||
-                              getLocationImageUrl(location.image, formData.username) ||
-                              ""
-                            }
+                        {locationPreviewImages[index] ? (
+                          <ImagePreview
+                            src={locationPreviewImages[index]}
+                            isUploading={uploadingLocationIndex === index}
+                            alt={location.name || "Location"}
+                            aspectRatio="video"
+                            objectFit="cover"
+                          />
+                        ) : location.image && formData.username ? (
+                          <OptimizedImage
+                            type="location"
+                            filename={location.image}
+                            username={formData.username}
                             alt={location.name || "Location"}
                             fill
-                            className="object-cover"
+                            objectFit="cover"
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           />
                         ) : (

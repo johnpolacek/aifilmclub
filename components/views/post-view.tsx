@@ -6,10 +6,10 @@ import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import type { ProjectFormData } from "@/components/project-form";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import { EditPostButton } from "@/components/views/edit-post-button";
 import type { Post } from "@/lib/posts";
 import type { UserProfile } from "@/lib/profiles";
-import { getPostImageUrl } from "@/lib/utils";
 
 interface PostViewProps {
   post: Post;
@@ -112,12 +112,15 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
         {/* Post Image */}
         {post.image && post.username && (
           <div className="mb-6 rounded-md overflow-hidden border border-border">
-            <Image
-              src={getPostImageUrl(post.image, post.username)}
+            <OptimizedImage
+              type="post"
+              filename={post.image}
+              username={post.username}
               alt={post.title}
               width={800}
               height={400}
-              className="w-full h-auto object-contain"
+              className="w-full h-auto"
+              objectFit="contain"
             />
           </div>
         )}

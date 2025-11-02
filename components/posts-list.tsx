@@ -2,7 +2,6 @@
 
 import { useUser } from "@clerk/nextjs";
 import { Calendar, Edit, Eye, Plus, X } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -11,8 +10,8 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { OptimizedImage } from "@/components/ui/optimized-image";
 import type { Post } from "@/lib/posts";
-import { getPostImageUrl } from "@/lib/utils";
 import { PostExport } from "./post-export";
 import { PostForm } from "./post-form";
 
@@ -208,12 +207,15 @@ export function PostsList({
                 </div>
                 {post.image && post.username && (
                   <div className="mb-4 rounded-md overflow-hidden border border-border">
-                    <Image
-                      src={getPostImageUrl(post.image, post.username)}
+                    <OptimizedImage
+                      type="post"
+                      filename={post.image}
+                      username={post.username}
                       alt={post.title}
                       width={800}
                       height={400}
-                      className="w-full h-auto object-contain"
+                      className="w-full h-auto"
+                      objectFit="contain"
                     />
                   </div>
                 )}
