@@ -46,7 +46,13 @@ export function ImagePreview({
     aspectRatio === "video" ? "aspect-video" : aspectRatio === "square" ? "aspect-square" : "";
 
   return (
-    <div className={cn("relative w-full rounded-md overflow-hidden border border-border bg-muted", aspectRatioClass, className)}>
+    <div
+      className={cn(
+        "relative w-full rounded-md overflow-hidden border border-border bg-muted",
+        aspectRatioClass,
+        className
+      )}
+    >
       {isUploading ? (
         <div className="w-full h-full flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -87,4 +93,3 @@ export function ImagePreview({
     </div>
   );
 }
-

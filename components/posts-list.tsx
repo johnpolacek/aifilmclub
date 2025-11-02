@@ -114,7 +114,6 @@ export function PostsList({
     });
   };
 
-
   return (
     <div className="space-y-6">
       {canEditPosts && (

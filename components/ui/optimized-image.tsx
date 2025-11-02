@@ -1,8 +1,8 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 import { getImageUrl, type ImageType } from "@/lib/image-utils";
 import { cn } from "@/lib/utils";
@@ -152,4 +152,3 @@ export function OptimizedImage({
     </div>
   );
 }
-

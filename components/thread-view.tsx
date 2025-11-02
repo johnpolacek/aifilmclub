@@ -1,13 +1,13 @@
 "use client";
 
-import { Copy, Check, X } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, X } from "lucide-react";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
+import { useState } from "react";
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ThreadViewProps {
   title: string;

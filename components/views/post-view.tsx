@@ -1,8 +1,8 @@
 import { Calendar, Clock, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { ProjectFormData } from "@/components/project-form";
 import { PostContent } from "@/components/post-content";
+import type { ProjectFormData } from "@/components/project-form";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { EditPostButton } from "@/components/views/edit-post-button";
@@ -26,7 +26,6 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
       day: "numeric",
     });
   };
-
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">

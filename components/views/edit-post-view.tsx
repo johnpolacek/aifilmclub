@@ -1,15 +1,14 @@
 "use client";
 
-import { ArrowLeft, Copy, Code2, FileText, MessageSquare, Rss, Share2 } from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, Code2, Copy, FileText, MessageSquare, Rss, Share2 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useState } from "react";
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
 import remarkHtml from "remark-html";
 import { toast } from "sonner";
 import { PostForm } from "@/components/post-form";
-import type { Post } from "@/lib/posts";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { Post } from "@/lib/posts";
 
 // Dynamically import ThreadView to prevent SSR (avoids hydration errors with Radix UI)
 const ThreadView = dynamic(() => import("@/components/thread-view").then((mod) => mod.ThreadView), {

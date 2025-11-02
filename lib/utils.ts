@@ -7,11 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 // Re-export image utilities for backward compatibility
 export {
-  getPublicUrl,
-  getImageUrl,
-  getThumbnailUrl,
   getCharacterImageUrl,
+  getImageUrl,
   getLocationImageUrl,
   getPostImageUrl,
   getProjectFileUrl,
+  getPublicUrl,
+  getThumbnailUrl,
 } from "./image-utils";

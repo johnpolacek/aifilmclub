@@ -123,4 +123,3 @@ export function getProjectFileUrl(
   const key = `projects/${username}/files/${filename}`;
   return getPublicUrl(key);
 }
-
