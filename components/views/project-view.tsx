@@ -76,7 +76,7 @@ export function ProjectView({
         )}
         <div className="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-8">
-          <div className="container mx-auto px-8 lg:px-16 max-w-5xl">
+          <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
             <div className="flex items-center gap-3 mb-4">
               <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
                 {projectDisplay.status}
@@ -107,7 +107,7 @@ export function ProjectView({
       <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
         <div className="space-y-8">
           {/* Combined Project Info */}
-          <div className="px-8 pb-5">
+          <div className="pb-5">
             {/* Creator */}
             <div className="mb-5">
               <Link
@@ -240,7 +240,7 @@ export function ProjectView({
 
             {/* Screenplay / Script */}
             {(project.screenplay || project.files?.[0]) && (
-              <div className="mb-5 pb-5 border-b border-border">
+              <div className="pb-5">
                 {(() => {
                   // Support both new screenplay field and old files array for backwards compatibility
                   const screenplay = project.screenplay || project.files?.[0];
@@ -249,9 +249,9 @@ export function ProjectView({
                   const fileUrl = getProjectFileUrl(screenplay.filename, username);
                   return (
                     <a href={fileUrl} target="_blank" rel="noopener noreferrer" download>
-                      <Button variant="outline" className="bg-transparent">
-                        <FileDown className="h-4 w-4 mr-2 text-primary" />
-                        Download Screenplay
+                      <Button size="sm" variant="outline" className="bg-transparent text-xs">
+                        <FileDown className="h-3 w-3 mr-1" />
+                        View Screenplay
                       </Button>
                     </a>
                   );
