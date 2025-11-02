@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Clock, ExternalLink, FileDown, Rss } from "lucide-react";
+import { Calendar, Clock, ExternalLink, FileDown, Rss } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { PostsList } from "@/components/posts-list";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePlaceholder } from "@/components/ui/image-placeholder";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { EditProjectButton } from "@/components/views/edit-project-button";
+import { ProjectNavigation } from "@/components/views/project-navigation";
 import type { Post } from "@/lib/posts";
 import type { UserProfile } from "@/lib/profiles";
 import { getProjectFileUrl, getThumbnailUrl } from "@/lib/utils";
@@ -59,35 +59,24 @@ export function ProjectView({
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-16">
-      <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-        {/* Back Button and Edit Button */}
-        <div className="flex items-center justify-between mb-6">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 text-primary hover:opacity-80 transition-opacity"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm font-semibold">Back to Dashboard</span>
-          </Link>
-          <EditProjectButton projectId={projectId} ownerUsername={username} />
-        </div>
-
-        {/* Hero Image */}
-        <div className="relative h-[400px] rounded-lg overflow-hidden mb-8">
-          {projectDisplay.thumbnail ? (
-            <Image
-              src={projectDisplay.thumbnail}
-              alt={projectDisplay.title}
-              fill
-              className="object-cover"
-              sizes="100vw"
-              priority
-            />
-          ) : (
-            <ImagePlaceholder className="h-full rounded-lg" />
-          )}
-          <div className="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-8">
+      {/* Hero Image - Full Width */}
+      <div className="relative h-[400px] xl:h-[500px] w-full mb-8">
+        <ProjectNavigation projectId={projectId} ownerUsername={username} />
+        {projectDisplay.thumbnail ? (
+          <Image
+            src={projectDisplay.thumbnail}
+            alt={projectDisplay.title}
+            fill
+            className="object-cover"
+            sizes="100vw"
+            priority
+          />
+        ) : (
+          <ImagePlaceholder className="h-full w-full" />
+        )}
+        <div className="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-8">
+          <div className="container mx-auto px-8 lg:px-16 max-w-5xl">
             <div className="flex items-center gap-3 mb-4">
               <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
                 {projectDisplay.status}
@@ -113,7 +102,9 @@ export function ProjectView({
             </div>
           </div>
         </div>
+      </div>
 
+      <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
         <div className="space-y-8">
           {/* Combined Project Info */}
           <div className="px-8 pb-5">
