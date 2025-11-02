@@ -76,13 +76,12 @@ export interface ProjectFormData {
     locations?: Location[];
   };
   thumbnail?: string;
+  filmLink?: string; // YouTube or Vimeo link
   links: ProjectLinks;
   tools: CategorizedTool[];
   screenplay?: ProjectFile;
   username?: string;
   slug?: string;
-  // Legacy field for backwards compatibility
-  files?: ProjectFile[];
 }
 
 // Common tools by category
@@ -166,76 +165,19 @@ export default function ProjectForm({
   const durationSelectId = useId();
   const characterTypeSelectIds = useRef<Record<number, string>>({});
 
-  // Helper to migrate old link format to new format
-  const migrateLinks = (links?: ProjectLinks | Record<string, unknown>): ProjectLinks => {
-    if (!links) return { links: [] };
-
-    // If already in new format
-    if ("links" in links && Array.isArray(links.links)) return links as ProjectLinks;
-
-    // Migrate from old format
-    const migratedLinks: Array<{ label: string; url: string }> = [];
-    const oldLinks = links as Record<string, unknown>;
-
-    if (typeof oldLinks.youtube === "string")
-      migratedLinks.push({ label: "YouTube", url: oldLinks.youtube });
-    if (typeof oldLinks.vimeo === "string")
-      migratedLinks.push({ label: "Vimeo", url: oldLinks.vimeo });
-    if (typeof oldLinks.x === "string")
-      migratedLinks.push({ label: "X (Twitter)", url: oldLinks.x });
-    if (typeof oldLinks.instagram === "string")
-      migratedLinks.push({ label: "Instagram", url: oldLinks.instagram });
-    if (typeof oldLinks.website === "string")
-      migratedLinks.push({ label: "Website", url: oldLinks.website });
-    if (Array.isArray(oldLinks.custom))
-      migratedLinks.push(...(oldLinks.custom as Array<{ label: string; url: string }>));
-
-    return { links: migratedLinks };
-  };
-
-  // Helper to migrate old tools format (string[]) to new format (CategorizedTool[])
-  const migrateTools = (tools?: CategorizedTool[] | string[]): CategorizedTool[] => {
-    if (!tools || tools.length === 0) return [];
-
-    // If already in new format (has category property)
-    if (typeof tools[0] === "object" && "category" in tools[0]) {
-      return tools as CategorizedTool[];
-    }
-
-    // Migrate from old format (string array) - categorize as "other"
-    return (tools as string[]).map((name) => ({ name, category: "other" as ToolCategory }));
-  };
-
-  // Helper to migrate old characters format (string) to new format (Character[])
-  const migrateCharacters = (characters?: Character[] | string): Character[] => {
-    if (!characters) return [];
-
-    // If already in new format (array of Character objects)
-    if (
-      Array.isArray(characters) &&
-      characters.length > 0 &&
-      typeof characters[0] === "object" &&
-      "name" in characters[0]
-    ) {
-      return characters as Character[];
-    }
-
-    // Migrate from old format (string) - return empty array (can't convert string to structured data)
-    return [];
-  };
-
   const [formData, setFormData] = useState<ProjectFormData>({
     title: initialData?.title || "",
     description: initialData?.description || "",
     status: (initialData?.status as ProjectFormData["status"]) || "In Progress",
     duration: initialData?.duration || "",
     genre: initialData?.genre || "",
-    characters: migrateCharacters(initialData?.characters),
+    characters: initialData?.characters || [],
     setting: initialData?.setting || { locations: [] },
     thumbnail: initialData?.thumbnail,
-    links: migrateLinks(initialData?.links),
-    tools: migrateTools(initialData?.tools),
-    screenplay: initialData?.screenplay || initialData?.files?.[0], // Migrate old files array to screenplay
+    filmLink: initialData?.filmLink || "",
+    links: initialData?.links || { links: [] },
+    tools: initialData?.tools || [],
+    screenplay: initialData?.screenplay,
     username: initialData?.username,
     slug: initialData?.slug,
   });
@@ -264,7 +206,7 @@ export default function ProjectForm({
   const [characterPreviewImages, setCharacterPreviewImages] = useState<Record<number, string>>({});
   const [locationPreviewImages, setLocationPreviewImages] = useState<Record<number, string>>({});
   const [hasVideoTool, setHasVideoTool] = useState(() => {
-    const tools = migrateTools(initialData?.tools);
+    const tools = initialData?.tools || [];
     return tools.some((tool) => tool.category === "video");
   });
   const projectFileInputRef = useRef<HTMLInputElement>(null);
@@ -1033,8 +975,8 @@ export default function ProjectForm({
                 <SelectContent>
                   <SelectItem value="Short (< 5 min)">Short (&lt; 5 min)</SelectItem>
                   <SelectItem value="Medium (5-20 min)">Medium (5-20 min)</SelectItem>
-                  <SelectItem value="Long (20-50 min)">Long (20-50 min)</SelectItem>
-                  <SelectItem value="Feature (50+ min)">Feature (50+ min)</SelectItem>
+                  <SelectItem value="Long (20-50 min)">Long (20-60 min)</SelectItem>
+                  <SelectItem value="Feature (60+ min)">Feature (60+ min)</SelectItem>
                   <SelectItem value="Series/Episode">Series / Episodic</SelectItem>
                 </SelectContent>
               </Select>
@@ -1118,6 +1060,20 @@ export default function ProjectForm({
                 disabled={isUploadingImage}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filmLink">Film Link</Label>
+            <Input
+              id="filmLink"
+              placeholder="YouTube or Vimeo URL (e.g., https://youtube.com/watch?v=...)"
+              value={formData.filmLink || ""}
+              onChange={(e) => setFormData({ ...formData, filmLink: e.target.value })}
+              className="bg-background"
+            />
+            <p className="text-xs text-muted-foreground">
+              Add a link to your film on YouTube or Vimeo
+            </p>
           </div>
 
           <div className="space-y-4 pt-4 border-t border-border">

@@ -1,4 +1,4 @@
-import { Calendar, Clock, ExternalLink, FileDown, Rss } from "lucide-react";
+import { Calendar, Clock, ExternalLink, FileDown, Play, Rss } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { PostsList } from "@/components/posts-list";
@@ -11,6 +11,38 @@ import { ProjectNavigation } from "@/components/views/project-navigation";
 import type { Post } from "@/lib/posts";
 import type { UserProfile } from "@/lib/profiles";
 import { getProjectFileUrl, getThumbnailUrl } from "@/lib/utils";
+
+// Helper functions to detect and parse video URLs
+function getVideoEmbedInfo(
+  url: string
+): { type: "youtube" | "vimeo" | null; embedUrl: string } | null {
+  try {
+    // YouTube URL patterns
+    const youtubeRegex =
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const youtubeMatch = url.match(youtubeRegex);
+    if (youtubeMatch?.[1]) {
+      return {
+        type: "youtube",
+        embedUrl: `https://www.youtube.com/embed/${youtubeMatch[1]}`,
+      };
+    }
+
+    // Vimeo URL patterns
+    const vimeoRegex = /(?:vimeo\.com\/)(?:.*\/)?(\d+)/;
+    const vimeoMatch = url.match(vimeoRegex);
+    if (vimeoMatch?.[1]) {
+      return {
+        type: "vimeo",
+        embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 interface ProjectViewProps {
   projectId: string;
@@ -100,16 +132,7 @@ export function ProjectView({
                 Updated {projectDisplay.lastUpdated}
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-        <div className="space-y-8">
-          {/* Combined Project Info */}
-          <div className="pb-5">
-            {/* Creator */}
-            <div className="mb-5">
+            <div className="mt-5">
               <Link
                 href={`/${projectDisplay.creator.username}`}
                 className="inline-flex items-center gap-2 group"
@@ -130,9 +153,54 @@ export function ProjectView({
                 </span>
               </Link>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
+        <div className="space-y-8">
+          <div className="pb-5">
+            {/* Film */}
+            {project.filmLink &&
+              (() => {
+                const videoInfo = getVideoEmbedInfo(project.filmLink);
+
+                if (videoInfo) {
+                  // Embedded video for YouTube/Vimeo
+                  return (
+                    <div className="mb-5 pb-5 border-b border-border">
+                      <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                        <iframe
+                          src={videoInfo.embedUrl}
+                          title={`${projectDisplay.title} - Film`}
+                          className="absolute inset-0 w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Fallback button for other video platforms
+                return (
+                  <div className="mb-5 pb-5 border-b border-border">
+                    <a
+                      href={project.filmLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                    >
+                      <Play className="h-4 w-4" />
+                      <span className="font-medium">Watch Film</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                );
+              })()}
 
             {/* About This Project */}
-            <div className="mb-5 pb-5 border-b border-border">
+            <div className="pb-5">
               <h2 className="text-xl font-bold mb-3">About This Project</h2>
               <p className="text-muted-foreground text-sm leading-relaxed">
                 {projectDisplay.description}
@@ -239,23 +307,19 @@ export function ProjectView({
             )}
 
             {/* Screenplay / Script */}
-            {(project.screenplay || project.files?.[0]) && (
+            {project.screenplay && (
               <div className="pb-5">
-                {(() => {
-                  // Support both new screenplay field and old files array for backwards compatibility
-                  const screenplay = project.screenplay || project.files?.[0];
-                  if (!screenplay) return null;
-
-                  const fileUrl = getProjectFileUrl(screenplay.filename, username);
-                  return (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" download>
-                      <Button size="sm" variant="outline" className="bg-transparent text-xs">
-                        <FileDown className="h-3 w-3 mr-1" />
-                        View Screenplay
-                      </Button>
-                    </a>
-                  );
-                })()}
+                <a
+                  href={getProjectFileUrl(project.screenplay.filename, username)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                >
+                  <Button size="sm" variant="outline" className="bg-transparent text-xs">
+                    <FileDown className="h-3 w-3 mr-1" />
+                    View Screenplay
+                  </Button>
+                </a>
               </div>
             )}
 
