@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ProjectFormData } from "@/components/project-form";
 import { PostView } from "@/components/views/post-view";
+import { getPostImageUrl } from "@/lib/image-utils";
 import { getPost } from "@/lib/posts";
 import { getUserProfile } from "@/lib/profiles";
 import { getProject } from "@/lib/projects";
@@ -28,10 +29,29 @@ export async function generateMetadata({
     };
   }
 
-  return {
+  // Get the first image from the post (post.image field)
+  const postImageUrl =
+    post.image && (post.username || username)
+      ? getPostImageUrl(post.image, post.username || username)
+      : undefined;
+
+  const metadata: Metadata = {
     title: `${post.title} - ${project.title} - AI Film Camp`,
     description: post.content.substring(0, 160) || `Read ${post.title} by ${username}`,
   };
+
+  // Add image to OpenGraph and Twitter metadata if available
+  if (postImageUrl) {
+    metadata.openGraph = {
+      images: [postImageUrl],
+    };
+    metadata.twitter = {
+      card: "summary_large_image",
+      images: [postImageUrl],
+    };
+  }
+
+  return metadata;
 }
 
 export default async function PostPage({

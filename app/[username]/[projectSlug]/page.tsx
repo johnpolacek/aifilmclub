@@ -4,6 +4,7 @@ import { ProjectView } from "@/components/views/project-view";
 import { getPostsForProject } from "@/lib/posts";
 import { getUserProfile } from "@/lib/profiles";
 import { getProjectByUsernameAndSlug } from "@/lib/projects";
+import { getImageUrl } from "@/lib/utils";
 
 export async function generateMetadata({
   params,
@@ -20,10 +21,35 @@ export async function generateMetadata({
   }
 
   const { project } = projectData;
+  const thumbnailUrl = project.thumbnail
+    ? getImageUrl({ type: "thumbnail", filename: project.thumbnail, username })
+    : undefined;
 
   return {
     title: `${project.title} - ${username} - AI Film Camp`,
     description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+    openGraph: {
+      title: `${project.title} - ${username} - AI Film Camp`,
+      description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+      ...(thumbnailUrl && {
+        images: [
+          {
+            url: thumbnailUrl,
+            width: 1200,
+            height: 630,
+            alt: project.title,
+          },
+        ],
+      }),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${project.title} - ${username} - AI Film Camp`,
+      description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+      ...(thumbnailUrl && {
+        images: [thumbnailUrl],
+      }),
+    },
   };
 }
 
