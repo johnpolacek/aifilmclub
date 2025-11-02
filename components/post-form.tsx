@@ -3,11 +3,7 @@
 import {
   Bold,
   Code,
-  Code2,
-  Copy,
-  Download,
   Edit,
-  FileText,
   Heading2,
   Heading3,
   Image as ImageIcon,
@@ -16,7 +12,6 @@ import {
   List,
   Loader2,
   Plus,
-  Rss,
   Video,
   X,
   Youtube,
@@ -25,9 +20,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
-import { remark } from "remark";
 import remarkGfm from "remark-gfm";
-import remarkHtml from "remark-html";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,13 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { Label } from "@/components/ui/label";
@@ -686,262 +672,6 @@ export function PostForm({
     }, 0);
   };
 
-  // Export functions
-  const copyToClipboard = async (text: string) => {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-          document.execCommand("copy");
-          document.body.removeChild(textArea);
-          return true;
-        } catch (_err) {
-          document.body.removeChild(textArea);
-          return false;
-        }
-      }
-    } catch (err) {
-      console.error(
-        "Failed to copy to clipboard:",
-        JSON.stringify(
-          {
-            error: err instanceof Error ? err.message : String(err),
-          },
-          null,
-          2
-        )
-      );
-      return false;
-    }
-  };
-
-  const downloadFile = (content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const convertToHTML = async (markdown: string): Promise<string> => {
-    const processedContent = renderVideoEmbeds(markdown);
-    try {
-      const processor = remark().use(remarkGfm).use(remarkHtml);
-      const result = await processor.process(processedContent);
-      return result.toString();
-    } catch (error) {
-      console.error(
-        "Error converting to HTML:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-          null,
-          2
-        )
-      );
-      throw error;
-    }
-  };
-
-  const handleCopyHTML = async () => {
-    if (!content.trim()) {
-      toast.error("No content to export");
-      return;
-    }
-
-    try {
-      const html = await convertToHTML(content);
-      const fullHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${title}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
-    .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; margin: 20px 0; }
-    .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <h1>${title}</h1>
-  ${html}
-</body>
-</html>`;
-
-      const success = await copyToClipboard(fullHTML);
-      if (success) {
-        toast.success("HTML copied to clipboard!");
-      } else {
-        toast.error("Failed to copy to clipboard");
-      }
-    } catch (error) {
-      console.error(
-        "Error copying HTML:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-          null,
-          2
-        )
-      );
-      toast.error("Failed to convert to HTML");
-    }
-  };
-
-  const handleCopyMarkdown = async () => {
-    if (!content.trim()) {
-      toast.error("No content to export");
-      return;
-    }
-
-    try {
-      const success = await copyToClipboard(content);
-      if (success) {
-        toast.success("Markdown copied to clipboard!");
-      } else {
-        toast.error("Failed to copy to clipboard");
-      }
-    } catch (error) {
-      console.error(
-        "Error copying markdown:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-          },
-          null,
-          2
-        )
-      );
-      toast.error("Failed to copy markdown");
-    }
-  };
-
-  const handleDownloadHTML = async () => {
-    if (!content.trim()) {
-      toast.error("No content to export");
-      return;
-    }
-
-    try {
-      const html = await convertToHTML(content);
-      const fullHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${title}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
-    .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; margin: 20px 0; }
-    .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <h1>${title}</h1>
-  ${html}
-</body>
-</html>`;
-
-      const filename = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`;
-      downloadFile(fullHTML, filename, "text/html");
-      toast.success("HTML file downloaded!");
-    } catch (error) {
-      console.error(
-        "Error downloading HTML:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-          null,
-          2
-        )
-      );
-      toast.error("Failed to download HTML");
-    }
-  };
-
-  const handleDownloadMarkdown = () => {
-    if (!content.trim()) {
-      toast.error("No content to export");
-      return;
-    }
-
-    try {
-      const filename = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
-      downloadFile(content, filename, "text/markdown");
-      toast.success("Markdown file downloaded!");
-    } catch (error) {
-      console.error(
-        "Error downloading markdown:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-          },
-          null,
-          2
-        )
-      );
-      toast.error("Failed to download markdown");
-    }
-  };
-
-  const handleExportRSS = async () => {
-    if (!content.trim() || !title.trim()) {
-      toast.error("Title and content are required for RSS export");
-      return;
-    }
-
-    try {
-      const html = await convertToHTML(content);
-      const pubDate = new Date().toUTCString();
-      const guid = initialPost?.id || `post-${Date.now()}`;
-
-      const rssItem = `  <item>
-    <title><![CDATA[${title}]]></title>
-    <description><![CDATA[${html}]]></description>
-    <pubDate>${pubDate}</pubDate>
-    <guid>${guid}</guid>
-  </item>`;
-
-      const success = await copyToClipboard(rssItem);
-      if (success) {
-        toast.success("RSS item copied to clipboard!");
-      } else {
-        toast.error("Failed to copy to clipboard");
-      }
-    } catch (error) {
-      console.error(
-        "Error exporting RSS:",
-        JSON.stringify(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-          null,
-          2
-        )
-      );
-      toast.error("Failed to export RSS");
-    }
-  };
-
   return (
     <Card className="bg-muted/30 border-border">
       <CardHeader>
@@ -1011,45 +741,7 @@ export function PostForm({
             </div>
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label htmlFor="post-content">Content</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isSubmitting || !content.trim()}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleCopyMarkdown}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Markdown
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleCopyHTML}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy HTML
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportRSS}>
-                    <Rss className="h-4 w-4 mr-2" />
-                    Copy RSS Item
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleDownloadMarkdown}>
-                    <Code2 className="h-4 w-4 mr-2" />
-                    Download Markdown
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleDownloadHTML}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Download HTML
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <Label htmlFor="post-content">Content</Label>
             <Tabs defaultValue="edit" className="mt-1">
               <TabsList>
                 <TabsTrigger value="edit">Edit</TabsTrigger>
