@@ -127,11 +127,9 @@
   body {
     @apply bg-background text-foreground;
   }
-  .prose {
-    font-size: 0.875rem;
-  }
+
   .prose h2 {
-    font-size: 1.175rem;
+    font-size: 1.25rem;
     font-weight: 700;
   }
 }
