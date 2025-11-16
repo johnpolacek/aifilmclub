@@ -130,6 +130,10 @@
   .prose {
     font-size: 0.875rem;
   }
+  .prose h2 {
+    font-size: 1.175rem;
+    font-weight: 700;
+  }
 }
 
 @layer utilities {

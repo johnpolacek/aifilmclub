@@ -204,15 +204,43 @@ export async function uploadPostImage(formData: FormData) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    console.log(
+      "[uploadPostImage] File info:",
+      JSON.stringify(
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          bufferSize: buffer.length,
+        },
+        null,
+        2
+      )
+    );
+
     // Generate a unique filename (timestamp + random to avoid collisions)
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 9);
     const filename = `${timestamp}-${random}.jpg`;
     const key = `posts/${username}/${filename}`;
 
+    console.log(
+      "[uploadPostImage] Calling uploadImageFromBuffer with NO thumbnail option (should maintain aspect ratio):",
+      JSON.stringify(
+        {
+          key,
+          fileType: file.type,
+          options: undefined,
+        },
+        null,
+        2
+      )
+    );
+
     // Upload optimized image to S3
+    // Don't use thumbnail optimization for post images - maintain original aspect ratio
     const { uploadImageFromBuffer } = await import("@/lib/s3");
-    await uploadImageFromBuffer(buffer, key, file.type, { isThumbnail: true });
+    await uploadImageFromBuffer(buffer, key, file.type);
 
     // Revalidate pages that show post data
     revalidatePath("/dashboard");

@@ -241,9 +241,25 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                               </Link>
                             </div>
                           </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {post.content}
-                          </p>
+                          <div className="flex gap-3 items-start">
+                            {post.image && (post.username || project.username) && (
+                              <div className="shrink-0 w-1/3 rounded-md overflow-hidden border border-border">
+                                <OptimizedImage
+                                  type="post"
+                                  filename={post.image}
+                                  username={post.username || project.username || ""}
+                                  alt={post.title}
+                                  width={400}
+                                  height={200}
+                                  className="w-full h-auto"
+                                  objectFit="contain"
+                                />
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
+                              {post.content}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>

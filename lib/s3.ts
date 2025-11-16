@@ -154,23 +154,82 @@ export async function uploadImageFromBuffer(
   options?: { isAvatar?: boolean; isThumbnail?: boolean }
 ): Promise<string> {
   try {
+    console.log(
+      "[uploadImageFromBuffer] Starting image optimization:",
+      JSON.stringify(
+        {
+          key,
+          bufferSize: buffer.length,
+          options: options
+            ? {
+                isAvatar: options.isAvatar,
+                isThumbnail: options.isThumbnail,
+              }
+            : undefined,
+        },
+        null,
+        2
+      )
+    );
+
     // Optimize the image before uploading
     let optimizedBuffer: Buffer;
     let optimizedContentType: string;
 
     if (options?.isAvatar) {
+      console.log("[uploadImageFromBuffer] Using optimizeAvatar path");
       const result = await optimizeAvatar(buffer);
       optimizedBuffer = result.buffer;
       optimizedContentType = result.contentType;
     } else if (options?.isThumbnail) {
+      // Only use thumbnail optimization when explicitly requested (e.g., project thumbnails)
+      // Post images should NOT use this - it crops to 16:9 aspect ratio
+      console.warn(
+        "[uploadImageFromBuffer] WARNING: Using optimizeThumbnail - this will crop to 16:9!",
+        JSON.stringify(
+          {
+            key,
+            reason: "isThumbnail option was set to true",
+          },
+          null,
+          2
+        )
+      );
       const result = await optimizeThumbnail(buffer);
       optimizedBuffer = result.buffer;
       optimizedContentType = result.contentType;
     } else {
+      // Default: use optimizeImage which maintains original aspect ratio (no cropping)
+      console.log(
+        "[uploadImageFromBuffer] Using optimizeImage path (maintains aspect ratio, no cropping)"
+      );
+      
+      // CRITICAL: Force optimizeImage - never use thumbnail for post images
+      // Double-check that options is not set to thumbnail
+      if (options?.isThumbnail) {
+        console.error(
+          "[uploadImageFromBuffer] ERROR: isThumbnail was set but we're in post image path! This should never happen!"
+        );
+      }
+      
       const result = await optimizeImage(buffer);
       optimizedBuffer = result.buffer;
       optimizedContentType = result.contentType;
     }
+
+    console.log(
+      "[uploadImageFromBuffer] Optimization complete:",
+      JSON.stringify(
+        {
+          key,
+          originalSize: buffer.length,
+          optimizedSize: optimizedBuffer.length,
+          contentType: optimizedContentType,
+        },
+        null,
+        2
+      )
+    );
 
     // Note: Bucket should be configured with public read access via bucket policy
     const command = new PutObjectCommand({

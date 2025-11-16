@@ -145,20 +145,50 @@ export function PostForm({
       reader.onload = (e) => {
         const img = new Image();
         img.onload = async () => {
-          // Calculate new dimensions
-          const maxWidth = 1920 * scale;
-          const maxHeight = 1080 * scale;
+          console.log(
+            "[compressImage] Original image dimensions:",
+            JSON.stringify(
+              {
+                width: img.width,
+                height: img.height,
+                aspectRatio: (img.width / img.height).toFixed(4),
+              },
+              null,
+              2
+            )
+          );
+
+          // Preserve original aspect ratio - no cropping
+          // Use much larger max dimensions to avoid unnecessary resizing
+          const maxWidth = 4000 * scale;
+          const maxHeight = 4000 * scale;
           let width = img.width;
           let height = img.height;
 
-          // Scale down if needed
+          // Scale down proportionally ONLY if exceeds max dimensions
+          // This maintains the original aspect ratio without any cropping
           if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = width * ratio;
-            height = height * ratio;
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
           }
 
-          // Create canvas
+          console.log(
+            "[compressImage] After scaling (maintaining aspect ratio):",
+            JSON.stringify(
+              {
+                width,
+                height,
+                aspectRatio: (width / height).toFixed(4),
+                maxWidth,
+                maxHeight,
+              },
+              null,
+              2
+            )
+          );
+
+          // Create canvas with exact dimensions matching the scaled image
           const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
@@ -168,7 +198,8 @@ export function PostForm({
             return;
           }
 
-          // Draw image
+          // Draw image maintaining aspect ratio - no cropping
+          // This draws the full image scaled proportionally to fit width x height
           ctx.drawImage(img, 0, 0, width, height);
 
           // Try different quality levels sequentially
@@ -371,13 +402,61 @@ export function PostForm({
 
           processedFile = await compressImage(processedFile, 900 * 1024, scale);
 
+          // Log client-side image info before upload
+          console.log(
+            "[handleInlineImageChange] Compressed image before upload:",
+            JSON.stringify(
+              {
+                fileName: processedFile.name,
+                fileSize: processedFile.size,
+                fileType: processedFile.type,
+              },
+              null,
+              2
+            )
+          );
+
+          // Create a temporary image to check dimensions
+          const tempImg = new Image();
+          const tempUrl = URL.createObjectURL(processedFile);
+          tempImg.onload = () => {
+            console.log(
+              "[handleInlineImageChange] Compressed image dimensions:",
+              JSON.stringify(
+                {
+                  width: tempImg.width,
+                  height: tempImg.height,
+                  aspectRatio: (tempImg.width / tempImg.height).toFixed(4),
+                },
+                null,
+                2
+              )
+            );
+            URL.revokeObjectURL(tempUrl);
+          };
+          tempImg.src = tempUrl;
+
           // Upload image
           toast.loading("Uploading image...", { id: loadingToast });
           const { uploadPostImage } = await import("@/lib/actions/posts");
           const formData = new FormData();
           formData.append("image", processedFile);
 
+          console.log("[handleInlineImageChange] Calling uploadPostImage server action");
+
           const result = await uploadPostImage(formData);
+
+          console.log(
+            "[handleInlineImageChange] Upload result:",
+            JSON.stringify(
+              {
+                success: result.success,
+                imageFilename: result.imageFilename,
+              },
+              null,
+              2
+            )
+          );
 
           if (result.success && result.imageFilename) {
             // Get username from initialPost or fetch it

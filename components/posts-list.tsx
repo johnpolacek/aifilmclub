@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import type { Post } from "@/lib/posts";
 import { PostExport } from "./post-export";
-import { PostForm } from "./post-form";
 
 interface PostsListProps {
   projectId: string;
@@ -58,8 +57,6 @@ export function PostsList({
   // Use canEdit prop if provided, otherwise check ownership
   const canEditPosts = canEdit || isOwner;
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [showForm, setShowForm] = useState(false);
-  const [editingPost, setEditingPost] = useState<Post | undefined>(undefined);
 
   const handleDelete = async (postId: string, title: string) => {
     if (!confirm(`Are you sure you want to delete "${title}"?`)) {
@@ -81,30 +78,6 @@ export function PostsList({
     }
   };
 
-  const handleFormSuccess = async () => {
-    // Refresh posts
-    try {
-      const { getProjectPosts } = await import("@/lib/actions/posts");
-      const updatedPosts = await getProjectPosts(projectId);
-      setPosts(updatedPosts);
-    } catch (error) {
-      console.error("Error refreshing posts:", error);
-    }
-
-    setShowForm(false);
-    setEditingPost(undefined);
-  };
-
-  const handleEdit = (post: Post) => {
-    setEditingPost(post);
-    setShowForm(true);
-  };
-
-  const handleCancel = () => {
-    setShowForm(false);
-    setEditingPost(undefined);
-  };
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -118,19 +91,12 @@ export function PostsList({
     <div className="space-y-6">
       {canEditPosts && (
         <div>
-          {!showForm ? (
-            <Button onClick={() => setShowForm(true)}>
+          <Link href={`/dashboard/projects/${projectId}/posts/new`}>
+            <Button>
               <Plus className="h-4 w-4 mr-2" />
               Add New Post
             </Button>
-          ) : (
-            <PostForm
-              projectId={projectId}
-              initialPost={editingPost}
-              onSuccess={handleFormSuccess}
-              onCancel={handleCancel}
-            />
-          )}
+          </Link>
         </div>
       )}
 
@@ -165,14 +131,11 @@ export function PostsList({
                       </Link>
                     )}
                     {canEditPosts && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(post)}
-                        className="gap-2"
-                      >
-                        <Edit className="h-4 w-4" /> Edit
-                      </Button>
+                      <Link href={`/dashboard/projects/${projectId}/posts/${post.id}/edit`}>
+                        <Button size="sm" variant="outline" className="gap-2">
+                          <Edit className="h-4 w-4" /> Edit
+                        </Button>
+                      </Link>
                     )}
                   </div>
                   <PostExport post={post} projectTitle={projectTitle} authorName={authorName} />

@@ -101,6 +101,7 @@ const COMMON_TOOLS = {
     "Google Veo",
     "Pika Labs",
     "Kling AI",
+    "Midjourney",
     "Luma Dream Machine",
     "HaiperAI",
     "Sora",

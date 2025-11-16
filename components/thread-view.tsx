@@ -99,11 +99,12 @@ function extractContentItems(markdown: string): ContentItem[] {
       return " ";
     }
 
-    // Handle list items
+    // Handle list items - preserve bullet point format
     if (astNode.type === "listItem") {
       const children = (astNode.children as unknown[]) || [];
       const content = children.map(extractContent).join("") || "";
-      return content;
+      // Return content with bullet point preserved
+      return `- ${content}`;
     }
 
     // Handle paragraphs
@@ -120,10 +121,11 @@ function extractContentItems(markdown: string): ContentItem[] {
       return content;
     }
 
-    // Handle lists
+    // Handle lists - preserve list structure with line breaks
     if (astNode.type === "list") {
       const children = (astNode.children as unknown[]) || [];
-      return children.map(extractContent).join(" ") || "";
+      // Join list items with newlines to preserve structure
+      return children.map(extractContent).join("\n") || "";
     }
 
     // Handle blockquotes
@@ -221,8 +223,13 @@ function extractContentItems(markdown: string): ContentItem[] {
         // Remove YouTube references from text
         let cleanedText = item.text.replace(/\[youtube:[^\]]+\]/g, "").trim();
 
-        // Normalize whitespace
-        cleanedText = cleanedText.replace(/\s+/g, " ").trim();
+        // Normalize whitespace but preserve newlines for lists
+        // Replace multiple spaces with single space, but preserve newlines
+        cleanedText = cleanedText.replace(/[ \t]+/g, " ");
+        // Normalize multiple newlines to single newline
+        cleanedText = cleanedText.replace(/\n{3,}/g, "\n\n");
+        // Trim but preserve leading/trailing newlines that might be part of list structure
+        cleanedText = cleanedText.trim();
 
         return {
           ...item,
@@ -277,14 +284,43 @@ function associateImagesWithChunks(
   }
 
   // Build full text from content items to find chunk boundaries
+  // Join text items intelligently: preserve newlines, add space only when needed
   const allText = contentItems
     .filter((item) => item.type === "text")
     .map((item) => item.text || "")
-    .join(" ");
+    .reduce((acc, text, index, array) => {
+      if (index === 0) return text;
+      const prevText = array[index - 1];
+      // If previous text ends with newline or current starts with newline, don't add space
+      if (prevText.endsWith("\n") || text.startsWith("\n")) {
+        return acc + text;
+      }
+      return acc + " " + text;
+    }, "");
 
   // Track which chunk we're currently building
-  let currentChunkIndex = 0;
+  // Use character position in allText to accurately determine which chunk we're in
+  let currentPositionInAllText = 0;
   let accumulatedText = "";
+
+  // Helper function to find which chunk contains a given position in allText
+  const findChunkIndexForPosition = (position: number): number => {
+    let charCount = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkStart = allText.indexOf(chunk, charCount);
+      if (chunkStart < 0) continue;
+
+      const chunkEnd = chunkStart + chunk.length;
+      if (position >= chunkStart && position < chunkEnd) {
+        return i;
+      }
+      // Move search forward
+      charCount = Math.max(charCount, chunkEnd);
+    }
+    // Default to last chunk if position is beyond all chunks
+    return Math.max(0, chunks.length - 1);
+  };
 
   for (const item of contentItems) {
     // Handle text items with YouTube URLs but empty text (YouTube-only items)
@@ -294,17 +330,16 @@ function associateImagesWithChunks(
       item.youtubeUrls.length > 0 &&
       (!item.text || item.text.trim() === "")
     ) {
-      // Associate YouTube URLs with the first chunk if no text accumulated yet,
-      // otherwise with the current chunk
-      const targetChunkIndex = accumulatedText.length === 0 ? 0 : currentChunkIndex;
+      // Associate YouTube URLs with the chunk at current position
+      const targetChunkIndex =
+        currentPositionInAllText === 0 ? 0 : findChunkIndexForPosition(currentPositionInAllText);
       console.log(
         "[ThreadView] Associating YouTube URLs from empty text item:",
         JSON.stringify(
           {
             youtubeUrls: item.youtubeUrls,
             targetChunkIndex,
-            currentChunkIndex,
-            accumulatedTextLength: accumulatedText.length,
+            currentPositionInAllText,
             totalChunks: chunksWithImages.length,
           },
           null,
@@ -314,34 +349,28 @@ function associateImagesWithChunks(
 
       if (targetChunkIndex < chunksWithImages.length) {
         chunksWithImages[targetChunkIndex].youtubeUrls.push(...item.youtubeUrls);
-        console.log(
-          "[ThreadView] Added YouTube URLs to chunk from empty text item:",
-          JSON.stringify(
-            {
-              chunkIndex: targetChunkIndex,
-              chunkText: chunksWithImages[targetChunkIndex].text.substring(0, 50),
-              youtubeUrls: chunksWithImages[targetChunkIndex].youtubeUrls,
-            },
-            null,
-            2
-          )
-        );
       }
       // Don't accumulate text for empty text items
       continue;
     }
 
     if (item.type === "text" && item.text) {
-      const textToAdd = accumulatedText ? ` ${item.text}` : item.text;
+      // Join text intelligently: preserve newlines, add space only when needed
+      let textToAdd: string;
+      if (!accumulatedText) {
+        textToAdd = item.text;
+      } else if (accumulatedText.endsWith("\n") || item.text.startsWith("\n")) {
+        // Don't add space if there's a newline boundary
+        textToAdd = item.text;
+      } else {
+        textToAdd = ` ${item.text}`;
+      }
       const testAccumulated = accumulatedText + textToAdd;
 
-      // Associate YouTube URLs with the current chunk
-      // Since we're processing items in order, the YouTube URL should go to the chunk
-      // that contains the text from this item
+      // Associate YouTube URLs with the chunk at current position
       if (item.youtubeUrls && item.youtubeUrls.length > 0) {
-        // Use currentChunkIndex since we're building chunks in order
-        // If no text accumulated yet, use first chunk
-        const targetChunkIndex = accumulatedText.length === 0 ? 0 : currentChunkIndex;
+        const targetChunkIndex =
+          currentPositionInAllText === 0 ? 0 : findChunkIndexForPosition(currentPositionInAllText);
         console.log(
           "[ThreadView] Associating YouTube URLs with chunk:",
           JSON.stringify(
@@ -349,8 +378,7 @@ function associateImagesWithChunks(
               itemText: item.text?.substring(0, 50),
               youtubeUrls: item.youtubeUrls,
               targetChunkIndex,
-              currentChunkIndex,
-              accumulatedTextLength: accumulatedText.length,
+              currentPositionInAllText,
               totalChunks: chunksWithImages.length,
             },
             null,
@@ -360,60 +388,48 @@ function associateImagesWithChunks(
 
         if (targetChunkIndex < chunksWithImages.length) {
           chunksWithImages[targetChunkIndex].youtubeUrls.push(...item.youtubeUrls);
-          console.log(
-            "[ThreadView] Added YouTube URLs to chunk:",
-            JSON.stringify(
-              {
-                chunkIndex: targetChunkIndex,
-                chunkText: chunksWithImages[targetChunkIndex].text.substring(0, 50),
-                youtubeUrls: chunksWithImages[targetChunkIndex].youtubeUrls,
-              },
-              null,
-              2
-            )
-          );
+        }
+      }
+
+      // Update position by finding where this text item appears in allText
+      // Find the item text in allText starting from current position
+      const itemStartPos = allText.indexOf(item.text, currentPositionInAllText);
+      if (itemStartPos >= currentPositionInAllText) {
+        // Found it, update position to end of this item
+        currentPositionInAllText = itemStartPos + item.text.length;
+        // Update accumulated text to match what we've processed in allText
+        accumulatedText = allText.substring(0, currentPositionInAllText);
+      } else {
+        // Fallback: if we can't find exact match, try to find a similar position
+        // Find where the accumulated text appears in allText
+        const searchStart = Math.max(0, currentPositionInAllText - item.text.length);
+        const foundIndex = allText.indexOf(testAccumulated, searchStart);
+        if (foundIndex >= 0) {
+          currentPositionInAllText = foundIndex + testAccumulated.length;
+          accumulatedText = testAccumulated;
         } else {
-          console.error(
-            "[ThreadView] Invalid chunk index:",
-            JSON.stringify(
-              {
-                targetChunkIndex,
-                totalChunks: chunksWithImages.length,
-              },
-              null,
-              2
-            )
-          );
+          // Last resort: just increment by the added length
+          currentPositionInAllText += textToAdd.length;
+          accumulatedText = testAccumulated;
         }
       }
-
-      // Update current chunk index for next items
-      // Check if we've moved to the next chunk
-      if (currentChunkIndex < chunks.length - 1) {
-        const currentChunk = chunks[currentChunkIndex];
-        const nextChunk = chunks[currentChunkIndex + 1];
-
-        // If accumulated text contains both current and next chunk, move to next
-        if (testAccumulated.includes(currentChunk) && testAccumulated.includes(nextChunk)) {
-          // Check if we've passed the current chunk
-          const currentChunkEnd = allText.indexOf(currentChunk) + currentChunk.length;
-          const nextChunkStart = allText.indexOf(nextChunk);
-
-          if (
-            accumulatedText.length >= currentChunkEnd ||
-            (accumulatedText.length > currentChunkEnd - 50 &&
-              testAccumulated.length >= nextChunkStart)
-          ) {
-            currentChunkIndex = Math.min(currentChunkIndex + 1, chunks.length - 1);
-          }
-        }
-      }
-
-      accumulatedText = testAccumulated;
     } else if (item.type === "image" && item.image) {
-      // Associate image with the current chunk
-      // If image appears before any text, associate with first chunk
-      const targetChunkIndex = accumulatedText.length === 0 ? 0 : currentChunkIndex;
+      // Associate image with the chunk at current position
+      const targetChunkIndex =
+        currentPositionInAllText === 0 ? 0 : findChunkIndexForPosition(currentPositionInAllText);
+      console.log(
+        "[ThreadView] Associating image with chunk:",
+        JSON.stringify(
+          {
+            imageUrl: item.image.url.substring(0, 50),
+            targetChunkIndex,
+            currentPositionInAllText,
+            totalChunks: chunksWithImages.length,
+          },
+          null,
+          2
+        )
+      );
       if (targetChunkIndex < chunksWithImages.length) {
         chunksWithImages[targetChunkIndex].images.push(item.image);
       }

@@ -33,7 +33,7 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
         {/* Project Header */}
         <div className="mb-6 pb-6 border-b border-border">
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-xl md:text-2xl font-bold">{project.title}</h2>
+            <h2 className="text-base pr-2">{project.title}</h2>
             {project.status && (
               <span className="px-2 py-0.5 bg-primary/20 text-primary rounded-full text-xs font-medium">
                 {project.status}
@@ -93,16 +93,17 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
 
         {/* Post Image */}
         {post.image && post.username && (
-          <div className="mb-6 rounded-md overflow-hidden border border-border">
+          <div className="mb-6 rounded-md overflow-hidden border border-border w-full">
             <OptimizedImage
               type="post"
               filename={post.image}
               username={post.username}
               alt={post.title}
-              width={800}
-              height={400}
+              width={1600}
+              height={900}
               className="w-full h-auto"
               objectFit="contain"
+              sizes="100vw"
             />
           </div>
         )}

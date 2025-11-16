@@ -25,6 +25,23 @@ export async function optimizeImage(
   // Get image metadata
   const metadata = await sharpInstance.metadata();
 
+  console.log(
+    "[optimizeImage] Original image metadata:",
+    JSON.stringify(
+      {
+        width: metadata.width,
+        height: metadata.height,
+        format: metadata.format,
+        hasProfile: metadata.hasProfile,
+        orientation: metadata.orientation,
+        maxWidth,
+        maxHeight,
+      },
+      null,
+      2
+    )
+  );
+
   // Auto-rotate based on EXIF data
   sharpInstance = sharpInstance.rotate();
 
@@ -33,12 +50,63 @@ export async function optimizeImage(
     const needsResize = metadata.width > maxWidth || metadata.height > maxHeight;
 
     if (needsResize) {
+      // Calculate new dimensions maintaining aspect ratio
+      const aspectRatio = metadata.width / metadata.height;
+      let newWidth = metadata.width;
+      let newHeight = metadata.height;
+
+      if (metadata.width > maxWidth) {
+        newWidth = maxWidth;
+        newHeight = Math.round(maxWidth / aspectRatio);
+      }
+      if (newHeight > maxHeight) {
+        newHeight = maxHeight;
+        newWidth = Math.round(maxHeight * aspectRatio);
+      }
+
+      console.log(
+        "[optimizeImage] Resizing with fit:inside (maintains aspect ratio, no cropping):",
+        JSON.stringify(
+          {
+            originalWidth: metadata.width,
+            originalHeight: metadata.height,
+            originalAspectRatio: aspectRatio.toFixed(4),
+            newWidth,
+            newHeight,
+            newAspectRatio: (newWidth / newHeight).toFixed(4),
+            maxWidth,
+            maxHeight,
+          },
+          null,
+          2
+        )
+      );
+
       sharpInstance = sharpInstance.resize(maxWidth, maxHeight, {
         fit: "inside",
         withoutEnlargement: true,
       });
+    } else {
+      console.log(
+        "[optimizeImage] No resize needed - image is within limits, maintaining original dimensions"
+      );
     }
   }
+
+  // Get final metadata after processing
+  const finalMetadata = await sharpInstance.metadata();
+  console.log(
+    "[optimizeImage] Final image metadata:",
+    JSON.stringify(
+      {
+        width: finalMetadata.width,
+        height: finalMetadata.height,
+        format: finalMetadata.format,
+      },
+      null,
+      2
+    )
+  );
 
   // Convert and optimize based on format
   let optimizedBuffer: Buffer;
@@ -83,10 +151,27 @@ export async function optimizeAvatar(
 export async function optimizeThumbnail(
   buffer: Buffer
 ): Promise<{ buffer: Buffer; contentType: string }> {
+  console.warn(
+    "[optimizeThumbnail] WARNING: optimizeThumbnail called - this will crop images to 16:9!"
+  );
+
   let sharpInstance = sharp(buffer);
 
   // Get image metadata
   const metadata = await sharpInstance.metadata();
+
+  console.log(
+    "[optimizeThumbnail] Original image metadata:",
+    JSON.stringify(
+      {
+        width: metadata.width,
+        height: metadata.height,
+        format: metadata.format,
+      },
+      null,
+      2
+    )
+  );
 
   // Auto-rotate based on EXIF data
   sharpInstance = sharpInstance.rotate();
@@ -100,6 +185,20 @@ export async function optimizeThumbnail(
     const imageAspect = metadata.width / metadata.height;
     const targetAspect = 16 / 9;
 
+    console.log(
+      "[optimizeThumbnail] Aspect ratio comparison:",
+      JSON.stringify(
+        {
+          imageAspect: imageAspect.toFixed(4),
+          targetAspect: targetAspect.toFixed(4),
+          difference: Math.abs(imageAspect - targetAspect).toFixed(4),
+          willCrop: Math.abs(imageAspect - targetAspect) > 0.01,
+        },
+        null,
+        2
+      )
+    );
+
     if (Math.abs(imageAspect - targetAspect) > 0.01) {
       // Aspect ratios don't match, need to crop
       let cropWidth = metadata.width;
@@ -112,11 +211,43 @@ export async function optimizeThumbnail(
         cropHeight = metadata.height;
         cropWidth = Math.round(metadata.height * targetAspect);
         left = Math.round((metadata.width - cropWidth) / 2);
+        console.log(
+          "[optimizeThumbnail] Cropping horizontally (center crop):",
+          JSON.stringify(
+            {
+              originalWidth: metadata.width,
+              originalHeight: metadata.height,
+              cropWidth,
+              cropHeight,
+              left,
+              top: 0,
+              cropType: "horizontal",
+            },
+            null,
+            2
+          )
+        );
       } else {
         // Image is taller than 16:9, crop vertically (center crop)
         cropWidth = metadata.width;
         cropHeight = Math.round(metadata.width / targetAspect);
         top = Math.round((metadata.height - cropHeight) / 2);
+        console.log(
+          "[optimizeThumbnail] Cropping vertically (center crop):",
+          JSON.stringify(
+            {
+              originalWidth: metadata.width,
+              originalHeight: metadata.height,
+              cropWidth,
+              cropHeight,
+              left: 0,
+              top,
+              cropType: "vertical",
+            },
+            null,
+            2
+          )
+        );
       }
 
       // Crop to 16:9 aspect ratio
