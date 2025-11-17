@@ -12,6 +12,7 @@ import {
   List,
   Loader2,
   Plus,
+  Quote,
   Video,
   X,
   Youtube,
@@ -733,6 +734,42 @@ export function PostForm({
     }, 0);
   };
 
+  const insertBlockquote = () => {
+    const textarea = document.getElementById("post-content") as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.substring(start, end);
+
+    // If text is selected, wrap it in blockquote
+    // Otherwise, insert a blockquote marker
+    if (selectedText) {
+      // Split selected text into lines and add > prefix to each line
+      const lines = selectedText.split("\n");
+      const blockquoteText = lines.map((line) => `> ${line}`).join("\n");
+      const newContent = content.substring(0, start) + blockquoteText + content.substring(end);
+      setContent(newContent);
+
+      setTimeout(() => {
+        textarea.focus();
+        const newPosition = start + blockquoteText.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+      }, 0);
+    } else {
+      // Insert blockquote marker at cursor position
+      const blockquoteMarker = "> ";
+      const newContent = content.substring(0, start) + blockquoteMarker + content.substring(end);
+      setContent(newContent);
+
+      setTimeout(() => {
+        textarea.focus();
+        const newPosition = start + blockquoteMarker.length;
+        textarea.setSelectionRange(newPosition, newPosition);
+      }, 0);
+    }
+  };
+
   return (
     <Card className="bg-muted/30 border-border">
       <CardHeader>
@@ -889,6 +926,17 @@ export function PostForm({
                       title="Bullet List"
                     >
                       <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={insertBlockquote}
+                      disabled={isSubmitting}
+                      className="h-7 w-7 p-0"
+                      title="Screenplay/Blockquote"
+                    >
+                      <Quote className="h-4 w-4" />
                     </Button>
                     <div className="w-px h-4 bg-border mx-1" />
                     <Button
