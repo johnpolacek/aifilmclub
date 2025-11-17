@@ -10,6 +10,7 @@ import { Button } from "./ui/button";
 interface Clip {
   id: string;
   platform: string;
+  videoUrl?: string;
   thumbnail?: string;
 }
 
@@ -48,13 +49,68 @@ export default function AIVideoStitcherTool() {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.currentTarget.files?.[0];
-    if (!file || !fileInputClipId) return;
+  const generateVideoThumbnail = (videoFile: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
 
-    const thumbnail = URL.createObjectURL(file);
-    setClips(clips.map((clip) => (clip.id === fileInputClipId ? { ...clip, thumbnail } : clip)));
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+
+      video.preload = "metadata";
+      video.src = URL.createObjectURL(videoFile);
+
+      video.onloadedmetadata = () => {
+        video.currentTime = 0.1; // Seek to 0.1 seconds
+      };
+
+      video.onseeked = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const thumbnail = canvas.toDataURL("image/jpeg");
+        URL.revokeObjectURL(video.src);
+        resolve(thumbnail);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error("Error loading video"));
+      };
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0];
+    const clipId = fileInputClipId;
+    if (!file || !clipId) return;
+
+    const videoUrl = URL.createObjectURL(file);
+
+    try {
+      const thumbnail = await generateVideoThumbnail(file);
+      setClips((prevClips) =>
+        prevClips.map((clip) => (clip.id === clipId ? { ...clip, videoUrl, thumbnail } : clip))
+      );
+    } catch (error) {
+      console.error(
+        "[AIVideoStitcherTool] Error generating thumbnail:",
+        JSON.stringify({ error }, null, 2)
+      );
+      // Fallback: just store the video URL
+      setClips((prevClips) =>
+        prevClips.map((clip) => (clip.id === clipId ? { ...clip, videoUrl } : clip))
+      );
+    }
+
     setFileInputClipId(null);
+    // Reset file input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -184,16 +240,25 @@ export default function AIVideoStitcherTool() {
                       </button>
                     </div>
 
-                    {/* Upload Button or Thumbnail */}
-                    {clip.thumbnail ? (
-                      <div className="relative w-full h-24">
-                        <Image
-                          src={clip.thumbnail}
-                          alt={clip.platform || "Uploaded video"}
-                          fill
-                          unoptimized
-                          className="object-cover rounded"
-                        />
+                    {/* Upload Button or Video Thumbnail */}
+                    {clip.videoUrl ? (
+                      <div className="relative w-full h-24 rounded overflow-hidden bg-black">
+                        {clip.thumbnail ? (
+                          <Image
+                            src={clip.thumbnail}
+                            alt={clip.platform || "Uploaded video"}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        ) : (
+                          <video
+                            src={clip.videoUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        )}
                       </div>
                     ) : (
                       <button
@@ -222,21 +287,67 @@ export default function AIVideoStitcherTool() {
 
         {/* Right Panel - Video Preview (2/3 width) */}
         <div className="flex-1 flex flex-col items-center justify-center border border-border rounded-lg bg-card p-6">
-          <div
-            style={{
-              width: previewDimensions.width,
-              height: previewDimensions.height,
-            }}
-            className="bg-black rounded-lg border border-border flex items-center justify-center"
-          >
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm mb-2">Video Preview</p>
-              <p className="text-xs text-muted-foreground">
-                {aspectRatio} • {previewDimensions.width.toFixed(0)}×
-                {previewDimensions.height.toFixed(0)}px
-              </p>
+          {clips.length > 0 && clips.some((clip) => clip.videoUrl) ? (
+            <div className="w-full max-w-4xl space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold mb-1">Video Preview</h3>
+                <p className="text-xs text-muted-foreground">
+                  {aspectRatio} • {previewDimensions.width.toFixed(0)}×
+                  {previewDimensions.height.toFixed(0)}px
+                </p>
+              </div>
+              <div className="space-y-2">
+                {clips
+                  .filter((clip) => clip.videoUrl)
+                  .map((clip) => (
+                    <div
+                      key={clip.id}
+                      className="bg-black rounded-lg border border-border overflow-hidden"
+                      style={{
+                        aspectRatio:
+                          aspectRatio === "16:9" ? "16/9" : aspectRatio === "9:16" ? "9/16" : "1/1",
+                        maxHeight: previewDimensions.height,
+                      }}
+                    >
+                      <video
+                        src={clip.videoUrl}
+                        controls
+                        className="w-full h-full object-contain"
+                        style={{ maxHeight: previewDimensions.height }}
+                      >
+                        <track kind="captions" />
+                        Your browser does not support the video tag.
+                      </video>
+                      {clip.platform && (
+                        <div className="px-4 py-2 bg-background/80 backdrop-blur-sm border-t border-border">
+                          <p className="text-xs text-muted-foreground">
+                            Platform:{" "}
+                            <span className="text-foreground font-medium">{clip.platform}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              style={{
+                width: previewDimensions.width,
+                height: previewDimensions.height,
+              }}
+              className="bg-black rounded-lg border border-border flex items-center justify-center"
+            >
+              <div className="text-center">
+                <p className="text-muted-foreground text-sm mb-2">Video Preview</p>
+                <p className="text-xs text-muted-foreground">
+                  {aspectRatio} • {previewDimensions.width.toFixed(0)}×
+                  {previewDimensions.height.toFixed(0)}px
+                </p>
+                <p className="text-xs text-muted-foreground mt-4">Upload videos to see preview</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
