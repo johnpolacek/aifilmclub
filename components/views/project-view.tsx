@@ -1,6 +1,7 @@
-import { Calendar, Clock, ExternalLink, FileDown, Play, Rss } from "lucide-react";
+import { Calendar, Clapperboard, Clock, ExternalLink, FileDown, Play, Rss } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { FilmPlayer } from "@/components/film-player";
 import { PostsList } from "@/components/posts-list";
 import type { ProjectFormData } from "@/components/project-form";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ function getVideoEmbedInfo(
   try {
     // YouTube URL patterns
     const youtubeRegex =
-      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+      /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
     const youtubeMatch = url.match(youtubeRegex);
     if (youtubeMatch?.[1]) {
       return {
@@ -71,8 +72,8 @@ export function ProjectView({
   const projectDisplay = {
     id: projectId,
     title: project.title,
+    logline: project.logline,
     slug: projectSlug,
-    description: project.description,
     thumbnail: thumbnailUrl,
     status: project.status,
     duration: project.duration,
@@ -113,6 +114,11 @@ export function ProjectView({
               <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
                 {projectDisplay.status}
               </span>
+              {project.isPublished && (
+                <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-sm font-medium">
+                  Published
+                </span>
+              )}
               {projectDisplay.genre && (
                 <span className="px-3 py-1 bg-muted/50 backdrop-blur-sm rounded-full text-sm">
                   {projectDisplay.genre}
@@ -199,13 +205,24 @@ export function ProjectView({
                 );
               })()}
 
+            {/* Logline */}
+            {projectDisplay.logline && (
+              <div className="pb-5 mb-5 border-b border-border">
+                <p className="text-lg italic text-foreground/90 leading-relaxed">
+                  "{projectDisplay.logline}"
+                </p>
+              </div>
+            )}
+
             {/* About This Project */}
-            <div className="pb-5">
-              <h2 className="text-xl font-bold mb-3">About This Project</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                {projectDisplay.description}
-              </p>
-            </div>
+            {projectDisplay.logline && (
+              <div className="pb-5">
+                <h2 className="text-xl font-bold mb-3">About This Project</h2>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {projectDisplay.logline}
+                </p>
+              </div>
+            )}
 
             {/* Characters */}
             {project.characters && project.characters.length > 0 && (
@@ -219,12 +236,12 @@ export function ProjectView({
                     >
                       <CardContent className="p-4">
                         <div className="space-y-3">
-                          {/* Character Image - Full Width */}
-                          {character.image && (
+                          {/* Character Main Image - Full Width */}
+                          {character.mainImage && (
                             <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
                               <OptimizedImage
                                 type="character"
-                                filename={character.image}
+                                filename={character.mainImage}
                                 username={username}
                                 alt={character.name || "Character"}
                                 fill
@@ -234,21 +251,36 @@ export function ProjectView({
                             </div>
                           )}
 
+                          {/* Additional Character Images */}
+                          {character.images && character.images.length > 0 && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {character.images.map((image, imageIndex) => (
+                                <div
+                                  key={`${index}-${imageIndex}`}
+                                  className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30"
+                                >
+                                  <OptimizedImage
+                                    type="character"
+                                    filename={image}
+                                    username={username}
+                                    alt={`${character.name || "Character"} - Image ${imageIndex + 1}`}
+                                    fill
+                                    objectFit="cover"
+                                    sizes="(max-width: 768px) 50vw, 25vw"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           {/* Character Info */}
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-sm">
-                                {character.name || "Unnamed Character"}
-                              </h3>
-                              {character.type && (
-                                <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
-                                  {character.type}
-                                </span>
-                              )}
-                            </div>
-                            {character.description && (
+                            <h3 className="font-semibold text-sm mb-1">
+                              {character.name || "Unnamed Character"}
+                            </h3>
+                            {character.appearance && (
                               <p className="text-muted-foreground text-sm leading-relaxed">
-                                {character.description}
+                                {character.appearance}
                               </p>
                             )}
                           </div>
@@ -320,6 +352,69 @@ export function ProjectView({
                     View Screenplay
                   </Button>
                 </a>
+              </div>
+            )}
+
+            {/* Scenes & Film Player */}
+            {project.scenes && project.scenes.length > 0 && (
+              <div className="mb-5 pb-5 border-b border-border">
+                <div className="flex items-center gap-2 mb-4">
+                  <Clapperboard className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold">Scenes</h2>
+                </div>
+
+                {/* Film Player - if there are completed videos */}
+                {project.scenes.some((s) =>
+                  s.generatedVideos?.some((v) => v.status === "completed" && v.videoUrl)
+                ) && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Watch the Film
+                    </h3>
+                    <FilmPlayer scenes={project.scenes} title={project.title} />
+                  </div>
+                )}
+
+                {/* Scene List */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    All Scenes ({project.scenes.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {project.scenes
+                      .sort((a, b) => a.sceneNumber - b.sceneNumber)
+                      .map((scene) => (
+                        <Card
+                          key={scene.id}
+                          className="bg-muted/30 border-border hover:bg-muted/50 transition-colors"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+                                {scene.sceneNumber}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-sm truncate">{scene.title}</h4>
+                                {scene.screenplay && (
+                                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                    {scene.screenplay.substring(0, 80)}...
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                  {scene.generatedImages?.length > 0 && (
+                                    <span>{scene.generatedImages.length} images</span>
+                                  )}
+                                  {scene.generatedVideos?.length > 0 && (
+                                    <span>{scene.generatedVideos.length} videos</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
               </div>
             )}
 

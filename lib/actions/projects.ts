@@ -126,6 +126,93 @@ export async function deleteProject(projectId: string) {
 }
 
 /**
+ * Publish a project (make it publicly shareable)
+ */
+export async function publishProject(projectId: string) {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Error("You must be signed in to publish a project");
+  }
+
+  try {
+    // Check if project exists and user owns it
+    const existingProject = await getProject(projectId);
+    if (!existingProject) {
+      throw new Error("Project not found");
+    }
+
+    // Check if user owns the project
+    const currentUsername = await getCurrentUsername();
+    if (existingProject.username !== currentUsername) {
+      throw new Error("You don't have permission to publish this project");
+    }
+
+    // Update project with published status
+    const updatedProject = {
+      ...existingProject,
+      isPublished: true,
+      publishedAt: new Date().toISOString(),
+    };
+
+    await saveProject(projectId, updatedProject);
+
+    // Revalidate pages
+    revalidatePath("/dashboard");
+    revalidatePath(`/${currentUsername}/${existingProject.slug}`);
+    revalidatePath("/films");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error publishing project:", JSON.stringify({ projectId, error }, null, 2));
+    throw new Error(error instanceof Error ? error.message : "Failed to publish project");
+  }
+}
+
+/**
+ * Unpublish a project
+ */
+export async function unpublishProject(projectId: string) {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Error("You must be signed in to unpublish a project");
+  }
+
+  try {
+    // Check if project exists and user owns it
+    const existingProject = await getProject(projectId);
+    if (!existingProject) {
+      throw new Error("Project not found");
+    }
+
+    // Check if user owns the project
+    const currentUsername = await getCurrentUsername();
+    if (existingProject.username !== currentUsername) {
+      throw new Error("You don't have permission to unpublish this project");
+    }
+
+    // Update project with unpublished status
+    const updatedProject = {
+      ...existingProject,
+      isPublished: false,
+    };
+
+    await saveProject(projectId, updatedProject);
+
+    // Revalidate pages
+    revalidatePath("/dashboard");
+    revalidatePath(`/${currentUsername}/${existingProject.slug}`);
+    revalidatePath("/films");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error unpublishing project:", JSON.stringify({ projectId, error }, null, 2));
+    throw new Error(error instanceof Error ? error.message : "Failed to unpublish project");
+  }
+}
+
+/**
  * Upload a project thumbnail image
  */
 export async function uploadProjectThumbnail(formData: FormData) {
@@ -217,9 +304,9 @@ export async function uploadCharacterImage(formData: FormData) {
     const filename = `${timestamp}-${random}.jpg`;
     const key = `characters/${username}/${filename}`;
 
-    // Upload optimized image to S3 (using thumbnail optimization for character images)
+    // Upload optimized image to S3 (maintains original aspect ratio)
     const { uploadImageFromBuffer } = await import("@/lib/s3");
-    await uploadImageFromBuffer(buffer, key, file.type, { isThumbnail: true });
+    await uploadImageFromBuffer(buffer, key, file.type);
 
     // Revalidate pages that show project data
     revalidatePath("/dashboard");
@@ -347,7 +434,8 @@ export async function uploadProjectFile(formData: FormData) {
 export async function submitProjectForm(
   data: ProjectFormData,
   projectId?: string,
-  redirectPath: string = "/dashboard"
+  redirectPath: string = "/dashboard",
+  skipRedirect: boolean = false
 ) {
   const { userId } = await auth();
 
@@ -362,6 +450,11 @@ export async function submitProjectForm(
     } else {
       // Create new project
       await createProject(data);
+    }
+
+    // Skip redirect for auto-save
+    if (skipRedirect) {
+      return { success: true };
     }
 
     // Redirect to success page

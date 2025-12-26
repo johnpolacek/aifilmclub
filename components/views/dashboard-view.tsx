@@ -132,9 +132,11 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                       {project.status}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                    {project.description}
-                  </p>
+                  {project.logline && (
+                    <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                      {project.logline}
+                    </p>
+                  )}
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
                     {project.duration && (
                       <div className="flex items-center gap-1">

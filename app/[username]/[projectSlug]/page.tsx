@@ -27,10 +27,10 @@ export async function generateMetadata({
 
   return {
     title: `${project.title} - ${username} - AI Film Camp`,
-    description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+    description: project.logline || `View ${project.title} by ${username} on AI Film Camp`,
     openGraph: {
       title: `${project.title} - ${username} - AI Film Camp`,
-      description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+      description: project.logline || `View ${project.title} by ${username} on AI Film Camp`,
       ...(thumbnailUrl && {
         images: [
           {
@@ -45,7 +45,7 @@ export async function generateMetadata({
     twitter: {
       card: "summary_large_image",
       title: `${project.title} - ${username} - AI Film Camp`,
-      description: project.description || `View ${project.title} by ${username} on AI Film Camp`,
+      description: project.logline || `View ${project.title} by ${username} on AI Film Camp`,
       ...(thumbnailUrl && {
         images: [thumbnailUrl],
       }),

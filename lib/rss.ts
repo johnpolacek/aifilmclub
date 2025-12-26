@@ -15,8 +15,8 @@ export async function generateRSSFeed(
   const projectUrl = `${baseUrl}/${userProfile.username}/${project.slug}`;
   const _rssUrl = `${baseUrl}/api/rss/${userProfile.username}/${project.slug}`;
 
-  // Get project description
-  const description = project.description || `Posts from ${project.title}`;
+  // Get project logline for RSS description
+  const description = project.logline || `Posts from ${project.title}`;
   const escapedDescription = escapeXml(description);
 
   // Generate items for each post
