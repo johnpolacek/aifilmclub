@@ -34,11 +34,6 @@ export function PostView({ post, project, creatorProfile, username, projectSlug 
         <div className="mb-6 pb-6 border-b border-border">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-base pr-2">{project.title}</h2>
-            {project.status && (
-              <span className="px-2 py-0.5 bg-primary/20 text-primary rounded-full text-xs font-medium">
-                {project.status}
-              </span>
-            )}
             {project.genre && (
               <span className="px-2 py-0.5 bg-muted/50 rounded-full text-xs">{project.genre}</span>
             )}

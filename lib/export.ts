@@ -38,14 +38,13 @@ ${project.logline ? `> ${project.logline}` : ""}
 
 ## Project Details
 
-- **Status**: ${project.status}
 - **Genre**: ${project.genre || "Not specified"}
 - **Duration**: ${project.duration || "Not specified"}
 ${project.publishedAt ? `- **Published**: ${new Date(project.publishedAt).toLocaleDateString()}` : ""}
 
 ${project.characters && project.characters.length > 0 ? `## Characters
 
-${project.characters.map((c) => `### ${c.name}${c.type ? ` (${c.type})` : ""}
+${project.characters.map((c) => `### ${c.name}
 ${c.appearance || ""}
 `).join("\n")}` : ""}
 

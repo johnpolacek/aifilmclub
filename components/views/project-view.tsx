@@ -75,7 +75,6 @@ export function ProjectView({
     logline: project.logline,
     slug: projectSlug,
     thumbnail: thumbnailUrl,
-    status: project.status,
     duration: project.duration,
     genre: project.genre,
     lastUpdated,
@@ -111,9 +110,6 @@ export function ProjectView({
         <div className="absolute bottom-0 left-0 right-0 p-8">
           <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
             <div className="flex items-center gap-3 mb-4">
-              <span className="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
-                {projectDisplay.status}
-              </span>
               {project.isPublished && (
                 <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-sm font-medium">
                   Published

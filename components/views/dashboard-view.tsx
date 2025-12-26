@@ -125,12 +125,6 @@ export function DashboardView({ initialProjects, initialPostsByProject = {} }: D
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xl font-bold">{project.title}</h3>
-                    <Badge
-                      variant="secondary"
-                      className="bg-sky-800 font-mono uppercase text-white/50! font-bold -mt-2 text-xxs"
-                    >
-                      {project.status}
-                    </Badge>
                   </div>
                   {project.logline && (
                     <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
