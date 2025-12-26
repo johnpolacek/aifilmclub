@@ -1,9 +1,22 @@
 "use client";
 
-import { Edit, Film, Image as ImageIcon, Loader2, Plus, Trash2, Video, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Edit,
+  Film,
+  Image as ImageIcon,
+  Loader2,
+  Plus,
+  Trash2,
+  Upload,
+  Video,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Character } from "@/components/project-form";
+import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,6 +31,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes";
+import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
+import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
+import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
 
 interface SceneEditorProps {
   scene: Scene;
@@ -31,14 +47,209 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
   const [editedScene, setEditedScene] = useState<Scene>(scene);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Screenplay editing state - structured elements
+  const [isEditingScreenplay, setIsEditingScreenplay] = useState(false);
+  const [screenplayElements, setScreenplayElements] = useState<ScreenplayElement[]>([]);
+  const [focusedElementIndex, setFocusedElementIndex] = useState(0);
+  const elementRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+
+  const handleScreenplayEdit = () => {
+    // Parse the plain text screenplay into structured elements
+    const elements = editedScene.screenplay
+      ? parseScreenplayToElements(editedScene.screenplay)
+      : [createScreenplayElement("action", "")];
+    setScreenplayElements(elements.length > 0 ? elements : [createScreenplayElement("action", "")]);
+    setFocusedElementIndex(0);
+    setIsEditingScreenplay(true);
+  };
+
+  const handleScreenplaySave = () => {
+    // Convert structured elements back to plain text
+    const plainText = elementsToText(screenplayElements);
+    setEditedScene({ ...editedScene, screenplay: plainText });
+    setIsEditingScreenplay(false);
+  };
+
+  const handleScreenplayCancel = () => {
+    setScreenplayElements([]);
+    setIsEditingScreenplay(false);
+  };
+
+  // Handle element content change
+  const handleElementChange = useCallback((id: string, content: string) => {
+    setScreenplayElements((prev) => prev.map((el) => (el.id === id ? { ...el, content } : el)));
+  }, []);
+
+  // Handle element type change
+  const handleElementTypeChange = useCallback((id: string, type: ScreenplayElementType) => {
+    setScreenplayElements((prev) => prev.map((el) => (el.id === id ? { ...el, type } : el)));
+  }, []);
+
+  // Delete element
+  const handleElementDelete = useCallback((id: string) => {
+    setScreenplayElements((prev) => {
+      const index = prev.findIndex((el) => el.id === id);
+      const filtered = prev.filter((el) => el.id !== id);
+      if (filtered.length === 0) {
+        return [createScreenplayElement("action", "")];
+      }
+      if (index > 0) {
+        setFocusedElementIndex(index - 1);
+      } else {
+        setFocusedElementIndex(0);
+      }
+      return filtered;
+    });
+  }, []);
+
+  // Insert new element after index
+  const handleElementInsertAfter = useCallback((index: number, type: ScreenplayElementType) => {
+    const newElement = createScreenplayElement(type, "");
+    setScreenplayElements((prev) => {
+      const updated = [...prev];
+      updated.splice(index + 1, 0, newElement);
+      return updated;
+    });
+    setFocusedElementIndex(index + 1);
+  }, []);
+
+  // Determine next element type based on current type
+  const getNextType = useCallback((currentType: ScreenplayElementType): ScreenplayElementType => {
+    switch (currentType) {
+      case "scene_heading":
+        return "action";
+      case "action":
+        return "action";
+      case "character":
+        return "dialogue";
+      case "parenthetical":
+        return "dialogue";
+      case "dialogue":
+        return "character";
+      case "transition":
+        return "scene_heading";
+      default:
+        return "action";
+    }
+  }, []);
+
+  // Handle keyboard navigation
+  const handleElementKeyDown = useCallback(
+    (e: React.KeyboardEvent, index: number) => {
+      const currentElement = screenplayElements[index];
+      const target = e.target as HTMLTextAreaElement;
+      const cursorAtStart = target.selectionStart === 0 && target.selectionEnd === 0;
+      const cursorAtEnd = target.selectionStart === currentElement.content.length;
+
+      // Enter: Create new element after current
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const nextType = getNextType(currentElement.type);
+        handleElementInsertAfter(index, nextType);
+        return;
+      }
+
+      // Backspace on empty element: Delete and focus previous
+      if (e.key === "Backspace" && currentElement.content === "" && screenplayElements.length > 1) {
+        e.preventDefault();
+        handleElementDelete(currentElement.id);
+        return;
+      }
+
+      // Tab on empty element: Change element type cyclically
+      if (e.key === "Tab" && !e.shiftKey && currentElement.content === "") {
+        e.preventDefault();
+        const types: ScreenplayElementType[] = [
+          "scene_heading",
+          "action",
+          "character",
+          "dialogue",
+          "parenthetical",
+          "transition",
+        ];
+        const currentIndex = types.indexOf(currentElement.type);
+        const nextIndex = (currentIndex + 1) % types.length;
+        handleElementTypeChange(currentElement.id, types[nextIndex]);
+        return;
+      }
+
+      // Tab with content: Move to next element
+      if (e.key === "Tab" && !e.shiftKey && currentElement.content !== "") {
+        if (index < screenplayElements.length - 1) {
+          e.preventDefault();
+          setFocusedElementIndex(index + 1);
+        }
+        return;
+      }
+
+      // Shift+Tab: Move to previous element
+      if (e.key === "Tab" && e.shiftKey) {
+        if (index > 0) {
+          e.preventDefault();
+          setFocusedElementIndex(index - 1);
+        }
+        return;
+      }
+
+      // Arrow Down at end of content: Move to next element
+      if (e.key === "ArrowDown" && cursorAtEnd) {
+        if (index < screenplayElements.length - 1) {
+          e.preventDefault();
+          setFocusedElementIndex(index + 1);
+        }
+        return;
+      }
+
+      // Arrow Up at start of content: Move to previous element
+      if (e.key === "ArrowUp" && cursorAtStart) {
+        if (index > 0) {
+          e.preventDefault();
+          setFocusedElementIndex(index - 1);
+        }
+        return;
+      }
+    },
+    [
+      screenplayElements,
+      handleElementDelete,
+      handleElementInsertAfter,
+      handleElementTypeChange,
+      getNextType,
+    ]
+  );
+
+  // Add new element at the end
+  const handleAddElement = (type: ScreenplayElementType) => {
+    const newElement = createScreenplayElement(type, "");
+    setScreenplayElements((prev) => [...prev, newElement]);
+    setFocusedElementIndex(screenplayElements.length);
+  };
+
+  // Register element ref
+  const registerElementRef = useCallback((id: string, ref: HTMLTextAreaElement | null) => {
+    if (ref) {
+      elementRefs.current.set(id, ref);
+    } else {
+      elementRefs.current.delete(id);
+    }
+  }, []);
+
   // Image generation state
   const [imagePrompt, setImagePrompt] = useState("");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Image upload state
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Video generation state
   const [videoPrompt, setVideoPrompt] = useState("");
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [pendingVideos, setPendingVideos] = useState<Map<string, string>>(new Map()); // videoId -> operationId
+
+  // Video upload state
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Poll for video completion
   useEffect(() => {
@@ -206,6 +417,103 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
     }
   };
 
+  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    const loadingToast = toast.loading("Uploading image...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", editedScene.projectId);
+      formData.append("sceneId", editedScene.id);
+      formData.append("mediaType", "image");
+
+      const response = await fetch("/api/scenes/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const newImage: GeneratedImage = {
+          id: data.id,
+          prompt: `Uploaded: ${file.name}`,
+          imageUrl: data.url,
+          model: "other",
+          createdAt: new Date().toISOString(),
+        };
+        setEditedScene((prev) => ({
+          ...prev,
+          generatedImages: [...prev.generatedImages, newImage],
+        }));
+        toast.success("Image uploaded successfully!", { id: loadingToast });
+      } else {
+        toast.error(data.error || "Failed to upload image", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("[SceneEditor] Error uploading image:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to upload image", { id: loadingToast });
+    } finally {
+      setIsUploadingImage(false);
+      if (e.target) {
+        e.target.value = "";
+      }
+    }
+  };
+
+  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingVideo(true);
+    const loadingToast = toast.loading("Uploading video...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", editedScene.projectId);
+      formData.append("sceneId", editedScene.id);
+      formData.append("mediaType", "video");
+
+      const response = await fetch("/api/scenes/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const newVideo: GeneratedVideo = {
+          id: data.id,
+          prompt: `Uploaded: ${file.name}`,
+          videoUrl: data.url,
+          model: "other",
+          status: "completed",
+          createdAt: new Date().toISOString(),
+        };
+        setEditedScene((prev) => ({
+          ...prev,
+          generatedVideos: [...prev.generatedVideos, newVideo],
+        }));
+        toast.success("Video uploaded successfully!", { id: loadingToast });
+      } else {
+        toast.error(data.error || "Failed to upload video", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("[SceneEditor] Error uploading video:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to upload video", { id: loadingToast });
+    } finally {
+      setIsUploadingVideo(false);
+      if (e.target) {
+        e.target.value = "";
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!editedScene.title.trim()) {
       toast.error("Scene title is required");
@@ -263,17 +571,114 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         {/* Screenplay Text */}
         <div className="space-y-2">
           <Label htmlFor="scene-screenplay">Screenplay</Label>
-          <Textarea
-            id="scene-screenplay"
-            placeholder="Enter the screenplay text for this scene..."
-            value={editedScene.screenplay}
-            onChange={(e) => setEditedScene({ ...editedScene, screenplay: e.target.value })}
-            rows={10}
-            className="bg-background resize-none font-mono text-sm"
-          />
-          <p className="text-xs text-muted-foreground">
-            Write the scene description, dialogue, and action for this scene
-          </p>
+
+          {isEditingScreenplay ? (
+            <div className="space-y-3">
+              {/* Structured Element Editor */}
+              <div className="rounded-md border border-input bg-background overflow-hidden">
+                {/* Elements */}
+                <div className="py-2 font-mono text-sm leading-relaxed max-h-[400px] overflow-y-auto">
+                  {screenplayElements.map((element, index) => {
+                    const prevElement = index > 0 ? screenplayElements[index - 1] : null;
+                    const needsExtraSpacing =
+                      element.type === "action" && prevElement?.type === "dialogue";
+
+                    return (
+                      <ScreenplayElementComponent
+                        key={element.id}
+                        element={element}
+                        index={index}
+                        isFocused={focusedElementIndex === index}
+                        onFocus={setFocusedElementIndex}
+                        onChange={handleElementChange}
+                        onTypeChange={handleElementTypeChange}
+                        onKeyDown={handleElementKeyDown}
+                        onDelete={handleElementDelete}
+                        onInsertAfter={handleElementInsertAfter}
+                        extraTopSpacing={needsExtraSpacing}
+                        ref={(ref) => registerElementRef(element.id, ref)}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Add element buttons */}
+                <div className="border-t border-border p-2 flex flex-wrap gap-1.5 bg-muted/30">
+                  <span className="text-xs text-muted-foreground self-center mr-1">Add:</span>
+                  {(
+                    [
+                      "scene_heading",
+                      "action",
+                      "character",
+                      "dialogue",
+                      "parenthetical",
+                      "transition",
+                    ] as ScreenplayElementType[]
+                  ).map((type) => (
+                    <Button
+                      key={type}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAddElement(type)}
+                      className="h-6 px-2 text-xs"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      {ELEMENT_TYPE_LABELS[type]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Enter for new line • Tab to change type • Click type label to change
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleScreenplayCancel}
+                    className="bg-transparent"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={handleScreenplaySave}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleScreenplayEdit}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 cursor-pointer hover:bg-muted/30 transition-colors group text-left"
+            >
+              {editedScene.screenplay ? (
+                <div className="flex items-start gap-2">
+                  <p
+                    className="flex-1 font-mono text-sm text-muted-foreground line-clamp-2"
+                    style={{
+                      fontFamily:
+                        "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+                    }}
+                  >
+                    {editedScene.screenplay.replace(/\n+/g, " ").trim()}
+                  </p>
+                  <Edit className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 py-1">
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                    Add screenplay text...
+                  </p>
+                </div>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Characters in Scene */}
@@ -302,18 +707,50 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
           </div>
         )}
 
-        {/* Image Generation */}
+        {/* Image Generation & Upload */}
         <div className="space-y-4 pt-4 border-t border-border">
           <div className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-primary" />
-            <Label className="text-base font-semibold">Generate Image</Label>
+            <Label className="text-base font-semibold">Images</Label>
           </div>
+
+          {/* Upload Image */}
+          <div className="flex gap-2">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={handleUploadImage}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={isUploadingImage}
+              className="flex-1 bg-transparent"
+            >
+              {isUploadingImage ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Image
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Generate Image */}
           <div className="space-y-2">
             <Textarea
-              placeholder="Describe the image you want to generate for this scene..."
+              placeholder="Or describe an image to generate..."
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
-              rows={3}
+              rows={2}
               className="bg-background resize-none"
               disabled={isGeneratingImage}
             />
@@ -337,11 +774,11 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
             </Button>
           </div>
 
-          {/* Generated Images Preview */}
+          {/* Images Preview */}
           {editedScene.generatedImages.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm text-muted-foreground">
-                Generated Images ({editedScene.generatedImages.length})
+                Images ({editedScene.generatedImages.length})
               </Label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {editedScene.generatedImages.map((image) => (
@@ -364,18 +801,50 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
           )}
         </div>
 
-        {/* Video Generation */}
+        {/* Video Generation & Upload */}
         <div className="space-y-4 pt-4 border-t border-border">
           <div className="flex items-center gap-2">
             <Video className="h-5 w-5 text-primary" />
-            <Label className="text-base font-semibold">Generate Video</Label>
+            <Label className="text-base font-semibold">Videos</Label>
           </div>
+
+          {/* Upload Video */}
+          <div className="flex gap-2">
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+              onChange={handleUploadVideo}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => videoInputRef.current?.click()}
+              disabled={isUploadingVideo}
+              className="flex-1 bg-transparent"
+            >
+              {isUploadingVideo ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Video
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Generate Video */}
           <div className="space-y-2">
             <Textarea
-              placeholder="Describe the video you want to generate for this scene..."
+              placeholder="Or describe a video to generate..."
               value={videoPrompt}
               onChange={(e) => setVideoPrompt(e.target.value)}
-              rows={3}
+              rows={2}
               className="bg-background resize-none"
               disabled={isGeneratingVideo}
             />
@@ -402,11 +871,11 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
             </p>
           </div>
 
-          {/* Generated Videos Preview */}
+          {/* Videos Preview */}
           {editedScene.generatedVideos.length > 0 && (
             <div className="space-y-2">
               <Label className="text-sm text-muted-foreground">
-                Generated Videos ({editedScene.generatedVideos.length})
+                Videos ({editedScene.generatedVideos.length})
               </Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {editedScene.generatedVideos.map((video) => (
@@ -479,12 +948,11 @@ interface SceneListProps {
 export function SceneList({
   projectId,
   scenes,
-  characters,
+  characters: _characters,
   screenplayText,
   onScenesChange,
 }: SceneListProps) {
-  const [editingScene, setEditingScene] = useState<Scene | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  const router = useRouter();
   const [isExtracting, setIsExtracting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
@@ -542,7 +1010,7 @@ export function SceneList({
     }
   };
 
-  const handleAddScene = () => {
+  const handleAddScene = async () => {
     const newSceneNumber = scenes.length + 1;
     const now = new Date().toISOString();
     const newScene: Scene = {
@@ -557,81 +1025,68 @@ export function SceneList({
       createdAt: now,
       updatedAt: now,
     };
-    setEditingScene(newScene);
-    setIsCreating(true);
-  };
 
-  const handleSaveScene = (scene: Scene) => {
-    if (isCreating) {
-      onScenesChange([...scenes, scene]);
-    } else {
-      onScenesChange(scenes.map((s) => (s.id === scene.id ? scene : s)));
+    // Save the new scene first, then navigate to edit page
+    const loadingToast = toast.loading("Creating scene...");
+    try {
+      const response = await fetch(`/api/scenes/${newScene.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          scene: newScene,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        onScenesChange([...scenes, newScene]);
+        toast.success("Scene created", { id: loadingToast });
+        router.push(`/dashboard/projects/${projectId}/scenes/${newScene.id}/edit`);
+      } else {
+        toast.error(data.error || "Failed to create scene", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("[SceneList] Error creating scene:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to create scene", { id: loadingToast });
     }
-    setEditingScene(null);
-    setIsCreating(false);
-    toast.success(isCreating ? "Scene created" : "Scene updated");
   };
-
-  const handleDeleteScene = (sceneId: string) => {
-    onScenesChange(scenes.filter((s) => s.id !== sceneId));
-    setEditingScene(null);
-    toast.success("Scene deleted");
-  };
-
-  const handleCancelEdit = () => {
-    setEditingScene(null);
-    setIsCreating(false);
-  };
-
-  // If editing a scene, show the editor
-  if (editingScene) {
-    return (
-      <SceneEditor
-        scene={editingScene}
-        characters={characters}
-        onSave={handleSaveScene}
-        onCancel={handleCancelEdit}
-        onDelete={!isCreating ? () => handleDeleteScene(editingScene.id) : undefined}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4">
       {/* Scene List */}
       {scenes.length > 0 ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {scenes.map((scene) => (
-            <Card
-              key={scene.id}
-              className="group bg-muted/30 border-border hover:bg-muted/50 py-2 transition-colors cursor-pointer"
-              onClick={() => setEditingScene(scene)}
-            >
-              <CardContent className="pl-4 py-0 flex items-center gap-4">
-                <div className="pt-0.5 shrink-0">
-                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                </div>
-                <span className="text-sm text-muted-foreground font-medium shrink-0 w-8">
-                  #{scene.sceneNumber}
-                </span>
-                <h4 className="font-medium truncate min-w-0">{scene.title}</h4>
-                {scene.screenplay && (
-                  <div className="flex-1 min-w-0 hidden sm:block">
-                    <p className="font-mono text-xs text-muted-foreground truncate">
-                      {scene.screenplay.substring(0, 200)}...
-                    </p>
+            <Link key={scene.id} href={`/dashboard/projects/${projectId}/scenes/${scene.id}/edit`}>
+              <Card className="group bg-muted/30 border-border hover:bg-muted/50 py-2 transition-colors cursor-pointer">
+                <CardContent className="pl-4 py-0 flex items-center gap-4">
+                  <div className="pt-0.5 shrink-0">
+                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
                   </div>
-                )}
-                <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
-                  {scene.generatedImages.length > 0 && (
-                    <span>{scene.generatedImages.length} images</span>
+                  <span className="text-sm text-muted-foreground font-medium shrink-0 w-8">
+                    #{scene.sceneNumber}
+                  </span>
+                  <h4 className="font-medium truncate min-w-0">{scene.title}</h4>
+                  {scene.screenplay && (
+                    <div className="flex-1 min-w-0 hidden sm:block">
+                      <p className="font-mono text-xs text-muted-foreground truncate">
+                        {scene.screenplay.substring(0, 200)}...
+                      </p>
+                    </div>
                   )}
-                  {scene.generatedVideos.length > 0 && (
-                    <span>{scene.generatedVideos.length} videos</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
+                    {scene.generatedImages.length > 0 && (
+                      <span>{scene.generatedImages.length} images</span>
+                    )}
+                    {scene.generatedVideos.length > 0 && (
+                      <span>{scene.generatedVideos.length} videos</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       ) : (

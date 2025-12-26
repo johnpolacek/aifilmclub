@@ -1,4 +1,5 @@
 import { getObjectFromS3, listObjectsInS3, putObjectToS3 } from "./s3";
+import { getProject, saveProject } from "./projects";
 
 const SCENES_PREFIX = "scenes/";
 
@@ -54,9 +55,20 @@ function getSceneKey(projectId: string, sceneId: string): string {
 
 /**
  * Get a scene by ID
+ * First checks the project's scenes array, then falls back to separate S3 storage
  */
 export async function getScene(projectId: string, sceneId: string): Promise<Scene | null> {
   try {
+    // First, try to get the scene from the project's scenes array
+    const project = await getProject(projectId);
+    if (project?.scenes) {
+      const sceneFromProject = project.scenes.find((s) => s.id === sceneId);
+      if (sceneFromProject) {
+        return sceneFromProject;
+      }
+    }
+
+    // Fallback: try to get from separate S3 storage (for new scenes)
     const key = getSceneKey(projectId, sceneId);
     const data = await getObjectFromS3(key);
 
@@ -73,12 +85,36 @@ export async function getScene(projectId: string, sceneId: string): Promise<Scen
 
 /**
  * Save a scene (create or update)
+ * If the scene exists in the project's scenes array, update it there
+ * Otherwise, save to separate S3 storage
  */
 export async function saveScene(projectId: string, sceneData: Scene): Promise<void> {
   try {
+    // First, check if this scene exists in the project's scenes array
+    const project = await getProject(projectId);
+    
+    if (project) {
+      const scenes = project.scenes || [];
+      const existingIndex = scenes.findIndex((s) => s.id === sceneData.id);
+      
+      if (existingIndex !== -1) {
+        // Update existing scene in project
+        scenes[existingIndex] = sceneData;
+        await saveProject(projectId, { ...project, scenes });
+        return;
+      } else {
+        // Add new scene to project's scenes array
+        scenes.push(sceneData);
+        // Sort by scene number
+        scenes.sort((a, b) => a.sceneNumber - b.sceneNumber);
+        await saveProject(projectId, { ...project, scenes });
+        return;
+      }
+    }
+
+    // Fallback: save to separate S3 storage
     const key = getSceneKey(projectId, sceneData.id);
     const body = JSON.stringify(sceneData, null, 2);
-
     await putObjectToS3(key, body);
   } catch (error) {
     console.error("Error saving scene:", JSON.stringify({ projectId, sceneId: sceneData.id, error }, null, 2));
@@ -122,9 +158,29 @@ export async function listScenesForProject(projectId: string): Promise<Scene[]> 
 
 /**
  * Delete a scene
+ * If the scene exists in the project's scenes array, remove it from there
+ * Otherwise, delete from separate S3 storage
  */
 export async function deleteScene(projectId: string, sceneId: string): Promise<void> {
   try {
+    // First, check if this scene exists in the project's scenes array
+    const project = await getProject(projectId);
+    
+    if (project?.scenes) {
+      const existingIndex = project.scenes.findIndex((s) => s.id === sceneId);
+      
+      if (existingIndex !== -1) {
+        // Remove scene from project and renumber remaining scenes
+        const updatedScenes = project.scenes.filter((s) => s.id !== sceneId);
+        updatedScenes.forEach((scene, index) => {
+          scene.sceneNumber = index + 1;
+        });
+        await saveProject(projectId, { ...project, scenes: updatedScenes });
+        return;
+      }
+    }
+
+    // Fallback: delete from separate S3 storage
     const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
     const { s3Client, BUCKET_NAME } = await import("./s3");
 
