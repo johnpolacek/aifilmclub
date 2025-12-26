@@ -3,13 +3,13 @@
 import { Film, Image as ImageIcon, Loader2, Plus, Trash2, Video, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { Character } from "@/components/project-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { Scene, GeneratedImage, GeneratedVideo } from "@/lib/scenes";
-import type { Character } from "@/components/project-form";
+import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes";
 
 interface SceneEditorProps {
   scene: Scene;
@@ -19,20 +19,14 @@ interface SceneEditorProps {
   onDelete?: () => void;
 }
 
-export function SceneEditor({
-  scene,
-  characters,
-  onSave,
-  onCancel,
-  onDelete,
-}: SceneEditorProps) {
+export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: SceneEditorProps) {
   const [editedScene, setEditedScene] = useState<Scene>(scene);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Image generation state
   const [imagePrompt, setImagePrompt] = useState("");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  
+
   // Video generation state
   const [videoPrompt, setVideoPrompt] = useState("");
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
@@ -57,7 +51,12 @@ export function SceneEditor({
                 ...prev,
                 generatedVideos: prev.generatedVideos.map((v) =>
                   v.id === videoId
-                    ? { ...v, status: "completed" as const, videoUrl: data.videoUrl, completedAt: new Date().toISOString() }
+                    ? {
+                        ...v,
+                        status: "completed" as const,
+                        videoUrl: data.videoUrl,
+                        completedAt: new Date().toISOString(),
+                      }
                     : v
                 ),
               }));
@@ -86,7 +85,10 @@ export function SceneEditor({
             }
           }
         } catch (error) {
-          console.error("[SceneEditor] Error polling video status:", JSON.stringify({ videoId, error }, null, 2));
+          console.error(
+            "[SceneEditor] Error polling video status:",
+            JSON.stringify({ videoId, error }, null, 2)
+          );
         }
       }
     }, 5000); // Poll every 5 seconds
@@ -168,21 +170,23 @@ export function SceneEditor({
           status: "processing",
           createdAt: new Date().toISOString(),
         };
-        
+
         setEditedScene((prev) => ({
           ...prev,
           generatedVideos: [...prev.generatedVideos, newVideo],
         }));
-        
+
         // Add to pending videos for polling
         setPendingVideos((prev) => {
           const next = new Map(prev);
           next.set(data.video.id, data.video.operationId);
           return next;
         });
-        
+
         setVideoPrompt("");
-        toast.success("Video generation started! This may take a few minutes.", { id: loadingToast });
+        toast.success("Video generation started! This may take a few minutes.", {
+          id: loadingToast,
+        });
       } else {
         toast.error(data.error || "Failed to start video generation", { id: loadingToast });
       }
@@ -215,7 +219,7 @@ export function SceneEditor({
   const toggleCharacter = (characterName: string) => {
     const currentCharacters = editedScene.characters || [];
     const isSelected = currentCharacters.includes(characterName);
-    
+
     setEditedScene({
       ...editedScene,
       characters: isSelected
@@ -229,15 +233,9 @@ export function SceneEditor({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Film className="h-5 w-5 text-primary" />
-          {scene.id ? `Edit Scene ${editedScene.sceneNumber}` : "New Scene"}
+          {scene.id ? "Edit Scene" : "New Scene"}
         </CardTitle>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-          className="h-8 w-8 p-0"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-8 w-8 p-0">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -251,19 +249,6 @@ export function SceneEditor({
             value={editedScene.title}
             onChange={(e) => setEditedScene({ ...editedScene, title: e.target.value })}
             className="bg-background"
-          />
-        </div>
-
-        {/* Scene Number */}
-        <div className="space-y-2">
-          <Label htmlFor="scene-number">Scene Number</Label>
-          <Input
-            id="scene-number"
-            type="number"
-            min={1}
-            value={editedScene.sceneNumber}
-            onChange={(e) => setEditedScene({ ...editedScene, sceneNumber: parseInt(e.target.value) || 1 })}
-            className="bg-background w-24"
           />
         </div>
 
@@ -343,7 +328,7 @@ export function SceneEditor({
               )}
             </Button>
           </div>
-          
+
           {/* Generated Images Preview */}
           {editedScene.generatedImages.length > 0 && (
             <div className="space-y-2">
@@ -408,7 +393,7 @@ export function SceneEditor({
               Video generation may take several minutes to complete.
             </p>
           </div>
-          
+
           {/* Generated Videos Preview */}
           {editedScene.generatedVideos.length > 0 && (
             <div className="space-y-2">
@@ -422,11 +407,7 @@ export function SceneEditor({
                     className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30"
                   >
                     {video.status === "completed" && video.videoUrl ? (
-                      <video
-                        src={video.videoUrl}
-                        className="w-full h-full object-cover"
-                        controls
-                      >
+                      <video src={video.videoUrl} className="w-full h-full object-cover" controls>
                         <track kind="captions" />
                       </video>
                     ) : (
@@ -450,12 +431,7 @@ export function SceneEditor({
 
         {/* Action Buttons */}
         <div className="flex gap-3 pt-4 border-t border-border">
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1"
-          >
+          <Button type="button" onClick={handleSave} disabled={isSaving} className="flex-1">
             {isSaving ? "Saving..." : "Save Scene"}
           </Button>
           <Button
@@ -528,10 +504,12 @@ export function SceneList({
         // Merge extracted scenes with existing scenes
         const existingIds = new Set(scenes.map((s) => s.id));
         const newScenes = data.scenes.filter((s: Scene) => !existingIds.has(s.id));
-        
+
         if (newScenes.length > 0) {
           onScenesChange([...scenes, ...newScenes]);
-          toast.success(`Extracted ${newScenes.length} scenes from screenplay`, { id: loadingToast });
+          toast.success(`Extracted ${newScenes.length} scenes from screenplay`, {
+            id: loadingToast,
+          });
         } else {
           toast.info("No new scenes found in screenplay", { id: loadingToast });
         }
@@ -553,7 +531,7 @@ export function SceneList({
       id: `scene-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       projectId,
       sceneNumber: newSceneNumber,
-      title: `Scene ${newSceneNumber}`,
+      title: "New Scene",
       screenplay: "",
       characters: [],
       generatedImages: [],
@@ -612,9 +590,6 @@ export function SceneList({
               onClick={() => setEditingScene(scene)}
             >
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
-                  {scene.sceneNumber}
-                </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium truncate">{scene.title}</h4>
                   {scene.screenplay && (
@@ -644,12 +619,7 @@ export function SceneList({
 
       {/* Action Buttons */}
       <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleAddScene}
-          className="bg-transparent"
-        >
+        <Button type="button" variant="outline" onClick={handleAddScene} className="bg-transparent">
           <Plus className="h-4 w-4 mr-2" />
           Add Scene
         </Button>
@@ -678,4 +648,3 @@ export function SceneList({
     </div>
   );
 }
-
