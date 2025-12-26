@@ -1,4 +1,4 @@
-import { Calendar, Clapperboard, Clock, ExternalLink, FileDown, Play, Rss } from "lucide-react";
+import { Calendar, Clapperboard, Clock, ExternalLink, FileDown, FileText, Play, Rss } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { FilmPlayer } from "@/components/film-player";
@@ -335,19 +335,31 @@ export function ProjectView({
             )}
 
             {/* Screenplay / Script */}
-            {project.screenplay && (
-              <div className="pb-5">
-                <a
-                  href={getProjectFileUrl(project.screenplay.filename, username)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                >
-                  <Button size="sm" variant="outline" className="bg-transparent text-xs">
-                    <FileDown className="h-3 w-3 mr-1" />
-                    View Screenplay
-                  </Button>
-                </a>
+            {(project.screenplayElements?.length || project.screenplayText || project.screenplay) && (
+              <div className="pb-5 flex items-center gap-2">
+                {/* View screenplay page link */}
+                {(project.screenplayElements?.length || project.screenplayText) && (
+                  <Link href={`/${username}/${project.slug}/screenplay`}>
+                    <Button size="sm" variant="outline" className="bg-transparent text-xs">
+                      <FileText className="h-3 w-3 mr-1" />
+                      Read Screenplay
+                    </Button>
+                  </Link>
+                )}
+                {/* Download PDF if available */}
+                {project.screenplay && (
+                  <a
+                    href={getProjectFileUrl(project.screenplay.filename, username)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                  >
+                    <Button size="sm" variant="outline" className="bg-transparent text-xs">
+                      <FileDown className="h-3 w-3 mr-1" />
+                      Download PDF
+                    </Button>
+                  </a>
+                )}
               </div>
             )}
 

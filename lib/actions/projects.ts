@@ -90,6 +90,119 @@ export async function updateProject(projectId: string, data: ProjectFormData) {
 }
 
 /**
+ * Update just the screenplay text for a project
+ * This is a simpler action for the screenplay editor
+ * Optionally includes PDF file info when uploading a PDF
+ */
+export async function updateScreenplayText(
+  projectId: string,
+  screenplayText: string,
+  pdfInfo?: {
+    name: string;
+    filename: string;
+    size: number;
+    type: string;
+  }
+): Promise<{ success: true } | { success: false; error: string }> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return { success: false, error: "You must be signed in to update the screenplay" };
+  }
+
+  try {
+    // Check if project exists and user owns it
+    const existingProject = await getProject(projectId);
+    if (!existingProject) {
+      return { success: false, error: "Project not found" };
+    }
+
+    // Check if user owns the project
+    const currentUsername = await getCurrentUsername();
+    if (existingProject.username !== currentUsername) {
+      return { success: false, error: "You don't have permission to update this project" };
+    }
+
+    // Update the screenplay text and optionally PDF info
+    const updatedProject: ProjectFormData = {
+      ...existingProject,
+      screenplayText,
+      ...(pdfInfo && { screenplay: pdfInfo }),
+    };
+
+    await saveProject(projectId, updatedProject);
+
+    // Revalidate pages
+    revalidatePath("/dashboard");
+    revalidatePath(`/dashboard/projects/${projectId}/edit`);
+    revalidatePath(`/dashboard/projects/${projectId}/screenplay`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating screenplay:", JSON.stringify(error, null, 2));
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update screenplay",
+    };
+  }
+}
+
+/**
+ * Update screenplay elements (structured JSON format)
+ * Also updates the plain text version for backwards compatibility
+ */
+export async function updateScreenplayElements(
+  projectId: string,
+  elements: Array<{ id: string; type: string; content: string }>
+): Promise<{ success: true } | { success: false; error: string }> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return { success: false, error: "You must be signed in to update the screenplay" };
+  }
+
+  try {
+    // Check if project exists and user owns it
+    const existingProject = await getProject(projectId);
+    if (!existingProject) {
+      return { success: false, error: "Project not found" };
+    }
+
+    // Check if user owns the project
+    const currentUsername = await getCurrentUsername();
+    if (existingProject.username !== currentUsername) {
+      return { success: false, error: "You don't have permission to update this project" };
+    }
+
+    // Convert elements to plain text for backwards compatibility
+    const { elementsToText } = await import("@/lib/screenplay-parser");
+    const screenplayText = elementsToText(elements as Parameters<typeof elementsToText>[0]);
+
+    // Update both elements and text
+    const updatedProject: ProjectFormData = {
+      ...existingProject,
+      screenplayElements: elements as ProjectFormData["screenplayElements"],
+      screenplayText,
+    };
+
+    await saveProject(projectId, updatedProject);
+
+    // Revalidate pages
+    revalidatePath("/dashboard");
+    revalidatePath(`/dashboard/projects/${projectId}/edit`);
+    revalidatePath(`/dashboard/projects/${projectId}/screenplay`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating screenplay elements:", JSON.stringify(error, null, 2));
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update screenplay",
+    };
+  }
+}
+
+/**
  * Delete a project
  */
 export async function deleteProject(projectId: string) {
@@ -375,12 +488,27 @@ export async function uploadLocationImage(formData: FormData) {
 
 /**
  * Upload a project file (PDF, documents, etc.)
+ * Optionally extracts text from PDF files
  */
-export async function uploadProjectFile(formData: FormData) {
+export async function uploadProjectFile(
+  formData: FormData,
+  extractText: boolean = true
+): Promise<
+  | {
+      success: true;
+      filename: string;
+      originalName: string;
+      size: number;
+      type: string;
+      extractedText?: string;
+      extractionError?: string;
+    }
+  | { success: false; error: string }
+> {
   const { userId } = await auth();
 
   if (!userId) {
-    throw new Error("You must be signed in to upload a file");
+    return { success: false, error: "You must be signed in to upload a file" };
   }
 
   try {
@@ -388,13 +516,13 @@ export async function uploadProjectFile(formData: FormData) {
     const file = formData.get("file") as File;
 
     if (!file) {
-      throw new Error("No file provided");
+      return { success: false, error: "No file provided" };
     }
 
     // Validate file size (max 50MB for project files)
     const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      throw new Error("File must be less than 50MB");
+      return { success: false, error: "File must be less than 50MB" };
     }
 
     // Convert file to buffer
@@ -414,6 +542,29 @@ export async function uploadProjectFile(formData: FormData) {
     // Revalidate pages that show project data
     revalidatePath("/dashboard");
 
+    // Extract text from PDF if requested and file is a PDF
+    let extractedText: string | undefined;
+    let extractionError: string | undefined;
+    if (extractText && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"))) {
+      const extractResult = await extractPdfText(buffer);
+      if (extractResult.success) {
+        extractedText = extractResult.text;
+      } else {
+        extractionError = extractResult.error;
+        console.error(
+          "[uploadProjectFile] PDF text extraction failed:",
+          JSON.stringify(
+            {
+              filename: file.name,
+              error: extractionError,
+            },
+            null,
+            2
+          )
+        );
+      }
+    }
+
     // Return filename and metadata
     return {
       success: true,
@@ -421,10 +572,151 @@ export async function uploadProjectFile(formData: FormData) {
       originalName: file.name,
       size: file.size,
       type: file.type || "application/octet-stream",
+      ...(extractedText && { extractedText }),
+      ...(extractionError && { extractionError }),
     };
   } catch (error) {
     console.error("Error uploading project file:", error);
-    throw new Error(error instanceof Error ? error.message : "Failed to upload file");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to upload file",
+    };
+  }
+}
+
+/**
+ * Extract text from a PDF file
+ * Can extract from either a file buffer (during upload) or from S3 (existing file)
+ */
+export async function extractPdfText(
+  fileBuffer?: Buffer,
+  filename?: string,
+  username?: string
+): Promise<{ success: true; text: string } | { success: false; error: string }> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return { success: false, error: "You must be signed in to extract PDF text" };
+  }
+
+  try {
+    let pdfBuffer: Buffer;
+
+    // Get PDF buffer from either provided buffer or S3
+    if (fileBuffer) {
+      pdfBuffer = fileBuffer;
+    } else if (filename && username) {
+      const { getFileBufferFromS3 } = await import("@/lib/s3");
+      const key = `projects/${username}/files/${filename}`;
+      const buffer = await getFileBufferFromS3(key);
+      
+      if (!buffer) {
+        return { success: false, error: "PDF file not found in storage" };
+      }
+      pdfBuffer = buffer;
+    } else {
+      return { success: false, error: "Either file buffer or filename with username must be provided" };
+    }
+
+    // Extract text using pdf-parse v1.1.1
+    // Import directly from lib to avoid the test file loading issue in index.js
+    // The index.js has code that runs when module.parent is undefined (ESM context)
+    const pdfParseModule = await import("pdf-parse/lib/pdf-parse.js");
+    const pdfParse = pdfParseModule.default || pdfParseModule;
+    
+    if (typeof pdfParse !== "function") {
+      console.error(
+        "[extractPdfText] pdf-parse import issue:",
+        JSON.stringify(
+          {
+            hasDefault: !!pdfParseModule.default,
+            defaultType: typeof pdfParseModule.default,
+            moduleKeys: Object.keys(pdfParseModule),
+          },
+          null,
+          2
+        )
+      );
+      return {
+        success: false,
+        error: "PDF parsing library failed to load. Please try again.",
+      };
+    }
+    
+    // v1 API: pdfParse(buffer) returns Promise with { text, numpages, info }
+    const pdfData = await pdfParse(pdfBuffer);
+
+    if (!pdfData || !pdfData.text) {
+      return { success: false, error: "Could not extract text from PDF. The PDF may be image-based or corrupted." };
+    }
+
+    let extractedText = pdfData.text.trim();
+
+    if (!extractedText) {
+      return { success: false, error: "PDF appears to be empty or contains only images. Text extraction requires a text-based PDF." };
+    }
+
+    // Clean up screenplay text: strip everything before the first scene heading
+    // Scene headings start with INT. (interior) or EXT. (exterior)
+    const firstSceneMatch = extractedText.match(/^(INT\.|EXT\.)/im);
+    if (firstSceneMatch && firstSceneMatch.index !== undefined && firstSceneMatch.index > 0) {
+      const originalLength = extractedText.length;
+      extractedText = extractedText.substring(firstSceneMatch.index);
+      console.log(
+        "[extractPdfText] Stripped front matter:",
+        JSON.stringify(
+          {
+            originalLength,
+            newLength: extractedText.length,
+            strippedChars: originalLength - extractedText.length,
+          },
+          null,
+          2
+        )
+      );
+    }
+
+    console.log(
+      "[extractPdfText] Successfully extracted text:",
+      JSON.stringify(
+        {
+          textLength: extractedText.length,
+          pageCount: pdfData.numpages || 0,
+          filename: filename || "from buffer",
+        },
+        null,
+        2
+      )
+    );
+
+    return { success: true, text: extractedText };
+  } catch (error) {
+    console.error(
+      "[extractPdfText] Error extracting PDF text:",
+      JSON.stringify(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          filename: filename || "from buffer",
+        },
+        null,
+        2
+      )
+    );
+
+    // Provide helpful error messages
+    if (error instanceof Error) {
+      if (error.message.includes("Invalid PDF")) {
+        return { success: false, error: "Invalid PDF file. Please ensure the file is a valid PDF." };
+      }
+      if (error.message.includes("password")) {
+        return { success: false, error: "PDF is password-protected. Please remove the password and try again." };
+      }
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to extract text from PDF",
+    };
   }
 }
 

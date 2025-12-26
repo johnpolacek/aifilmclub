@@ -59,6 +59,40 @@ export async function getObjectFromS3(key: string): Promise<string | null> {
 }
 
 /**
+ * Get a file buffer from S3
+ */
+export async function getFileBufferFromS3(key: string): Promise<Buffer | null> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+
+    const response = await s3Client.send(command);
+    const arrayBuffer = await response.Body?.transformToByteArray();
+    
+    if (!arrayBuffer) {
+      return null;
+    }
+    
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    const awsError = error as {
+      name?: string;
+      message?: string;
+      Code?: string;
+      $metadata?: { httpStatusCode?: number };
+      stack?: string;
+    };
+
+    if (awsError.name === "NoSuchKey") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Put an object to S3
  */
 export async function putObjectToS3(

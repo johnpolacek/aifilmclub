@@ -36,16 +36,14 @@ export function Header() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" suppressHydrationWarning>
             <SignedIn>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hidden sm:inline-flex hover:bg-primary/20! hover:text-white!"
-                asChild
+              <Link
+                href="/dashboard"
+                className="hidden sm:inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium transition-all h-8 px-3 hover:bg-primary/20 hover:text-white"
               >
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
+                Dashboard
+              </Link>
               <UserButton />
             </SignedIn>
             <SignedOut>

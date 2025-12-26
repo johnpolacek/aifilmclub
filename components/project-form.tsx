@@ -70,6 +70,8 @@ export interface ProjectFile {
   type?: string; // MIME type (e.g., "application/pdf")
 }
 
+import type { ScreenplayElement } from "@/lib/types/screenplay";
+
 export interface ProjectFormData {
   title: string;
   logline: string; // One-line description of the film
@@ -80,7 +82,8 @@ export interface ProjectFormData {
     locations?: Location[];
   };
   scenes?: Scene[]; // Film scenes with generated content
-  screenplayText?: string; // Full screenplay text content
+  screenplayText?: string; // Full screenplay text content (legacy/export)
+  screenplayElements?: ScreenplayElement[]; // Structured screenplay elements (JSON format)
   thumbnail?: string;
   filmLink?: string; // YouTube or Vimeo link
   links: ProjectLinks;
@@ -228,6 +231,7 @@ export default function ProjectForm({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [editingCharacterIndex, setEditingCharacterIndex] = useState<number | null>(null);
   const [isEditingProjectInfo, setIsEditingProjectInfo] = useState(!isEditing); // Start expanded for new projects
+  const [showRemoveScreenplayConfirm, setShowRemoveScreenplayConfirm] = useState(false);
 
   // Auto-save state
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
@@ -841,7 +845,8 @@ export default function ProjectForm({
     setCharacterAdditionalPreviewImages(newPreviews);
   };
 
-  const handleProjectFileClick = () => {
+  const handleProjectFileClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
     projectFileInputRef.current?.click();
   };
 
@@ -870,21 +875,49 @@ export default function ProjectForm({
       const uploadFormData = new FormData();
       uploadFormData.append("file", file);
 
-      const result = await uploadProjectFile(uploadFormData);
+      // Upload the PDF and extract text in one step
+      const uploadResult = await uploadProjectFile(uploadFormData, true);
 
-      if (result.success && result.filename) {
-        setFormData({
-          ...formData,
-          screenplay: {
-            name: result.originalName,
-            filename: result.filename,
-            size: result.size,
-            type: result.type,
-          },
-        });
-        toast.success("Screenplay uploaded successfully!", {
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || "Failed to upload screenplay");
+      }
+
+      // Parse extracted text into structured elements
+      let screenplayElements: ScreenplayElement[] | undefined;
+      if (uploadResult.extractedText) {
+        const { parseScreenplayToElements } = await import("@/lib/screenplay-parser");
+        screenplayElements = parseScreenplayToElements(uploadResult.extractedText);
+      }
+
+      // Update form with uploaded file info, extracted text, and parsed elements
+      setFormData((prev) => ({
+        ...prev,
+        screenplay: {
+          name: uploadResult.originalName,
+          filename: uploadResult.filename,
+          size: uploadResult.size,
+          type: uploadResult.type,
+        },
+        ...(uploadResult.extractedText && { screenplayText: uploadResult.extractedText }),
+        ...(screenplayElements && screenplayElements.length > 0 && { screenplayElements }),
+      }));
+
+      if (uploadResult.extractedText) {
+        toast.success("Screenplay uploaded and text extracted successfully!", {
           id: loadingToast,
         });
+      } else {
+        // PDF uploaded but text extraction failed - still show success for upload
+        const errorMessage = uploadResult.extractionError
+          ? `Text extraction failed: ${uploadResult.extractionError}`
+          : "Text extraction failed. The PDF may be image-based or corrupted.";
+        toast.warning(
+          `Screenplay uploaded successfully! ${errorMessage} You can manually paste the screenplay text or use the screenplay editor.`,
+          {
+            id: loadingToast,
+            duration: 10000,
+          }
+        );
       }
     } catch (error) {
       console.error("Error uploading screenplay:", JSON.stringify(error, null, 2));
@@ -905,7 +938,10 @@ export default function ProjectForm({
     setFormData({
       ...formData,
       screenplay: undefined,
+      screenplayText: undefined,
+      screenplayElements: undefined,
     });
+    setShowRemoveScreenplayConfirm(false);
   };
 
   // Compress image client-side before upload
@@ -1362,6 +1398,194 @@ export default function ProjectForm({
               </div>
             </div>
           )}
+
+          {/* Screenplay Section */}
+          <div className="space-y-4 pt-4 border-t border-border" suppressHydrationWarning>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <File className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Screenplay / Script</h3>
+              </div>
+              {isEditing && projectId && (formData.screenplayText || formData.screenplay) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
+                  className="bg-transparent"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Screenplay
+                </Button>
+              )}
+            </div>
+            {!formData.screenplayText && (
+              <p className="text-sm text-muted-foreground">
+                Upload a PDF screenplay or use the editor to write your screenplay. The text will be
+                automatically extracted from PDFs.
+              </p>
+            )}
+
+            {/* Screenplay Preview */}
+            {formData.screenplayText && (
+              <div className="p-4 bg-muted/30 rounded-lg border border-border">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium mb-1">Screenplay Text</p>
+                    <p className="text-xs text-muted-foreground line-clamp-3">
+                      {formData.screenplayText.substring(0, 200)}
+                      {formData.screenplayText.length > 200 ? "..." : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length}{" "}
+                      words • {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0}{" "}
+                      scenes
+                    </p>
+                  </div>
+                  {isEditing && projectId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
+                      className="shrink-0 bg-transparent"
+                    >
+                      Open Editor
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Empty State - No Screenplay */}
+            {!formData.screenplayText && !formData.screenplay && (
+              <div className="p-6 bg-muted/30 rounded-lg border border-border border-dashed">
+                <div className="text-center space-y-4">
+                  <div className="flex justify-center">
+                    <div className="rounded-full bg-muted p-3">
+                      <File className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-1">No screenplay yet</p>
+                    <p className="text-xs text-muted-foreground">
+                      Create a new screenplay or upload an existing PDF
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    {isEditing && projectId ? (
+                      <Button
+                        type="button"
+                        onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
+                        className="bg-transparent"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Create Screenplay
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          // For new projects, we'll create the project first, then redirect
+                          // This will be handled after project creation
+                          toast.info("Please save the project first, then edit the screenplay");
+                        }}
+                        className="bg-transparent"
+                        disabled
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Create Screenplay
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleProjectFileClick}
+                      disabled={isUploadingFile}
+                      className="bg-transparent"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {isUploadingFile ? "Uploading..." : "Upload PDF"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PDF Upload Section - Only show if screenplay exists */}
+            {(formData.screenplayText || formData.screenplay) && (
+              <div className="space-y-3">
+                {/* Display uploaded screenplay PDF */}
+                {formData.screenplay && (
+                  <>
+                    <div className="flex items-center gap-2 px-3 bg-muted/30 rounded-md">
+                      <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{formData.screenplay.name}</p>
+                        {formData.screenplay.size && (
+                          <p className="text-xs text-muted-foreground">
+                            {(formData.screenplay.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="pl-8 flex items-center gap-4">
+                      {showRemoveScreenplayConfirm ? (
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-muted-foreground">Remove screenplay?</span>
+                          <button
+                            onClick={removeScreenplay}
+                            type="button"
+                            className="text-destructive hover:text-destructive/80 font-medium"
+                          >
+                            Yes, remove
+                          </button>
+                          <button
+                            onClick={() => setShowRemoveScreenplayConfirm(false)}
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              projectFileInputRef.current?.click();
+                            }}
+                            type="button"
+                            className="flex items-center gap-2 text-blue-500 hover:text-blue-600 cursor-pointer text-xs"
+                          >
+                            <Upload className="h-2 w-2" />
+                            Replace
+                          </button>
+                          <button
+                            onClick={() => setShowRemoveScreenplayConfirm(true)}
+                            type="button"
+                            className="flex items-center gap-2 text-destructive hover:text-destructive cursor-pointer text-xs"
+                          >
+                            <X className="h-2 w-2" /> Remove
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Hidden file input - Always rendered so ref is always available */}
+            <input
+              ref={projectFileInputRef}
+              type="file"
+              onChange={handleProjectFileChange}
+              className="hidden"
+              disabled={isUploadingFile}
+              accept=".pdf,application/pdf"
+            />
+          </div>
 
           {/* Characters Section */}
           <div className="space-y-4 pt-4 border-t border-border">
@@ -1974,101 +2198,6 @@ export default function ProjectForm({
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <File className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Screenplay / Script</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Enter your screenplay text or upload a PDF
-            </p>
-
-            {/* Screenplay Text Input */}
-            <div className="space-y-2">
-              <Label htmlFor="screenplayText">Screenplay Text</Label>
-              <Textarea
-                id="screenplayText"
-                placeholder="INT. COFFEE SHOP - DAY
-
-A cozy corner cafe. SARAH (30s) sits alone at a table, staring at her phone...
-
-SARAH
-(to herself)
-Where is he?
-
-..."
-                value={formData.screenplayText || ""}
-                onChange={(e) => setFormData({ ...formData, screenplayText: e.target.value })}
-                rows={15}
-                className="bg-background resize-y font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Use standard screenplay format with INT./EXT. scene headings to enable automatic
-                scene extraction
-              </p>
-            </div>
-
-            <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-border" />
-              <span className="flex-shrink mx-4 text-xs text-muted-foreground">
-                or upload a PDF
-              </span>
-              <div className="flex-grow border-t border-border" />
-            </div>
-
-            <div className="space-y-3">
-              {/* Display uploaded screenplay */}
-              {formData.screenplay && (
-                <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-md">
-                  <File className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{formData.screenplay.name}</p>
-                    {formData.screenplay.size && (
-                      <p className="text-xs text-muted-foreground">
-                        {(formData.screenplay.size / 1024 / 1024).toFixed(2)} MB
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={removeScreenplay}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Upload button */}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleProjectFileClick}
-                disabled={isUploadingFile}
-                className="w-full bg-transparent"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isUploadingFile
-                  ? "Uploading..."
-                  : formData.screenplay
-                    ? "Replace Screenplay"
-                    : "Upload Screenplay"}
-              </Button>
-
-              {/* Hidden file input */}
-              <input
-                ref={projectFileInputRef}
-                type="file"
-                onChange={handleProjectFileChange}
-                className="hidden"
-                disabled={isUploadingFile}
-                accept=".pdf,application/pdf"
-              />
             </div>
           </div>
 
