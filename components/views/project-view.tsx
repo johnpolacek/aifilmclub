@@ -1,4 +1,13 @@
-import { Calendar, Clapperboard, Clock, ExternalLink, FileDown, FileText, Play, Rss } from "lucide-react";
+import {
+  Calendar,
+  Clapperboard,
+  Clock,
+  ExternalLink,
+  FileDown,
+  FileText,
+  Play,
+  Rss,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { FilmPlayer } from "@/components/film-player";
@@ -90,9 +99,9 @@ export function ProjectView({
   };
 
   return (
-    <div className="min-h-screen bg-background pt-24 pb-16">
+    <div className="min-h-screen bg-background pb-16">
       {/* Hero Image - Full Width */}
-      <div className="relative h-[400px] xl:h-[500px] w-full mb-8">
+      <div className="relative h-[400px] xl:h-[540px] w-full mb-8">
         <ProjectNavigation projectId={projectId} ownerUsername={username} />
         {projectDisplay.thumbnail ? (
           <Image
@@ -108,7 +117,7 @@ export function ProjectView({
         )}
         <div className="absolute inset-0 bg-linear-to-t from-background via-background/50 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-8">
-          <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
+          <div className="container mx-auto px-4 lg:px-8 max-w-8xl">
             <div className="flex items-center gap-3 mb-4">
               {project.isPublished && (
                 <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-sm font-medium">
@@ -159,7 +168,7 @@ export function ProjectView({
         </div>
       </div>
 
-      <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
+      <div className="container mx-auto px-4 lg:px-8 max-w-8xl">
         <div className="space-y-8">
           <div className="pb-5">
             {/* Film */}
@@ -335,7 +344,9 @@ export function ProjectView({
             )}
 
             {/* Screenplay / Script */}
-            {(project.screenplayElements?.length || project.screenplayText || project.screenplay) && (
+            {(project.screenplayElements?.length ||
+              project.screenplayText ||
+              project.screenplay) && (
               <div className="pb-5 flex items-center gap-2">
                 {/* View screenplay page link */}
                 {(project.screenplayElements?.length || project.screenplayText) && (

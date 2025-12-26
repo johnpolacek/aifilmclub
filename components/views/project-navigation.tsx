@@ -34,7 +34,7 @@ export function ProjectNavigation({ projectId, ownerUsername }: ProjectNavigatio
   }
 
   return (
-    <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between gap-4">
+    <div className="absolute top-20 left-4 right-4 z-10 flex items-center justify-between gap-4">
       <Link
         href="/dashboard"
         className="inline-flex items-center gap-2 bg-background/90 backdrop-blur-sm px-3 py-2 md:px-4 rounded-md text-primary hover:bg-background transition-colors border border-border/50"
