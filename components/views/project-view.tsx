@@ -101,7 +101,7 @@ export function ProjectView({
   return (
     <div className="min-h-screen bg-background pb-16">
       {/* Hero Image - Full Width */}
-      <div className="relative h-[400px] xl:h-[540px] w-full mb-8">
+      <div className="relative h-[400px] xl:h-[720px] w-full mb-8">
         <ProjectNavigation projectId={projectId} ownerUsername={username} />
         {projectDisplay.thumbnail ? (
           <Image

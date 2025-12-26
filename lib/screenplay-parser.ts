@@ -207,11 +207,77 @@ export function parseScreenplay(text: string): ParseResult {
 }
 
 /**
+ * Extract location key from scene heading for deduplication
+ * Normalizes location by removing INT./EXT. prefix and time suffix
+ */
+function extractLocationKey(heading: string): string {
+  // Remove INT./EXT. prefix
+  let location = heading
+    .replace(/^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|INTERIOR|EXTERIOR)\s*/i, "")
+    .trim();
+
+  // Remove time of day suffix
+  location = location
+    .replace(
+      /\s*[-–—]\s*(DAY|NIGHT|MORNING|EVENING|AFTERNOON|LATER|CONTINUOUS|SAME|MOMENTS LATER).*$/i,
+      ""
+    )
+    .trim();
+
+  // Normalize to lowercase for comparison
+  return location.toLowerCase();
+}
+
+/**
+ * Label scenes at the same location with numbers (#1, #2, etc.)
+ * Keeps scenes separate but adds numbering when there are multiple scenes at the same location
+ */
+export function labelDuplicateLocationScenes(parsedScenes: ParsedScene[]): ParsedScene[] {
+  // First pass: count occurrences of each location
+  const locationCounts = new Map<string, number>();
+  for (const scene of parsedScenes) {
+    const locationKey = extractLocationKey(scene.heading);
+    locationCounts.set(locationKey, (locationCounts.get(locationKey) || 0) + 1);
+  }
+
+  // Second pass: track current index for each location and label scenes
+  const locationCurrentIndex = new Map<string, number>();
+  const labeledScenes: ParsedScene[] = [];
+
+  for (let i = 0; i < parsedScenes.length; i++) {
+    const scene = parsedScenes[i];
+    const locationKey = extractLocationKey(scene.heading);
+    const totalCount = locationCounts.get(locationKey) || 1;
+
+    if (totalCount > 1) {
+      // Multiple scenes at this location, add numbering
+      const currentIndex = (locationCurrentIndex.get(locationKey) || 0) + 1;
+      locationCurrentIndex.set(locationKey, currentIndex);
+
+      labeledScenes.push({
+        ...scene,
+        sceneNumber: i + 1,
+        title: `${scene.title} #${currentIndex}`,
+      });
+    } else {
+      // Single scene at this location, no numbering needed
+      labeledScenes.push({
+        ...scene,
+        sceneNumber: i + 1,
+      });
+    }
+  }
+
+  return labeledScenes;
+}
+
+/**
  * Convert parsed scenes to Scene objects for storage
  */
 export function parsedScenesToScenes(
   projectId: string,
-  parsedScenes: ParsedScene[]
+  parsedScenes: ParsedScene[],
+  labelDuplicates: boolean = true
 ): Array<{
   id: string;
   projectId: string;
@@ -226,7 +292,12 @@ export function parsedScenesToScenes(
 }> {
   const now = new Date().toISOString();
 
-  return parsedScenes.map((parsed) => ({
+  // Label duplicate location scenes with #1, #2, etc. if requested
+  const scenesToProcess = labelDuplicates
+    ? labelDuplicateLocationScenes(parsedScenes)
+    : parsedScenes;
+
+  return scenesToProcess.map((parsed) => ({
     id: `scene-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     projectId,
     sceneNumber: parsed.sceneNumber,

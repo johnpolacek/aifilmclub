@@ -1,11 +1,19 @@
 "use client";
 
-import { Film, Image as ImageIcon, Loader2, Plus, Trash2, Video, X } from "lucide-react";
+import { Edit, Film, Image as ImageIcon, Loader2, Plus, Trash2, Video, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Character } from "@/components/project-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -478,8 +486,9 @@ export function SceneList({
   const [editingScene, setEditingScene] = useState<Scene | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const handleExtractScenes = async () => {
+  const performExtraction = async () => {
     if (!screenplayText || screenplayText.trim().length === 0) {
       toast.error("No screenplay text to extract scenes from. Please add a screenplay first.");
       return;
@@ -501,18 +510,11 @@ export function SceneList({
       const data = await response.json();
 
       if (data.success && data.scenes) {
-        // Merge extracted scenes with existing scenes
-        const existingIds = new Set(scenes.map((s) => s.id));
-        const newScenes = data.scenes.filter((s: Scene) => !existingIds.has(s.id));
-
-        if (newScenes.length > 0) {
-          onScenesChange([...scenes, ...newScenes]);
-          toast.success(`Extracted ${newScenes.length} scenes from screenplay`, {
-            id: loadingToast,
-          });
-        } else {
-          toast.info("No new scenes found in screenplay", { id: loadingToast });
-        }
+        // Replace all scenes with extracted scenes
+        onScenesChange(data.scenes);
+        toast.success(`Extracted ${data.scenes.length} scenes from screenplay`, {
+          id: loadingToast,
+        });
       } else {
         toast.error(data.error || "Failed to extract scenes", { id: loadingToast });
       }
@@ -521,6 +523,22 @@ export function SceneList({
       toast.error("Failed to extract scenes", { id: loadingToast });
     } finally {
       setIsExtracting(false);
+      setShowConfirmDialog(false);
+    }
+  };
+
+  const handleExtractScenes = () => {
+    if (!screenplayText || screenplayText.trim().length === 0) {
+      toast.error("No screenplay text to extract scenes from. Please add a screenplay first.");
+      return;
+    }
+
+    // If there are existing scenes, show confirmation dialog
+    if (scenes.length > 0) {
+      setShowConfirmDialog(true);
+    } else {
+      // No existing scenes, proceed directly
+      performExtraction();
     }
   };
 
@@ -586,18 +604,24 @@ export function SceneList({
           {scenes.map((scene) => (
             <Card
               key={scene.id}
-              className="bg-muted/30 border-border hover:bg-muted/50 transition-colors cursor-pointer"
+              className="group bg-muted/30 border-border hover:bg-muted/50 py-2 transition-colors cursor-pointer"
               onClick={() => setEditingScene(scene)}
             >
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{scene.title}</h4>
-                  {scene.screenplay && (
-                    <p className="text-sm text-muted-foreground truncate">
-                      {scene.screenplay.substring(0, 100)}...
-                    </p>
-                  )}
+              <CardContent className="pl-4 py-0 flex items-center gap-4">
+                <div className="pt-0.5 shrink-0">
+                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
                 </div>
+                <span className="text-sm text-muted-foreground font-medium shrink-0 w-8">
+                  #{scene.sceneNumber}
+                </span>
+                <h4 className="font-medium truncate min-w-0">{scene.title}</h4>
+                {scene.screenplay && (
+                  <div className="flex-1 min-w-0 hidden sm:block">
+                    <p className="font-mono text-xs text-muted-foreground truncate">
+                      {scene.screenplay.substring(0, 200)}...
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
                   {scene.generatedImages.length > 0 && (
                     <span>{scene.generatedImages.length} images</span>
@@ -645,6 +669,44 @@ export function SceneList({
           </Button>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Replace All Scenes?</DialogTitle>
+            <DialogDescription>
+              This will replace all {scenes.length} existing scene{scenes.length !== 1 ? "s" : ""}{" "}
+              with scenes extracted from the screenplay. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+              disabled={isExtracting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={performExtraction}
+              disabled={isExtracting}
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                "Replace All Scenes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
