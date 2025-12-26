@@ -22,7 +22,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SceneList } from "@/components/scene-editor";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1105,11 +1105,6 @@ export default function ProjectForm({
               </div>
             )}
           </div>
-          <CardDescription>
-            {isEditing
-              ? "Update your project details"
-              : "Add a new AI film project to your portfolio"}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Project Info Section */}
@@ -1140,13 +1135,11 @@ export default function ProjectForm({
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h3 className="text-lg font-semibold truncate">
+                    <h3 className="text-2xl font-semibold truncate">
                       {formData.title || "Untitled Project"}
                     </h3>
                     {formData.logline && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {formData.logline}
-                      </p>
+                      <p className="text-muted-foreground line-clamp-2">{formData.logline}</p>
                     )}
                   </div>
                   <Button
@@ -1383,7 +1376,7 @@ export default function ProjectForm({
             <div className="space-y-4">
               {/* Character Grid - Compact View */}
               {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                   {(formData.characters || []).map((character, index) => (
                     <div
                       key={`character-compact-${index}`}
@@ -1392,46 +1385,46 @@ export default function ProjectForm({
                       {/* Character Image */}
                       <div className="aspect-square relative">
                         {character.mainImage && formData.username ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={getImageUrl({
-                              type: "character",
-                              filename: character.mainImage,
-                              username: formData.username,
-                            })}
+                          <OptimizedImage
+                            type="character"
+                            filename={character.mainImage}
+                            username={formData.username}
                             alt={character.name || "Character"}
-                            className="w-full h-full object-cover"
+                            fill
+                            objectFit="cover"
+                            className="w-full h-full"
+                            sizes="(max-width: 768px) 33vw, (max-width: 1024px) 25vw, 12.5vw"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-muted">
-                            <User className="h-12 w-12 text-muted-foreground" />
+                            <User className="h-8 w-8 text-muted-foreground" />
                           </div>
                         )}
                         {/* Hover overlay with edit button */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
                           <Button
                             type="button"
                             size="sm"
                             variant="secondary"
                             onClick={() => setEditingCharacterIndex(index)}
-                            className="h-8 w-8 p-0"
+                            className="h-7 w-7 p-0"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant="destructive"
                             onClick={() => removeCharacter(index)}
-                            className="h-8 w-8 p-0"
+                            className="h-7 w-7 p-0"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                       {/* Character Name */}
-                      <div className="p-2 text-center">
-                        <p className="text-sm font-medium truncate">
+                      <div className="p-1.5 text-center">
+                        <p className="text-xs font-medium truncate">
                           {character.name || "Unnamed"}
                         </p>
                       </div>
@@ -1789,7 +1782,7 @@ export default function ProjectForm({
                 type="button"
                 variant="outline"
                 onClick={addCharacter}
-                className="w-full bg-transparent"
+                className="bg-transparent"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Character

@@ -648,7 +648,7 @@ export function SceneList({
           type="button"
           variant="outline"
           onClick={handleAddScene}
-          className="flex-1 bg-transparent"
+          className="bg-transparent"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Scene
