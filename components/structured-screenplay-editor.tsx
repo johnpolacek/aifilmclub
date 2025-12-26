@@ -481,6 +481,11 @@ export function StructuredScreenplayEditor({
                     .slice(0, index + 1)
                     .filter((el) => el.type === "scene_heading").length;
 
+                  // Add extra spacing when action follows dialogue
+                  const prevElement = index > 0 ? elements[index - 1] : null;
+                  const needsExtraSpacing =
+                    element.type === "action" && prevElement?.type === "dialogue";
+
                   return (
                     <ScreenplayElementComponent
                       key={element.id}
@@ -494,6 +499,7 @@ export function StructuredScreenplayEditor({
                       onDelete={handleDelete}
                       onInsertAfter={handleInsertAfter}
                       sceneNumber={sceneNumber > 0 ? sceneNumber : undefined}
+                      extraTopSpacing={needsExtraSpacing}
                       ref={(ref) => registerRef(element.id, ref)}
                     />
                   );

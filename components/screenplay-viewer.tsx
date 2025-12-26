@@ -191,10 +191,19 @@ export function ScreenplayViewer({
                       .slice(0, index + 1)
                       .filter((el) => el.type === "scene_heading").length;
 
+                    // Add extra spacing when action follows dialogue
+                    const prevElement = index > 0 ? elements[index - 1] : null;
+                    const needsExtraSpacing =
+                      element.type === "action" && prevElement?.type === "dialogue";
+
                     return (
                       <div
                         key={element.id}
-                        className={cn("py-0.5 relative", getWrapperStyles(element.type))}
+                        className={cn(
+                          "py-0.5 relative",
+                          getWrapperStyles(element.type),
+                          needsExtraSpacing && "pt-4"
+                        )}
                       >
                         <p
                           className={cn(

@@ -19,6 +19,7 @@ interface ScreenplayElementProps {
   onDelete: (id: string) => void;
   onInsertAfter: (index: number, type: ElementType) => void;
   sceneNumber?: number;
+  extraTopSpacing?: boolean;
 }
 
 /**
@@ -103,6 +104,7 @@ export const ScreenplayElementComponent = forwardRef<HTMLTextAreaElement, Screen
       onDelete: _onDelete,
       onInsertAfter: _onInsertAfter,
       sceneNumber,
+      extraTopSpacing = false,
     },
     ref
   ) {
@@ -258,7 +260,13 @@ export const ScreenplayElementComponent = forwardRef<HTMLTextAreaElement, Screen
         </div>
 
         {/* Right column: Content area */}
-        <div className={cn("flex-1 py-0.5 pl-4 pr-4 relative", getWrapperStyles(element.type))}>
+        <div
+          className={cn(
+            "flex-1 pb-0.5 pl-4 pr-4 relative",
+            getWrapperStyles(element.type),
+            extraTopSpacing ? "pt-4" : "pt-0.5"
+          )}
+        >
           <textarea
             ref={setRefs}
             value={element.content}
