@@ -166,7 +166,10 @@ export function PostsList({
                     />
                   </div>
                 )}
-                <PostContent content={post.content} />
+                <PostContent
+                  className={canEditPosts ? "pointer-events-none" : ""}
+                  content={post.content}
+                />
               </CardContent>
             </Card>
           ))}

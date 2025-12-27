@@ -48,6 +48,9 @@
         "noExplicitAny": "warn",
         "noArrayIndexKey": "off"
       },
+      "a11y": {
+        "noImgElement": "off"
+      },
       "complexity": {
         "noForEach": "off"
       }

@@ -13,6 +13,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Trash,
   Upload,
   User,
   Wrench,
@@ -236,13 +237,21 @@ export default function ProjectForm({
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [editingCharacterIndex, setEditingCharacterIndex] = useState<number | null>(null);
+  const [confirmingCharacterDelete, setConfirmingCharacterDelete] = useState<number | null>(null);
+  const [showAllCharacters, setShowAllCharacters] = useState(false);
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
+  const [confirmingLocationDelete, setConfirmingLocationDelete] = useState<number | null>(null);
   const [showAllLocations, setShowAllLocations] = useState(false);
   const [isEditingProjectInfo, setIsEditingProjectInfo] = useState(!isEditing); // Start expanded for new projects
 
-  // Location management state
+  // Section refs for scrolling
+  const charactersSectionRef = useRef<HTMLDivElement>(null);
   const locationsSectionRef = useRef<HTMLDivElement>(null);
+
+  // Location management state
   const locationFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const locationAddImageInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const locationAdditionalFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [uploadingLocationIndex, setUploadingLocationIndex] = useState<number | null>(null);
   const [uploadingLocationAdditionalIndex, setUploadingLocationAdditionalIndex] = useState<{
     locationIndex: number;
@@ -495,6 +504,7 @@ export default function ProjectForm({
       ...formData,
       characters: newCharacters,
     });
+    setEditingCharacterIndex(newCharacters.length - 1);
   };
 
   const removeCharacter = (index: number) => {
@@ -946,11 +956,45 @@ export default function ProjectForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.screenplayText, formData.setting?.locations, extractLocationsFromScreenplay]);
 
+  const addLocation = () => {
+    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }];
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+    setEditingLocationIndex(newLocations.length - 1);
+  };
+
+  const removeLocation = (index: number) => {
+    const newLocations = formData.setting?.locations?.filter((_, i) => i !== index) || [];
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+    // Clean up preview images and refs
+    const newPreviews = { ...locationPreviewImages };
+    delete newPreviews[index];
+    setLocationPreviewImages(newPreviews);
+
+    const newAdditionalPreviews = { ...locationAdditionalPreviewImages };
+    delete newAdditionalPreviews[index];
+    setLocationAdditionalPreviewImages(newAdditionalPreviews);
+  };
+
+  const updateLocation = (index: number, field: keyof Location, value: string | string[]) => {
+    const newLocations = [...(formData.setting?.locations || [])];
+    newLocations[index] = { ...newLocations[index], [field]: value };
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+  };
+
   const handleLocationMainImageClick = (index: number) => {
     locationFileInputRefs.current[index]?.click();
   };
 
-  const handleLocationDescriptionChange = (index: number, description: string) => {
+  const _handleLocationDescriptionChange = (index: number, description: string) => {
     const newLocations = [...(formData.setting?.locations || [])];
     newLocations[index] = { ...newLocations[index], description };
     setFormData({
@@ -1044,6 +1088,115 @@ export default function ProjectForm({
       setUploadingLocationIndex(null);
       // Reset file input
       const fileInput = locationFileInputRefs.current[index];
+      if (fileInput) {
+        fileInput.value = "";
+      }
+    }
+  };
+
+  const handleLocationAdditionalImageClick = (locationIndex: number, imageIndex: number) => {
+    locationAdditionalFileInputRefs.current[`${locationIndex}-${imageIndex}`]?.click();
+  };
+
+  const handleLocationAdditionalImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    locationIndex: number,
+    imageIndex: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate raw file size (max 20MB - we'll compress it)
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
+    if (file.size > maxRawSize) {
+      toast.error("Image must be less than 20MB");
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLocationAdditionalPreviewImages({
+        ...locationAdditionalPreviewImages,
+        [locationIndex]: {
+          ...locationAdditionalPreviewImages[locationIndex],
+          [imageIndex]: reader.result as string,
+        },
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Compress and upload image
+    setUploadingLocationAdditionalIndex({ locationIndex, imageIndex });
+    const loadingToast = toast.loading("Compressing image...");
+
+    try {
+      // Compress image client-side
+      const compressedFile = await compressImage(file, 3840, 3840, 0.85);
+
+      // Validate compressed size (max 2MB)
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
+      if (compressedFile.size > maxCompressedSize) {
+        toast.error("Compressed image is still too large. Please try a smaller image.", {
+          id: loadingToast,
+        });
+        setUploadingLocationAdditionalIndex(null);
+        return;
+      }
+
+      toast.loading("Uploading location image...", { id: loadingToast });
+
+      const { uploadLocationImage } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
+
+      const result = await uploadLocationImage(uploadFormData);
+
+      if (result.imageFilename) {
+        const newLocations = [...(formData.setting?.locations || [])];
+        const currentImages = newLocations[locationIndex].images || [];
+        // Replace the existing image at this index
+        const newImages = [...currentImages];
+        newImages[imageIndex] = result.imageFilename;
+        newLocations[locationIndex] = {
+          ...newLocations[locationIndex],
+          images: newImages,
+        };
+        setFormData({
+          ...formData,
+          setting: { ...formData.setting, locations: newLocations },
+        });
+        const newPreviews = { ...locationAdditionalPreviewImages };
+        if (newPreviews[locationIndex]) {
+          delete newPreviews[locationIndex][imageIndex];
+        }
+        setLocationAdditionalPreviewImages(newPreviews);
+        toast.success("Location image uploaded successfully!", {
+          id: loadingToast,
+        });
+      }
+    } catch (error) {
+      console.error("Error uploading location image:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload location image";
+      toast.error(errorMessage, {
+        id: loadingToast,
+      });
+      const newPreviews = { ...locationAdditionalPreviewImages };
+      if (newPreviews[locationIndex]) {
+        delete newPreviews[locationIndex][imageIndex];
+      }
+      setLocationAdditionalPreviewImages(newPreviews);
+    } finally {
+      setUploadingLocationAdditionalIndex(null);
+      // Reset file input
+      const fileInput = locationAdditionalFileInputRefs.current[`${locationIndex}-${imageIndex}`];
       if (fileInput) {
         fileInput.value = "";
       }
@@ -2009,7 +2162,7 @@ export default function ProjectForm({
           {useGridLayout && (
             <div className="col-span-2 space-y-6">
               {/* Characters Section */}
-              <div className="space-y-3">
+              <div ref={charactersSectionRef} className="space-y-3">
                 <div className="flex items-center gap-2">
                   <User className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Characters</h3>
@@ -2019,55 +2172,96 @@ export default function ProjectForm({
                   {/* Character List - Compact One-Liner View */}
                   {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
                     <div className="space-y-1.5">
-                      {(formData.characters || []).map((character, index) => (
-                        <button
-                          key={`character-compact-${index}`}
-                          type="button"
-                          className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                          onClick={() => setEditingCharacterIndex(index)}
-                        >
-                          {/* Edit indicator */}
-                          <div className="pt-0.5 shrink-0">
-                            <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                          </div>
+                      {(() => {
+                        const characters = formData.characters || [];
+                        const shouldShowAll = characters.length <= 10 || showAllCharacters;
+                        const charactersToShow = shouldShowAll
+                          ? characters
+                          : characters.slice(0, 5);
 
-                          {/* Character Image - Super Small */}
-                          <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                            {character.mainImage && formData.username ? (
-                              <OptimizedImage
-                                type="character"
-                                filename={character.mainImage}
-                                username={formData.username}
-                                alt={character.name || "Character"}
-                                width={32}
-                                height={32}
-                                objectFit="cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-muted">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                              </div>
+                        return (
+                          <>
+                            {charactersToShow.map((character, index) => (
+                              <button
+                                key={`character-compact-${index}`}
+                                type="button"
+                                className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                onClick={() => setEditingCharacterIndex(index)}
+                              >
+                                {/* Edit indicator */}
+                                <div className="pt-0.5 shrink-0">
+                                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                </div>
+
+                                {/* Character Image - Super Small */}
+                                <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                                  {character.mainImage && formData.username ? (
+                                    <OptimizedImage
+                                      type="character"
+                                      filename={character.mainImage}
+                                      username={formData.username}
+                                      alt={character.name || "Character"}
+                                      width={32}
+                                      height={32}
+                                      objectFit="cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                                      <User className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Character Name */}
+                                <span className="font-medium text-sm shrink-0">
+                                  {character.name || "Unnamed"}
+                                </span>
+
+                                {/* Character Appearance - Truncated */}
+                                <span className="text-xs text-muted-foreground truncate flex-1">
+                                  {character.appearance || "No appearance description"}
+                                </span>
+
+                                {/* Additional Images Count */}
+                                {(character.images?.length || 0) > 0 && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    +{character.images?.length} img
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                            {characters.length > 10 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const wasShowingAll = showAllCharacters;
+                                  setShowAllCharacters(!showAllCharacters);
+                                  // Scroll to top when showing less
+                                  if (wasShowingAll) {
+                                    setTimeout(() => {
+                                      charactersSectionRef.current?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "start",
+                                      });
+                                    }, 0);
+                                  }
+                                }}
+                                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <ChevronsDown
+                                  className={cn(
+                                    "h-4 w-4 transition-transform duration-300",
+                                    showAllCharacters ? "rotate-180" : ""
+                                  )}
+                                />
+                                {showAllCharacters
+                                  ? "Show Less"
+                                  : `Show All (${characters.length})`}
+                              </button>
                             )}
-                          </div>
-
-                          {/* Character Name */}
-                          <span className="font-medium text-sm shrink-0">
-                            {character.name || "Unnamed"}
-                          </span>
-
-                          {/* Character Appearance - Truncated */}
-                          <span className="text-xs text-muted-foreground truncate flex-1">
-                            {character.appearance || "No appearance description"}
-                          </span>
-
-                          {/* Additional Images Count */}
-                          {(character.images?.length || 0) > 0 && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              +{character.images?.length} img
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -2075,32 +2269,21 @@ export default function ProjectForm({
                   {editingCharacterIndex !== null &&
                     formData.characters?.[editingCharacterIndex] && (
                       <Card className="bg-muted/30 border-border">
-                        <CardContent className="p-4 space-y-4">
+                        <CardContent className="space-y-4">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium">Edit Character</h4>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEditingCharacterIndex(null)}
-                                className="bg-transparent"
-                              >
-                                Done
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  removeCharacter(editingCharacterIndex);
-                                  setEditingCharacterIndex(null);
-                                }}
-                                className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCharacterIndex(null);
+                                setConfirmingCharacterDelete(null);
+                              }}
+                              className="bg-transparent"
+                            >
+                              Done
+                            </Button>
                           </div>
 
                           {/* Character Name */}
@@ -2436,6 +2619,53 @@ export default function ProjectForm({
                               className="bg-background resize-none"
                             />
                           </div>
+
+                          {/* Delete Character Button */}
+                          <div className="pt-4 flex justify-end">
+                            {confirmingCharacterDelete === editingCharacterIndex ? (
+                              <div className="space-y-3 text-right">
+                                <p className="text-sm text-muted-foreground">
+                                  Are you sure you want to delete this character? This action cannot
+                                  be undone.
+                                </p>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      removeCharacter(editingCharacterIndex);
+                                      setEditingCharacterIndex(null);
+                                      setConfirmingCharacterDelete(null);
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4 mr-2" />
+                                    Delete Character
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmingCharacterDelete(null)}
+                                    className="bg-transparent"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmingCharacterDelete(editingCharacterIndex)}
+                                className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <X className="h-2 w-2 mr-2" />
+                                Delete Character
+                              </Button>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     )}
@@ -2452,56 +2682,40 @@ export default function ProjectForm({
                 </div>
               </div>
 
-              {/* Locations/Settings Section - Compact View */}
-              <div ref={locationsSectionRef} className="pt-4 border-t border-border">
-                <div className="flex items-center gap-2 mb-3">
+              {/* Locations Section */}
+              <div ref={locationsSectionRef} className="space-y-3 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
                   <Camera className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Locations</h3>
-                  <span className="text-sm text-muted-foreground">
-                    ({(formData.setting?.locations || []).length})
-                  </span>
                 </div>
 
-                {/* Location List */}
-                {(formData.setting?.locations || []).length > 0 && (
-                  <div className="space-y-2">
-                    {(() => {
-                      const locations = formData.setting?.locations || [];
-                      const shouldShowAll = locations.length <= 10 || showAllLocations;
-                      const locationsToShow = shouldShowAll ? locations : locations.slice(0, 5);
+                <div className="space-y-2">
+                  {/* Location List - Compact One-Liner View */}
+                  {(formData.setting?.locations || []).length > 0 &&
+                    editingLocationIndex === null && (
+                      <div className="space-y-1.5">
+                        {(() => {
+                          const locations = formData.setting?.locations || [];
+                          const shouldShowAll = locations.length <= 10 || showAllLocations;
+                          const locationsToShow = shouldShowAll ? locations : locations.slice(0, 5);
 
-                      return (
-                        <>
-                          {locationsToShow.map((location, index) => (
-                            <div
-                              key={`location-${index}`}
-                              className="p-3 bg-muted/30 rounded-lg border border-border space-y-2"
-                            >
-                              {/* Top Row: Name and Images */}
-                              <div className="flex items-center gap-2">
-                                {/* Location Name (read-only display) */}
-                                <span className="flex-1 text-sm font-medium truncate">
-                                  {location.name}
-                                </span>
+                          return (
+                            <>
+                              {locationsToShow.map((location, index) => (
+                                <button
+                                  key={`location-compact-${index}`}
+                                  type="button"
+                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                  onClick={() => setEditingLocationIndex(index)}
+                                >
+                                  {/* Edit indicator */}
+                                  <div className="pt-0.5 shrink-0">
+                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                  </div>
 
-                                {/* Images */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {/* Main Image */}
-                                  {locationPreviewImages[index] ? (
-                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
-                                      <img
-                                        src={locationPreviewImages[index]}
-                                        alt={location.name || "Location"}
-                                        className="w-full h-full object-cover"
-                                      />
-                                      {uploadingLocationIndex === index && (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                          <Loader2 className="h-3 w-3 animate-spin text-white" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : location.image && formData.username ? (
-                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
+                                  {/* Location Image - Super Small */}
+                                  <div className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                                    {location.image && formData.username ? (
                                       <OptimizedImage
                                         type="location"
                                         filename={location.image}
@@ -2510,164 +2724,482 @@ export default function ProjectForm({
                                         fill
                                         objectFit="cover"
                                       />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleLocationMainImageClick(index)}
-                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                      >
-                                        <Pencil className="h-2 w-2 text-white" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    /* Upload Button when no main image */
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleLocationMainImageClick(index)}
-                                      disabled={uploadingLocationIndex === index}
-                                      className="h-8 bg-transparent"
-                                    >
-                                      {uploadingLocationIndex === index ? (
-                                        <>
-                                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                                          <span className="text-xs">Uploading...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Upload className="h-3 w-3 mr-1.5" />
-                                          <span className="text-xs">Add Image</span>
-                                        </>
-                                      )}
-                                    </Button>
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                                        <Camera className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Location Name */}
+                                  <span className="font-medium text-sm shrink-0">
+                                    {location.name || "Unnamed"}
+                                  </span>
+
+                                  {/* Location Description - Truncated */}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">
+                                    {location.description || "No description"}
+                                  </span>
+
+                                  {/* Additional Images Count */}
+                                  {(location.images?.length || 0) > 0 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      +{location.images?.length} img
+                                    </span>
                                   )}
-
-                                  {/* Additional Images */}
-                                  {(location.images || []).map((image, imageIndex) => (
-                                    <div
-                                      key={`${index}-${imageIndex}`}
-                                      className="relative w-12 h-8 rounded overflow-hidden border border-border group"
-                                    >
-                                      {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
-                                        <img
-                                          src={locationAdditionalPreviewImages[index][imageIndex]}
-                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : formData.username ? (
-                                        <OptimizedImage
-                                          type="location"
-                                          filename={image}
-                                          username={formData.username}
-                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                                          fill
-                                          objectFit="cover"
-                                        />
-                                      ) : null}
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          removeLocationAdditionalImage(index, imageIndex)
-                                        }
-                                        disabled={
-                                          uploadingLocationAdditionalIndex?.locationIndex ===
-                                            index &&
-                                          uploadingLocationAdditionalIndex?.imageIndex ===
-                                            imageIndex
-                                        }
-                                        className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
-                                      >
-                                        <X className="h-2 w-2" />
-                                      </button>
-                                    </div>
-                                  ))}
-
-                                  {/* Add Additional Image Button (only show when main image exists) */}
-                                  {(location.image || locationPreviewImages[index]) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAddLocationAdditionalImageClick(index)}
-                                      disabled={
-                                        uploadingLocationAdditionalIndex?.locationIndex === index
-                                      }
-                                      className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
-                                    >
-                                      {uploadingLocationAdditionalIndex?.locationIndex === index ? (
-                                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                      ) : (
-                                        <Plus className="h-3 w-3 text-muted-foreground" />
-                                      )}
-                                    </button>
-                                  )}
-
-                                  {/* Hidden file inputs */}
-                                  <input
-                                    ref={(el) => {
-                                      locationFileInputRefs.current[index] = el;
-                                    }}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleLocationMainImageChange(e, index)}
-                                    className="hidden"
-                                    disabled={uploadingLocationIndex === index}
+                                </button>
+                              ))}
+                              {locations.length > 10 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const wasShowingAll = showAllLocations;
+                                    setShowAllLocations(!showAllLocations);
+                                    // Scroll to top when showing less
+                                    if (wasShowingAll) {
+                                      setTimeout(() => {
+                                        locationsSectionRef.current?.scrollIntoView({
+                                          behavior: "smooth",
+                                          block: "start",
+                                        });
+                                      }, 0);
+                                    }
+                                  }}
+                                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
+                                >
+                                  <ChevronsDown
+                                    className={cn(
+                                      "h-4 w-4 transition-transform duration-300",
+                                      showAllLocations ? "rotate-180" : ""
+                                    )}
                                   />
+                                  {showAllLocations
+                                    ? "Show Less"
+                                    : `Show All (${locations.length})`}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                  {/* Location Edit Form - Expanded View */}
+                  {editingLocationIndex !== null &&
+                    formData.setting?.locations?.[editingLocationIndex] && (
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">Edit Location</h4>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingLocationIndex(null);
+                                setConfirmingLocationDelete(null);
+                              }}
+                              className="bg-transparent"
+                            >
+                              Done
+                            </Button>
+                          </div>
+
+                          {/* Location Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`location-name-${editingLocationIndex}`}>Name</Label>
+                            <Input
+                              id={`location-name-${editingLocationIndex}`}
+                              placeholder="Enter location name"
+                              value={formData.setting.locations[editingLocationIndex].name}
+                              onChange={(e) =>
+                                updateLocation(editingLocationIndex, "name", e.target.value)
+                              }
+                              className="bg-background"
+                            />
+                          </div>
+
+                          {/* Location Main Image */}
+                          <div className="space-y-2">
+                            <Label>Main Image</Label>
+                            <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted/30">
+                              {locationPreviewImages[editingLocationIndex] ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={locationPreviewImages[editingLocationIndex]}
+                                    alt={
+                                      formData.setting.locations[editingLocationIndex].name ||
+                                      "Location"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : formData.setting.locations[editingLocationIndex].image &&
+                                formData.username ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={getImageUrl({
+                                      type: "location",
+                                      filename:
+                                        formData.setting.locations[editingLocationIndex].image!,
+                                      username: formData.username,
+                                    })}
+                                    alt={
+                                      formData.setting.locations[editingLocationIndex].name ||
+                                      "Location"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-full min-h-[200px] flex items-center justify-center relative group">
+                                  <Camera className="h-12 w-12 text-muted-foreground" />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              ref={(el) => {
+                                locationFileInputRefs.current[editingLocationIndex] = el;
+                              }}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleLocationMainImageChange(e, editingLocationIndex)
+                              }
+                              className="hidden"
+                              disabled={uploadingLocationIndex === editingLocationIndex}
+                            />
+                          </div>
+
+                          {/* Additional Location Images */}
+                          <div className="space-y-2">
+                            <Label>Additional Images (Different Angles/Variations)</Label>
+                            <div className="columns-2 md:columns-3 gap-4">
+                              {(formData.setting.locations[editingLocationIndex].images || []).map(
+                                (image, imageIndex) => (
+                                  <div
+                                    key={`${editingLocationIndex}-${imageIndex}`}
+                                    className="relative w-full mb-4 break-inside-avoid rounded-lg overflow-hidden border border-border bg-muted/30"
+                                  >
+                                    {locationAdditionalPreviewImages[editingLocationIndex]?.[
+                                      imageIndex
+                                    ] ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            locationAdditionalPreviewImages[editingLocationIndex][
+                                              imageIndex
+                                            ]
+                                          }
+                                          alt={`${formData.setting?.locations?.[editingLocationIndex]?.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeLocationAdditionalImage(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : image && formData.username ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={getImageUrl({
+                                            type: "location",
+                                            filename: image,
+                                            username: formData.username,
+                                          })}
+                                          alt={`${formData.setting?.locations?.[editingLocationIndex]?.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeLocationAdditionalImage(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-full min-h-[150px] flex items-center justify-center relative group">
+                                        <Camera className="h-8 w-8 text-muted-foreground" />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                    <input
+                                      ref={(el) => {
+                                        locationAdditionalFileInputRefs.current[
+                                          `${editingLocationIndex}-${imageIndex}`
+                                        ] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleLocationAdditionalImageChange(
+                                          e,
+                                          editingLocationIndex,
+                                          imageIndex
+                                        )
+                                      }
+                                      className="hidden"
+                                      disabled={
+                                        uploadingLocationAdditionalIndex?.locationIndex ===
+                                          editingLocationIndex &&
+                                        uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                      }
+                                    />
+                                  </div>
+                                )
+                              )}
+                              <div className="relative w-full mb-4 break-inside-avoid">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddLocationAdditionalImageClick(editingLocationIndex)
+                                  }
+                                  className="relative w-full min-h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center"
+                                  aria-label="Add additional location image"
+                                >
+                                  <Plus className="h-8 w-8 text-muted-foreground" />
                                   <input
                                     ref={(el) => {
-                                      locationAddImageInputRefs.current[index] = el;
+                                      locationAddImageInputRefs.current[editingLocationIndex] = el;
                                     }}
                                     type="file"
                                     accept="image/*"
                                     onChange={(e) =>
-                                      handleAddLocationAdditionalImageChange(e, index)
+                                      handleAddLocationAdditionalImageChange(
+                                        e,
+                                        editingLocationIndex
+                                      )
                                     }
                                     className="hidden"
                                     disabled={
-                                      uploadingLocationAdditionalIndex?.locationIndex === index
+                                      uploadingLocationAdditionalIndex?.locationIndex ===
+                                      editingLocationIndex
                                     }
                                   />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Location Description */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`location-description-${editingLocationIndex}`}>
+                              Description
+                            </Label>
+                            <Textarea
+                              id={`location-description-${editingLocationIndex}`}
+                              placeholder="Describe this location..."
+                              value={formData.setting.locations[editingLocationIndex].description}
+                              onChange={(e) =>
+                                updateLocation(editingLocationIndex, "description", e.target.value)
+                              }
+                              rows={3}
+                              className="bg-background resize-none"
+                            />
+                          </div>
+
+                          {/* Delete Location Button */}
+                          <div className="pt-4 flex justify-end">
+                            {confirmingLocationDelete === editingLocationIndex ? (
+                              <div className="space-y-3 text-right">
+                                <p className="text-sm text-muted-foreground">
+                                  Are you sure you want to delete this location? This action cannot
+                                  be undone.
+                                </p>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      removeLocation(editingLocationIndex);
+                                      setEditingLocationIndex(null);
+                                      setConfirmingLocationDelete(null);
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4 mr-2" />
+                                    Delete Location
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmingLocationDelete(null)}
+                                    className="bg-transparent"
+                                  >
+                                    Cancel
+                                  </Button>
                                 </div>
                               </div>
-
-                              {/* Description */}
-                              <textarea
-                                value={location.description || ""}
-                                onChange={(e) =>
-                                  handleLocationDescriptionChange(index, e.target.value)
-                                }
-                                placeholder="Describe this location..."
-                                className="w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-                                rows={2}
-                              />
-                            </div>
-                          ))}
-                          {locations.length > 10 && (
-                            <div className="pt-2">
-                              <button
+                            ) : (
+                              <Button
                                 type="button"
-                                onClick={() => {
-                                  const wasShowingAll = showAllLocations;
-                                  setShowAllLocations(!showAllLocations);
-                                  // Scroll to top when showing less
-                                  if (wasShowingAll) {
-                                    setTimeout(() => {
-                                      locationsSectionRef.current?.scrollIntoView({
-                                        behavior: "smooth",
-                                        block: "start",
-                                      });
-                                    }, 0);
-                                  }
-                                }}
-                                className="w-full bg-transparent"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmingLocationDelete(editingLocationIndex)}
+                                className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               >
-                                {showAllLocations ? "Show Less" : `Show All (${locations.length})`}
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                                <X className="h-2 w-2 mr-2" />
+                                Delete Location
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addLocation}
+                    className="bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Location
+                  </Button>
+                </div>
               </div>
 
               {/* Scenes Section */}
@@ -3043,7 +3575,7 @@ export default function ProjectForm({
               </div>
 
               {/* Characters Section */}
-              <div className="space-y-3 pt-4 border-t border-border">
+              <div ref={charactersSectionRef} className="space-y-3 pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
                   <User className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Characters</h3>
@@ -3053,55 +3585,96 @@ export default function ProjectForm({
                   {/* Character List - Compact One-Liner View */}
                   {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
                     <div className="space-y-1.5">
-                      {(formData.characters || []).map((character, index) => (
-                        <button
-                          key={`character-compact-${index}`}
-                          type="button"
-                          className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                          onClick={() => setEditingCharacterIndex(index)}
-                        >
-                          {/* Edit indicator */}
-                          <div className="pt-0.5 shrink-0">
-                            <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                          </div>
+                      {(() => {
+                        const characters = formData.characters || [];
+                        const shouldShowAll = characters.length <= 10 || showAllCharacters;
+                        const charactersToShow = shouldShowAll
+                          ? characters
+                          : characters.slice(0, 5);
 
-                          {/* Character Image - Super Small */}
-                          <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                            {character.mainImage && formData.username ? (
-                              <OptimizedImage
-                                type="character"
-                                filename={character.mainImage}
-                                username={formData.username}
-                                alt={character.name || "Character"}
-                                width={32}
-                                height={32}
-                                objectFit="cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-muted">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                              </div>
+                        return (
+                          <>
+                            {charactersToShow.map((character, index) => (
+                              <button
+                                key={`character-compact-${index}`}
+                                type="button"
+                                className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                onClick={() => setEditingCharacterIndex(index)}
+                              >
+                                {/* Edit indicator */}
+                                <div className="pt-0.5 shrink-0">
+                                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                </div>
+
+                                {/* Character Image - Super Small */}
+                                <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                                  {character.mainImage && formData.username ? (
+                                    <OptimizedImage
+                                      type="character"
+                                      filename={character.mainImage}
+                                      username={formData.username}
+                                      alt={character.name || "Character"}
+                                      width={32}
+                                      height={32}
+                                      objectFit="cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                                      <User className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Character Name */}
+                                <span className="font-medium text-sm shrink-0">
+                                  {character.name || "Unnamed"}
+                                </span>
+
+                                {/* Character Appearance - Truncated */}
+                                <span className="text-xs text-muted-foreground truncate flex-1">
+                                  {character.appearance || "No appearance description"}
+                                </span>
+
+                                {/* Additional Images Count */}
+                                {(character.images?.length || 0) > 0 && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    +{character.images?.length} img
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                            {characters.length > 10 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const wasShowingAll = showAllCharacters;
+                                  setShowAllCharacters(!showAllCharacters);
+                                  // Scroll to top when showing less
+                                  if (wasShowingAll) {
+                                    setTimeout(() => {
+                                      charactersSectionRef.current?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "start",
+                                      });
+                                    }, 0);
+                                  }
+                                }}
+                                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <ChevronsDown
+                                  className={cn(
+                                    "h-4 w-4 transition-transform duration-300",
+                                    showAllCharacters ? "rotate-180" : ""
+                                  )}
+                                />
+                                {showAllCharacters
+                                  ? "Show Less"
+                                  : `Show All (${characters.length})`}
+                              </button>
                             )}
-                          </div>
-
-                          {/* Character Name */}
-                          <span className="font-medium text-sm shrink-0">
-                            {character.name || "Unnamed"}
-                          </span>
-
-                          {/* Character Appearance - Truncated */}
-                          <span className="text-xs text-muted-foreground truncate flex-1">
-                            {character.appearance || "No appearance description"}
-                          </span>
-
-                          {/* Additional Images Count */}
-                          {(character.images?.length || 0) > 0 && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              +{character.images?.length} img
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -3112,29 +3685,18 @@ export default function ProjectForm({
                         <CardContent className="p-4 space-y-4">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium">Edit Character</h4>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEditingCharacterIndex(null)}
-                                className="bg-transparent"
-                              >
-                                Done
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  removeCharacter(editingCharacterIndex);
-                                  setEditingCharacterIndex(null);
-                                }}
-                                className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingCharacterIndex(null);
+                                setConfirmingCharacterDelete(null);
+                              }}
+                              className="bg-transparent"
+                            >
+                              Done
+                            </Button>
                           </div>
 
                           {/* Character Name */}
@@ -3470,6 +4032,53 @@ export default function ProjectForm({
                               className="bg-background resize-none"
                             />
                           </div>
+
+                          {/* Delete Character Button */}
+                          <div className="pt-4 border-t border-border flex justify-end">
+                            {confirmingCharacterDelete === editingCharacterIndex ? (
+                              <div className="space-y-3 text-right">
+                                <p className="text-sm text-muted-foreground">
+                                  Are you sure you want to delete this character? This action cannot
+                                  be undone.
+                                </p>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      removeCharacter(editingCharacterIndex);
+                                      setEditingCharacterIndex(null);
+                                      setConfirmingCharacterDelete(null);
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4 mr-2" />
+                                    Delete Character
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmingCharacterDelete(null)}
+                                    className="bg-transparent"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmingCharacterDelete(editingCharacterIndex)}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash className="h-4 w-4 mr-2" />
+                                Delete Character
+                              </Button>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     )}
@@ -3486,56 +4095,40 @@ export default function ProjectForm({
                 </div>
               </div>
 
-              {/* Locations/Settings Section - Compact View */}
-              <div ref={locationsSectionRef} className="pt-4 border-t border-border">
-                <div className="flex items-center gap-2 mb-3">
+              {/* Locations Section */}
+              <div ref={locationsSectionRef} className="space-y-3 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
                   <Camera className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Locations</h3>
-                  <span className="text-sm text-muted-foreground">
-                    ({(formData.setting?.locations || []).length})
-                  </span>
                 </div>
 
-                {/* Location List */}
-                {(formData.setting?.locations || []).length > 0 && (
-                  <div className="space-y-2">
-                    {(() => {
-                      const locations = formData.setting?.locations || [];
-                      const shouldShowAll = locations.length <= 10 || showAllLocations;
-                      const locationsToShow = shouldShowAll ? locations : locations.slice(0, 5);
+                <div className="space-y-2">
+                  {/* Location List - Compact One-Liner View */}
+                  {(formData.setting?.locations || []).length > 0 &&
+                    editingLocationIndex === null && (
+                      <div className="space-y-1.5">
+                        {(() => {
+                          const locations = formData.setting?.locations || [];
+                          const shouldShowAll = locations.length <= 10 || showAllLocations;
+                          const locationsToShow = shouldShowAll ? locations : locations.slice(0, 5);
 
-                      return (
-                        <>
-                          {locationsToShow.map((location, index) => (
-                            <div
-                              key={`location-${index}`}
-                              className="p-3 bg-muted/30 rounded-lg border border-border space-y-2"
-                            >
-                              {/* Top Row: Name and Images */}
-                              <div className="flex items-center gap-2">
-                                {/* Location Name (read-only display) */}
-                                <span className="flex-1 text-sm font-medium truncate">
-                                  {location.name}
-                                </span>
+                          return (
+                            <>
+                              {locationsToShow.map((location, index) => (
+                                <button
+                                  key={`location-compact-${index}`}
+                                  type="button"
+                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                  onClick={() => setEditingLocationIndex(index)}
+                                >
+                                  {/* Edit indicator */}
+                                  <div className="pt-0.5 shrink-0">
+                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                  </div>
 
-                                {/* Images */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {/* Main Image */}
-                                  {locationPreviewImages[index] ? (
-                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
-                                      <img
-                                        src={locationPreviewImages[index]}
-                                        alt={location.name || "Location"}
-                                        className="w-full h-full object-cover"
-                                      />
-                                      {uploadingLocationIndex === index && (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                          <Loader2 className="h-3 w-3 animate-spin text-white" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : location.image && formData.username ? (
-                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
+                                  {/* Location Image - Super Small */}
+                                  <div className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                                    {location.image && formData.username ? (
                                       <OptimizedImage
                                         type="location"
                                         filename={location.image}
@@ -3544,170 +4137,484 @@ export default function ProjectForm({
                                         fill
                                         objectFit="cover"
                                       />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleLocationMainImageClick(index)}
-                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                      >
-                                        <Pencil className="h-2 w-2 text-white" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    /* Upload Button when no main image */
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleLocationMainImageClick(index)}
-                                      disabled={uploadingLocationIndex === index}
-                                      className="h-8 bg-transparent"
-                                    >
-                                      {uploadingLocationIndex === index ? (
-                                        <>
-                                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                                          <span className="text-xs">Uploading...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Upload className="h-3 w-3 mr-1.5" />
-                                          <span className="text-xs">Add Image</span>
-                                        </>
-                                      )}
-                                    </Button>
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                                        <Camera className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Location Name */}
+                                  <span className="font-medium text-sm shrink-0">
+                                    {location.name || "Unnamed"}
+                                  </span>
+
+                                  {/* Location Description - Truncated */}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">
+                                    {location.description || "No description"}
+                                  </span>
+
+                                  {/* Additional Images Count */}
+                                  {(location.images?.length || 0) > 0 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      +{location.images?.length} img
+                                    </span>
                                   )}
-
-                                  {/* Additional Images */}
-                                  {(location.images || []).map((image, imageIndex) => (
-                                    <div
-                                      key={`${index}-${imageIndex}`}
-                                      className="relative w-12 h-8 rounded overflow-hidden border border-border group"
-                                    >
-                                      {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
-                                        <img
-                                          src={locationAdditionalPreviewImages[index][imageIndex]}
-                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : formData.username ? (
-                                        <OptimizedImage
-                                          type="location"
-                                          filename={image}
-                                          username={formData.username}
-                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                                          fill
-                                          objectFit="cover"
-                                        />
-                                      ) : null}
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          removeLocationAdditionalImage(index, imageIndex)
-                                        }
-                                        disabled={
-                                          uploadingLocationAdditionalIndex?.locationIndex ===
-                                            index &&
-                                          uploadingLocationAdditionalIndex?.imageIndex ===
-                                            imageIndex
-                                        }
-                                        className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
-                                      >
-                                        <X className="h-2 w-2" />
-                                      </button>
-                                    </div>
-                                  ))}
-
-                                  {/* Add Additional Image Button (only show when main image exists) */}
-                                  {(location.image || locationPreviewImages[index]) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAddLocationAdditionalImageClick(index)}
-                                      disabled={
-                                        uploadingLocationAdditionalIndex?.locationIndex === index
-                                      }
-                                      className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
-                                    >
-                                      {uploadingLocationAdditionalIndex?.locationIndex === index ? (
-                                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                      ) : (
-                                        <Plus className="h-3 w-3 text-muted-foreground" />
-                                      )}
-                                    </button>
-                                  )}
-
-                                  {/* Hidden file inputs */}
-                                  <input
-                                    ref={(el) => {
-                                      locationFileInputRefs.current[index] = el;
-                                    }}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleLocationMainImageChange(e, index)}
-                                    className="hidden"
-                                    disabled={uploadingLocationIndex === index}
+                                </button>
+                              ))}
+                              {locations.length > 10 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const wasShowingAll = showAllLocations;
+                                    setShowAllLocations(!showAllLocations);
+                                    // Scroll to top when showing less
+                                    if (wasShowingAll) {
+                                      setTimeout(() => {
+                                        locationsSectionRef.current?.scrollIntoView({
+                                          behavior: "smooth",
+                                          block: "start",
+                                        });
+                                      }, 0);
+                                    }
+                                  }}
+                                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
+                                >
+                                  <ChevronsDown
+                                    className={cn(
+                                      "h-4 w-4 transition-transform duration-300",
+                                      showAllLocations ? "rotate-180" : ""
+                                    )}
                                   />
+                                  {showAllLocations
+                                    ? "Show Less"
+                                    : `Show All (${locations.length})`}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                  {/* Location Edit Form - Expanded View */}
+                  {editingLocationIndex !== null &&
+                    formData.setting?.locations?.[editingLocationIndex] && (
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">Edit Location</h4>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingLocationIndex(null);
+                                setConfirmingLocationDelete(null);
+                              }}
+                              className="bg-transparent"
+                            >
+                              Done
+                            </Button>
+                          </div>
+
+                          {/* Location Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`location-name-alt-${editingLocationIndex}`}>
+                              Name
+                            </Label>
+                            <Input
+                              id={`location-name-alt-${editingLocationIndex}`}
+                              placeholder="Enter location name"
+                              value={formData.setting.locations[editingLocationIndex].name}
+                              onChange={(e) =>
+                                updateLocation(editingLocationIndex, "name", e.target.value)
+                              }
+                              className="bg-background"
+                            />
+                          </div>
+
+                          {/* Location Main Image */}
+                          <div className="space-y-2">
+                            <Label>Main Image</Label>
+                            <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted/30">
+                              {locationPreviewImages[editingLocationIndex] ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={locationPreviewImages[editingLocationIndex]}
+                                    alt={
+                                      formData.setting.locations[editingLocationIndex].name ||
+                                      "Location"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : formData.setting.locations[editingLocationIndex].image &&
+                                formData.username ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={getImageUrl({
+                                      type: "location",
+                                      filename:
+                                        formData.setting.locations[editingLocationIndex].image!,
+                                      username: formData.username,
+                                    })}
+                                    alt={
+                                      formData.setting.locations[editingLocationIndex].name ||
+                                      "Location"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-full min-h-[200px] flex items-center justify-center relative group">
+                                  <Camera className="h-12 w-12 text-muted-foreground" />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleLocationMainImageClick(editingLocationIndex)
+                                    }
+                                    disabled={uploadingLocationIndex === editingLocationIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload location main image"
+                                  >
+                                    {uploadingLocationIndex === editingLocationIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              ref={(el) => {
+                                locationFileInputRefs.current[editingLocationIndex] = el;
+                              }}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleLocationMainImageChange(e, editingLocationIndex)
+                              }
+                              className="hidden"
+                              disabled={uploadingLocationIndex === editingLocationIndex}
+                            />
+                          </div>
+
+                          {/* Additional Location Images */}
+                          <div className="space-y-2">
+                            <Label>Additional Images (Different Angles/Variations)</Label>
+                            <div className="columns-2 md:columns-3 gap-4">
+                              {(formData.setting.locations[editingLocationIndex].images || []).map(
+                                (image, imageIndex) => (
+                                  <div
+                                    key={`${editingLocationIndex}-${imageIndex}`}
+                                    className="relative w-full mb-4 break-inside-avoid rounded-lg overflow-hidden border border-border bg-muted/30"
+                                  >
+                                    {locationAdditionalPreviewImages[editingLocationIndex]?.[
+                                      imageIndex
+                                    ] ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            locationAdditionalPreviewImages[editingLocationIndex][
+                                              imageIndex
+                                            ]
+                                          }
+                                          alt={`${formData.setting?.locations?.[editingLocationIndex]?.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeLocationAdditionalImage(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : image && formData.username ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={getImageUrl({
+                                            type: "location",
+                                            filename: image,
+                                            username: formData.username,
+                                          })}
+                                          alt={`${formData.setting?.locations?.[editingLocationIndex]?.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeLocationAdditionalImage(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-full min-h-[150px] flex items-center justify-center relative group">
+                                        <Camera className="h-8 w-8 text-muted-foreground" />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleLocationAdditionalImageClick(
+                                              editingLocationIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingLocationAdditionalIndex?.locationIndex ===
+                                              editingLocationIndex &&
+                                            uploadingLocationAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional location image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingLocationAdditionalIndex?.locationIndex ===
+                                            editingLocationIndex &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                    <input
+                                      ref={(el) => {
+                                        locationAdditionalFileInputRefs.current[
+                                          `${editingLocationIndex}-${imageIndex}`
+                                        ] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleLocationAdditionalImageChange(
+                                          e,
+                                          editingLocationIndex,
+                                          imageIndex
+                                        )
+                                      }
+                                      className="hidden"
+                                      disabled={
+                                        uploadingLocationAdditionalIndex?.locationIndex ===
+                                          editingLocationIndex &&
+                                        uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                      }
+                                    />
+                                  </div>
+                                )
+                              )}
+                              <div className="relative w-full mb-4 break-inside-avoid">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddLocationAdditionalImageClick(editingLocationIndex)
+                                  }
+                                  className="relative w-full min-h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center"
+                                  aria-label="Add additional location image"
+                                >
+                                  <Plus className="h-8 w-8 text-muted-foreground" />
                                   <input
                                     ref={(el) => {
-                                      locationAddImageInputRefs.current[index] = el;
+                                      locationAddImageInputRefs.current[editingLocationIndex] = el;
                                     }}
                                     type="file"
                                     accept="image/*"
                                     onChange={(e) =>
-                                      handleAddLocationAdditionalImageChange(e, index)
+                                      handleAddLocationAdditionalImageChange(
+                                        e,
+                                        editingLocationIndex
+                                      )
                                     }
                                     className="hidden"
                                     disabled={
-                                      uploadingLocationAdditionalIndex?.locationIndex === index
+                                      uploadingLocationAdditionalIndex?.locationIndex ===
+                                      editingLocationIndex
                                     }
                                   />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Location Description */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`location-description-alt-${editingLocationIndex}`}>
+                              Description
+                            </Label>
+                            <Textarea
+                              id={`location-description-alt-${editingLocationIndex}`}
+                              placeholder="Describe this location..."
+                              value={formData.setting.locations[editingLocationIndex].description}
+                              onChange={(e) =>
+                                updateLocation(editingLocationIndex, "description", e.target.value)
+                              }
+                              rows={3}
+                              className="bg-background resize-none"
+                            />
+                          </div>
+
+                          {/* Delete Location Button */}
+                          <div className="pt-4 flex justify-end">
+                            {confirmingLocationDelete === editingLocationIndex ? (
+                              <div className="space-y-3 text-right">
+                                <p className="text-sm text-muted-foreground">
+                                  Are you sure you want to delete this location? This action cannot
+                                  be undone.
+                                </p>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => {
+                                      removeLocation(editingLocationIndex);
+                                      setEditingLocationIndex(null);
+                                      setConfirmingLocationDelete(null);
+                                    }}
+                                  >
+                                    <Trash className="h-4 w-4 mr-2" />
+                                    Delete Location
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmingLocationDelete(null)}
+                                    className="bg-transparent"
+                                  >
+                                    Cancel
+                                  </Button>
                                 </div>
                               </div>
-
-                              {/* Description */}
-                              <textarea
-                                value={location.description || ""}
-                                onChange={(e) =>
-                                  handleLocationDescriptionChange(index, e.target.value)
-                                }
-                                placeholder="Describe this location..."
-                                className="w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-                                rows={2}
-                              />
-                            </div>
-                          ))}
-                          {locations.length > 10 && (
-                            <div className="pt-2">
-                              <button
+                            ) : (
+                              <Button
                                 type="button"
-                                onClick={() => {
-                                  const wasShowingAll = showAllLocations;
-                                  setShowAllLocations(!showAllLocations);
-                                  // Scroll to top when showing less
-                                  if (wasShowingAll) {
-                                    setTimeout(() => {
-                                      locationsSectionRef.current?.scrollIntoView({
-                                        behavior: "smooth",
-                                        block: "start",
-                                      });
-                                    }, 0);
-                                  }
-                                }}
-                                className="w-full bg-transparent flex items-center gap-2"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setConfirmingLocationDelete(editingLocationIndex)}
+                                className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                               >
-                                <ChevronsDown
-                                  className={cn(
-                                    "h-4 w-4 transition-all duration-300 ease-in-out",
-                                    showAllLocations ? "rotate-180" : ""
-                                  )}
-                                />
-                                {showAllLocations ? "Show Less" : `Show All (${locations.length})`}
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                                <X className="h-2 w-2 mr-2" />
+                                Delete Location
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addLocation}
+                    className="bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Location
+                  </Button>
+                </div>
               </div>
 
               {/* Scenes Section */}
