@@ -2,6 +2,7 @@
 
 import {
   Camera,
+  ChevronsDown,
   Clapperboard,
   Cloud,
   CloudOff,
@@ -73,6 +74,7 @@ export interface ProjectFile {
 }
 
 import type { ScreenplayElement } from "@/lib/types/screenplay";
+import { cn } from "@/lib/utils";
 
 export interface ProjectFormData {
   title: string;
@@ -946,6 +948,15 @@ export default function ProjectForm({
 
   const handleLocationMainImageClick = (index: number) => {
     locationFileInputRefs.current[index]?.click();
+  };
+
+  const handleLocationDescriptionChange = (index: number, description: string) => {
+    const newLocations = [...(formData.setting?.locations || [])];
+    newLocations[index] = { ...newLocations[index], description };
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
   };
 
   const handleLocationMainImageChange = async (
@@ -2464,139 +2475,175 @@ export default function ProjectForm({
                           {locationsToShow.map((location, index) => (
                             <div
                               key={`location-${index}`}
-                              className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
+                              className="p-3 bg-muted/30 rounded-lg border border-border space-y-2"
                             >
-                              {/* Location Name (read-only display) */}
-                              <span className="flex-1 text-sm font-medium truncate px-2">
-                                {location.name}
-                              </span>
+                              {/* Top Row: Name and Images */}
+                              <div className="flex items-center gap-2">
+                                {/* Location Name (read-only display) */}
+                                <span className="flex-1 text-sm font-medium truncate">
+                                  {location.name}
+                                </span>
 
-                              {/* Images */}
-                              <div className="flex items-center gap-1 shrink-0">
-                                {/* Main Image */}
-                                {locationPreviewImages[index] ? (
-                                  <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
-                                    <img
-                                      src={locationPreviewImages[index]}
-                                      alt={location.name || "Location"}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    {uploadingLocationIndex === index && (
-                                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                        <Loader2 className="h-3 w-3 animate-spin text-white" />
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : location.image && formData.username ? (
-                                  <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
-                                    <OptimizedImage
-                                      type="location"
-                                      filename={location.image}
-                                      username={formData.username}
-                                      alt={location.name || "Location"}
-                                      fill
-                                      objectFit="cover"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleLocationMainImageClick(index)}
-                                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                    >
-                                      <Pencil className="h-2 w-2 text-white" />
-                                    </button>
-                                  </div>
-                                ) : null}
-
-                                {/* Additional Images */}
-                                {(location.images || []).map((image, imageIndex) => (
-                                  <div
-                                    key={`${index}-${imageIndex}`}
-                                    className="relative w-12 h-8 rounded overflow-hidden border border-border group"
-                                  >
-                                    {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                {/* Images */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Main Image */}
+                                  {locationPreviewImages[index] ? (
+                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
                                       <img
-                                        src={locationAdditionalPreviewImages[index][imageIndex]}
-                                        alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                        src={locationPreviewImages[index]}
+                                        alt={location.name || "Location"}
                                         className="w-full h-full object-cover"
                                       />
-                                    ) : formData.username ? (
+                                      {uploadingLocationIndex === index && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                          <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : location.image && formData.username ? (
+                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
                                       <OptimizedImage
                                         type="location"
-                                        filename={image}
+                                        filename={location.image}
                                         username={formData.username}
-                                        alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                        alt={location.name || "Location"}
                                         fill
                                         objectFit="cover"
                                       />
-                                    ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLocationMainImageClick(index)}
+                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                      >
+                                        <Pencil className="h-2 w-2 text-white" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    /* Upload Button when no main image */
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleLocationMainImageClick(index)}
+                                      disabled={uploadingLocationIndex === index}
+                                      className="h-8 bg-transparent"
+                                    >
+                                      {uploadingLocationIndex === index ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                          <span className="text-xs">Uploading...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Upload className="h-3 w-3 mr-1.5" />
+                                          <span className="text-xs">Add Image</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+
+                                  {/* Additional Images */}
+                                  {(location.images || []).map((image, imageIndex) => (
+                                    <div
+                                      key={`${index}-${imageIndex}`}
+                                      className="relative w-12 h-8 rounded overflow-hidden border border-border group"
+                                    >
+                                      {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                        <img
+                                          src={locationAdditionalPreviewImages[index][imageIndex]}
+                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : formData.username ? (
+                                        <OptimizedImage
+                                          type="location"
+                                          filename={image}
+                                          username={formData.username}
+                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                          fill
+                                          objectFit="cover"
+                                        />
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeLocationAdditionalImage(index, imageIndex)
+                                        }
+                                        disabled={
+                                          uploadingLocationAdditionalIndex?.locationIndex ===
+                                            index &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex
+                                        }
+                                        className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                                      >
+                                        <X className="h-2 w-2" />
+                                      </button>
+                                    </div>
+                                  ))}
+
+                                  {/* Add Additional Image Button (only show when main image exists) */}
+                                  {(location.image || locationPreviewImages[index]) && (
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        removeLocationAdditionalImage(index, imageIndex)
-                                      }
+                                      onClick={() => handleAddLocationAdditionalImageClick(index)}
                                       disabled={
-                                        uploadingLocationAdditionalIndex?.locationIndex === index &&
-                                        uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                        uploadingLocationAdditionalIndex?.locationIndex === index
                                       }
-                                      className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                                      className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
                                     >
-                                      <X className="h-2 w-2" />
+                                      {uploadingLocationAdditionalIndex?.locationIndex === index ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                      ) : (
+                                        <Plus className="h-3 w-3 text-muted-foreground" />
+                                      )}
                                     </button>
-                                  </div>
-                                ))}
-
-                                {/* Add Image Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!location.image && !locationPreviewImages[index]) {
-                                      handleLocationMainImageClick(index);
-                                    } else {
-                                      handleAddLocationAdditionalImageClick(index);
-                                    }
-                                  }}
-                                  disabled={uploadingLocationIndex === index}
-                                  className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
-                                >
-                                  {uploadingLocationIndex === index ? (
-                                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                  ) : (
-                                    <Plus className="h-3 w-3 text-muted-foreground" />
                                   )}
-                                </button>
 
-                                {/* Hidden file inputs */}
-                                <input
-                                  ref={(el) => {
-                                    locationFileInputRefs.current[index] = el;
-                                  }}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleLocationMainImageChange(e, index)}
-                                  className="hidden"
-                                  disabled={uploadingLocationIndex === index}
-                                />
-                                <input
-                                  ref={(el) => {
-                                    locationAddImageInputRefs.current[index] = el;
-                                  }}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
-                                  className="hidden"
-                                  disabled={
-                                    uploadingLocationAdditionalIndex?.locationIndex === index
-                                  }
-                                />
+                                  {/* Hidden file inputs */}
+                                  <input
+                                    ref={(el) => {
+                                      locationFileInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleLocationMainImageChange(e, index)}
+                                    className="hidden"
+                                    disabled={uploadingLocationIndex === index}
+                                  />
+                                  <input
+                                    ref={(el) => {
+                                      locationAddImageInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleAddLocationAdditionalImageChange(e, index)
+                                    }
+                                    className="hidden"
+                                    disabled={
+                                      uploadingLocationAdditionalIndex?.locationIndex === index
+                                    }
+                                  />
+                                </div>
                               </div>
+
+                              {/* Description */}
+                              <textarea
+                                value={location.description || ""}
+                                onChange={(e) =>
+                                  handleLocationDescriptionChange(index, e.target.value)
+                                }
+                                placeholder="Describe this location..."
+                                className="w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                                rows={2}
+                              />
                             </div>
                           ))}
                           {locations.length > 10 && (
                             <div className="pt-2">
-                              <Button
+                              <button
                                 type="button"
-                                variant="outline"
-                                size="sm"
                                 onClick={() => {
                                   const wasShowingAll = showAllLocations;
                                   setShowAllLocations(!showAllLocations);
@@ -2613,7 +2660,7 @@ export default function ProjectForm({
                                 className="w-full bg-transparent"
                               >
                                 {showAllLocations ? "Show Less" : `Show All (${locations.length})`}
-                              </Button>
+                              </button>
                             </div>
                           )}
                         </>
@@ -3462,139 +3509,175 @@ export default function ProjectForm({
                           {locationsToShow.map((location, index) => (
                             <div
                               key={`location-${index}`}
-                              className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
+                              className="p-3 bg-muted/30 rounded-lg border border-border space-y-2"
                             >
-                              {/* Location Name (read-only display) */}
-                              <span className="flex-1 text-sm font-medium truncate px-2">
-                                {location.name}
-                              </span>
+                              {/* Top Row: Name and Images */}
+                              <div className="flex items-center gap-2">
+                                {/* Location Name (read-only display) */}
+                                <span className="flex-1 text-sm font-medium truncate">
+                                  {location.name}
+                                </span>
 
-                              {/* Images */}
-                              <div className="flex items-center gap-1 shrink-0">
-                                {/* Main Image */}
-                                {locationPreviewImages[index] ? (
-                                  <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
-                                    <img
-                                      src={locationPreviewImages[index]}
-                                      alt={location.name || "Location"}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    {uploadingLocationIndex === index && (
-                                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                        <Loader2 className="h-3 w-3 animate-spin text-white" />
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : location.image && formData.username ? (
-                                  <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
-                                    <OptimizedImage
-                                      type="location"
-                                      filename={location.image}
-                                      username={formData.username}
-                                      alt={location.name || "Location"}
-                                      fill
-                                      objectFit="cover"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleLocationMainImageClick(index)}
-                                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                                    >
-                                      <Pencil className="h-2 w-2 text-white" />
-                                    </button>
-                                  </div>
-                                ) : null}
-
-                                {/* Additional Images */}
-                                {(location.images || []).map((image, imageIndex) => (
-                                  <div
-                                    key={`${index}-${imageIndex}`}
-                                    className="relative w-12 h-8 rounded overflow-hidden border border-border group"
-                                  >
-                                    {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                {/* Images */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Main Image */}
+                                  {locationPreviewImages[index] ? (
+                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
                                       <img
-                                        src={locationAdditionalPreviewImages[index][imageIndex]}
-                                        alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                        src={locationPreviewImages[index]}
+                                        alt={location.name || "Location"}
                                         className="w-full h-full object-cover"
                                       />
-                                    ) : formData.username ? (
+                                      {uploadingLocationIndex === index && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                          <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : location.image && formData.username ? (
+                                    <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
                                       <OptimizedImage
                                         type="location"
-                                        filename={image}
+                                        filename={location.image}
                                         username={formData.username}
-                                        alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                        alt={location.name || "Location"}
                                         fill
                                         objectFit="cover"
                                       />
-                                    ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleLocationMainImageClick(index)}
+                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                                      >
+                                        <Pencil className="h-2 w-2 text-white" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    /* Upload Button when no main image */
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleLocationMainImageClick(index)}
+                                      disabled={uploadingLocationIndex === index}
+                                      className="h-8 bg-transparent"
+                                    >
+                                      {uploadingLocationIndex === index ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                          <span className="text-xs">Uploading...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Upload className="h-3 w-3 mr-1.5" />
+                                          <span className="text-xs">Add Image</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+
+                                  {/* Additional Images */}
+                                  {(location.images || []).map((image, imageIndex) => (
+                                    <div
+                                      key={`${index}-${imageIndex}`}
+                                      className="relative w-12 h-8 rounded overflow-hidden border border-border group"
+                                    >
+                                      {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                        <img
+                                          src={locationAdditionalPreviewImages[index][imageIndex]}
+                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : formData.username ? (
+                                        <OptimizedImage
+                                          type="location"
+                                          filename={image}
+                                          username={formData.username}
+                                          alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                          fill
+                                          objectFit="cover"
+                                        />
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeLocationAdditionalImage(index, imageIndex)
+                                        }
+                                        disabled={
+                                          uploadingLocationAdditionalIndex?.locationIndex ===
+                                            index &&
+                                          uploadingLocationAdditionalIndex?.imageIndex ===
+                                            imageIndex
+                                        }
+                                        className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                                      >
+                                        <X className="h-2 w-2" />
+                                      </button>
+                                    </div>
+                                  ))}
+
+                                  {/* Add Additional Image Button (only show when main image exists) */}
+                                  {(location.image || locationPreviewImages[index]) && (
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        removeLocationAdditionalImage(index, imageIndex)
-                                      }
+                                      onClick={() => handleAddLocationAdditionalImageClick(index)}
                                       disabled={
-                                        uploadingLocationAdditionalIndex?.locationIndex === index &&
-                                        uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                        uploadingLocationAdditionalIndex?.locationIndex === index
                                       }
-                                      className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                                      className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
                                     >
-                                      <X className="h-2 w-2" />
+                                      {uploadingLocationAdditionalIndex?.locationIndex === index ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                      ) : (
+                                        <Plus className="h-3 w-3 text-muted-foreground" />
+                                      )}
                                     </button>
-                                  </div>
-                                ))}
-
-                                {/* Add Image Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!location.image && !locationPreviewImages[index]) {
-                                      handleLocationMainImageClick(index);
-                                    } else {
-                                      handleAddLocationAdditionalImageClick(index);
-                                    }
-                                  }}
-                                  disabled={uploadingLocationIndex === index}
-                                  className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
-                                >
-                                  {uploadingLocationIndex === index ? (
-                                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                  ) : (
-                                    <Plus className="h-3 w-3 text-muted-foreground" />
                                   )}
-                                </button>
 
-                                {/* Hidden file inputs */}
-                                <input
-                                  ref={(el) => {
-                                    locationFileInputRefs.current[index] = el;
-                                  }}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleLocationMainImageChange(e, index)}
-                                  className="hidden"
-                                  disabled={uploadingLocationIndex === index}
-                                />
-                                <input
-                                  ref={(el) => {
-                                    locationAddImageInputRefs.current[index] = el;
-                                  }}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
-                                  className="hidden"
-                                  disabled={
-                                    uploadingLocationAdditionalIndex?.locationIndex === index
-                                  }
-                                />
+                                  {/* Hidden file inputs */}
+                                  <input
+                                    ref={(el) => {
+                                      locationFileInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleLocationMainImageChange(e, index)}
+                                    className="hidden"
+                                    disabled={uploadingLocationIndex === index}
+                                  />
+                                  <input
+                                    ref={(el) => {
+                                      locationAddImageInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleAddLocationAdditionalImageChange(e, index)
+                                    }
+                                    className="hidden"
+                                    disabled={
+                                      uploadingLocationAdditionalIndex?.locationIndex === index
+                                    }
+                                  />
+                                </div>
                               </div>
+
+                              {/* Description */}
+                              <textarea
+                                value={location.description || ""}
+                                onChange={(e) =>
+                                  handleLocationDescriptionChange(index, e.target.value)
+                                }
+                                placeholder="Describe this location..."
+                                className="w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                                rows={2}
+                              />
                             </div>
                           ))}
                           {locations.length > 10 && (
                             <div className="pt-2">
-                              <Button
+                              <button
                                 type="button"
-                                variant="outline"
-                                size="sm"
                                 onClick={() => {
                                   const wasShowingAll = showAllLocations;
                                   setShowAllLocations(!showAllLocations);
@@ -3608,10 +3691,16 @@ export default function ProjectForm({
                                     }, 0);
                                   }
                                 }}
-                                className="w-full bg-transparent"
+                                className="w-full bg-transparent flex items-center gap-2"
                               >
+                                <ChevronsDown
+                                  className={cn(
+                                    "h-4 w-4 transition-all duration-300 ease-in-out",
+                                    showAllLocations ? "rotate-180" : ""
+                                  )}
+                                />
                                 {showAllLocations ? "Show Less" : `Show All (${locations.length})`}
-                              </Button>
+                              </button>
                             </div>
                           )}
                         </>
@@ -3813,24 +3902,27 @@ export default function ProjectForm({
             </>
           )}
 
-          <div className={useGridLayout ? "col-span-3 flex gap-3 pt-4" : "flex gap-3 pt-4"}>
-            <Button
-              type="submit"
-              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Saving..." : isEditing ? "Save Changes" : "Create Project"}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCancel}
-              variant="outline"
-              className="flex-1 bg-transparent"
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-          </div>
+          {/* Only show Create button for new projects - editing uses auto-save */}
+          {!isEditing && (
+            <div className={useGridLayout ? "col-span-3 flex gap-3 pt-4" : "flex gap-3 pt-4"}>
+              <Button
+                type="submit"
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Creating..." : "Create Project"}
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCancel}
+                variant="outline"
+                className="flex-1 bg-transparent"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </form>
