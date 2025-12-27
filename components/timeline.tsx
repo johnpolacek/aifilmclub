@@ -417,39 +417,29 @@ export default function Timeline({
 
       {/* Video track */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
-        <div className="flex-shrink-0 w-32 flex items-center gap-2">
-          <Video className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium">Video</span>
-        </div>
         <div ref={timelineRef} className="flex-1 flex items-center gap-1 overflow-x-auto py-1">
-          {shots.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-4 px-4">
-              No shots yet. Add a shot to get started.
-            </p>
-          ) : (
-            shots.map((shot, index) => (
-              <div key={shot.id} className="flex items-center gap-1">
-                <ShotCard
-                  shot={shot}
-                  isSelected={selectedShotId === shot.id}
-                  isDragging={draggedShotId === shot.id}
-                  onClick={() => onShotClick(shot)}
-                  onDragStart={() => handleDragStart(shot.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(shot.id)}
-                  onDragEnd={handleDragEnd}
-                  pixelsPerSecond={pixelsPerSecond}
+          {shots.map((shot, index) => (
+            <div key={shot.id} className="flex items-center gap-1">
+              <ShotCard
+                shot={shot}
+                isSelected={selectedShotId === shot.id}
+                isDragging={draggedShotId === shot.id}
+                onClick={() => onShotClick(shot)}
+                onDragStart={() => handleDragStart(shot.id)}
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(shot.id)}
+                onDragEnd={handleDragEnd}
+                pixelsPerSecond={pixelsPerSecond}
+              />
+              {/* Transition icon (not after last shot) */}
+              {index < shots.length - 1 && (
+                <TransitionIcon
+                  transition={shot.transitionOut.type}
+                  onTransitionChange={(type) => onTransitionChange(shot.id, type)}
                 />
-                {/* Transition icon (not after last shot) */}
-                {index < shots.length - 1 && (
-                  <TransitionIcon
-                    transition={shot.transitionOut.type}
-                    onTransitionChange={(type) => onTransitionChange(shot.id, type)}
-                  />
-                )}
-              </div>
-            ))
-          )}
+              )}
+            </div>
+          ))}
           {/* Add shot button */}
           <Button
             variant="ghost"
