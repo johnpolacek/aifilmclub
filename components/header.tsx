@@ -36,31 +36,35 @@ export function Header() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3" suppressHydrationWarning>
+          <div className="flex items-center gap-3">
             <SignedIn>
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium transition-all h-8 px-3 hover:bg-primary/20 hover:text-white"
-              >
-                Dashboard
-              </Link>
-              <UserButton />
+              <div suppressHydrationWarning>
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium transition-all h-8 px-3 hover:bg-primary/20 hover:text-white"
+                >
+                  Dashboard
+                </Link>
+                <UserButton />
+              </div>
             </SignedIn>
             <SignedOut>
-              <SignInButton mode="modal">
-                <Button
-                  variant="outline"
-                  className="bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!"
-                  size="sm"
-                >
-                  Sign In
-                </Button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <Button size="sm" className="bg-primary text-white hover:text-white">
-                  Join
-                </Button>
-              </SignUpButton>
+              <div suppressHydrationWarning>
+                <SignInButton mode="modal">
+                  <Button
+                    variant="outline"
+                    className="bg-transparent! border-primary/80! hover:border-primary/90! hover:text-white! hover:bg-primary/20!"
+                    size="sm"
+                  >
+                    Sign In
+                  </Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button size="sm" className="bg-primary text-white hover:text-white">
+                    Join
+                  </Button>
+                </SignUpButton>
+              </div>
             </SignedOut>
           </div>
         </div>
