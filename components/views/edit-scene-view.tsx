@@ -8,7 +8,9 @@ import {
   Loader2,
   Plus,
   Save,
+  Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -32,7 +34,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AudioTrack, Scene, Shot, ShotVideo, TransitionType } from "@/lib/scenes-client";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  AudioTrack,
+  GenerationMode,
+  Scene,
+  Shot,
+  ShotVideo,
+  TransitionType,
+} from "@/lib/scenes-client";
 import { createNewShot } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
@@ -109,6 +119,101 @@ function getMaxWidth(type: ScreenplayElement["type"]): string {
 }
 
 // ============================================================================
+// IMAGE DROP ZONE COMPONENT
+// ============================================================================
+
+interface ImageDropZoneProps {
+  label: string;
+  onImageSelect: (file: File) => void;
+  disabled?: boolean;
+}
+
+function ImageDropZone({ label, onImageSelect, disabled }: ImageDropZoneProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file?.type.startsWith("image/")) {
+        onImageSelect(file);
+      }
+    },
+    [onImageSelect]
+  );
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        onImageSelect(file);
+      }
+    },
+    [onImageSelect]
+  );
+
+  const handleClick = useCallback(() => {
+    if (!disabled) {
+      inputRef.current?.click();
+    }
+  }, [disabled]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.key === "Enter" || e.key === " ") && !disabled) {
+        e.preventDefault();
+        inputRef.current?.click();
+      }
+    },
+    [disabled]
+  );
+
+  return (
+    <div className="space-y-2">
+      {label && <Label className="text-sm">{label}</Label>}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "w-full aspect-video rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-transparent",
+          isDragOver
+            ? "border-primary bg-primary/5"
+            : "border-muted-foreground/30 hover:border-primary/50",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        <ImageIcon className="h-8 w-8 relative top-2 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground p-2">Drop image or click to upload</span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -135,6 +240,18 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [showShotEditor, setShowShotEditor] = useState(false);
   const [pendingShots, setPendingShots] = useState<Map<string, string>>(new Map()); // shotId -> operationId
+
+  // Generate video dialog state
+  const [showGenerateVideoDialog, setShowGenerateVideoDialog] = useState(false);
+  const [generateMode, setGenerateMode] = useState<"start-end-frames" | "ingredients">(
+    "start-end-frames"
+  );
+  const [generatePrompt, setGeneratePrompt] = useState("");
+  const [startFrameImage, setStartFrameImage] = useState<string | undefined>(undefined);
+  const [endFrameImage, setEndFrameImage] = useState<string | undefined>(undefined);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Audio track editing state
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
@@ -391,18 +508,231 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
   // SHOT HANDLERS
   // ============================================================================
 
+  const videoUploadInputRef = useRef<HTMLInputElement>(null);
+
   const handleGenerateVideoClick = () => {
-    const newShot = createNewShot(scene.shots.length);
-    newShot.sourceType = "generated";
-    setSelectedShot(newShot);
-    setShowShotEditor(true);
+    setGeneratePrompt("");
+    setStartFrameImage(undefined);
+    setEndFrameImage(undefined);
+    setReferenceImages([]);
+    setGenerateMode("start-end-frames");
+    setShowGenerateVideoDialog(true);
+  };
+
+  const handleImageUpload = async (file: File, type: "start" | "end" | "reference") => {
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      formData.append("sceneId", scene.id);
+      formData.append("mediaType", "image");
+
+      const response = await fetch("/api/scenes/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (type === "start") {
+          setStartFrameImage(data.url);
+        } else if (type === "end") {
+          setEndFrameImage(data.url);
+        } else if (type === "reference") {
+          if (referenceImages.length < 3) {
+            setReferenceImages([...referenceImages, data.url]);
+          }
+        }
+      } else {
+        toast.error(data.error || "Failed to upload image");
+      }
+    } catch (error) {
+      console.error("[EditSceneView] Image upload error:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleGenerateVideoSubmit = async () => {
+    if (!generatePrompt.trim()) {
+      toast.error("Please enter a prompt");
+      return;
+    }
+
+    // Validate based on mode
+    if (generateMode === "start-end-frames" && (!startFrameImage || !endFrameImage)) {
+      toast.error("Please upload both start and end frame images");
+      return;
+    }
+    if (generateMode === "ingredients" && referenceImages.length === 0) {
+      toast.error("Please upload at least one reference image");
+      return;
+    }
+
+    setIsGeneratingVideo(true);
+    const loadingToast = toast.loading("Starting video generation...");
+
+    try {
+      // Create a new shot first
+      const newShot = createNewShot(scene.shots.length);
+      newShot.title = `Generated: ${generatePrompt.substring(0, 30)}...`;
+      newShot.prompt = generatePrompt;
+      newShot.sourceType = "generated";
+      newShot.generationMode =
+        generateMode === "start-end-frames"
+          ? ("start-end-frame" as GenerationMode)
+          : ("reference-images" as GenerationMode);
+      newShot.startFrameImage = startFrameImage;
+      newShot.endFrameImage = generateMode === "start-end-frames" ? endFrameImage : undefined;
+      newShot.referenceImages = generateMode === "ingredients" ? referenceImages : undefined;
+
+      // Add shot to scene first
+      setScene((prev) => ({
+        ...prev,
+        shots: [...prev.shots, newShot],
+      }));
+
+      // Generate video
+      const response = await fetch("/api/ai/generate-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: generatePrompt,
+          projectId,
+          sceneId: scene.id,
+          shotId: newShot.id,
+          aspectRatio: "16:9",
+          durationSeconds: 8,
+          generationMode: newShot.generationMode,
+          startFrameImage: newShot.startFrameImage,
+          endFrameImage: newShot.endFrameImage,
+          referenceImages: newShot.referenceImages,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.video) {
+        // Update the shot with the pending video info
+        setScene((prev) => ({
+          ...prev,
+          shots: prev.shots.map((s) =>
+            s.id === newShot.id
+              ? {
+                  ...s,
+                  video: {
+                    url: "",
+                    status: "processing" as const,
+                    operationId: data.video.operationId,
+                  },
+                }
+              : s
+          ),
+        }));
+
+        // Add to pending shots for polling
+        setPendingShots((prev) => {
+          const next = new Map(prev);
+          next.set(newShot.id, data.video.operationId);
+          return next;
+        });
+
+        setHasChanges(true);
+        toast.success("Video generation started!", { id: loadingToast });
+        setShowGenerateVideoDialog(false);
+        // Reset form
+        setGeneratePrompt("");
+        setStartFrameImage(undefined);
+        setReferenceImages([]);
+      } else {
+        toast.error(data.error || "Failed to start video generation", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("[EditSceneView] Error generating video:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to start video generation", { id: loadingToast });
+    } finally {
+      setIsGeneratingVideo(false);
+    }
   };
 
   const handleUploadVideoClick = () => {
-    const newShot = createNewShot(scene.shots.length);
-    newShot.sourceType = "uploaded";
-    setSelectedShot(newShot);
-    setShowShotEditor(true);
+    videoUploadInputRef.current?.click();
+  };
+
+  const handleVideoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const loadingToast = toast.loading("Uploading video...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      formData.append("sceneId", scene.id);
+      formData.append("mediaType", "video");
+
+      const response = await fetch("/api/scenes/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Get video duration (default to 5 seconds if not available)
+        let durationMs = 5000;
+        try {
+          const video = document.createElement("video");
+          video.preload = "metadata";
+          video.src = URL.createObjectURL(file);
+          await new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+              durationMs = Math.round(video.duration * 1000);
+              URL.revokeObjectURL(video.src);
+              resolve(undefined);
+            };
+            video.onerror = reject;
+          });
+        } catch (error) {
+          console.error(
+            "[EditSceneView] Error getting video duration:",
+            JSON.stringify({ error }, null, 2)
+          );
+          // Use default duration
+        }
+
+        // Create a new shot with the uploaded video
+        const newShot = createNewShot(scene.shots.length);
+        newShot.title = `Uploaded: ${file.name}`;
+        newShot.sourceType = "uploaded";
+        newShot.video = {
+          url: data.url,
+          status: "completed",
+          durationMs,
+        };
+        newShot.updatedAt = new Date().toISOString();
+
+        setScene((prev) => ({
+          ...prev,
+          shots: [...prev.shots, newShot],
+        }));
+        setHasChanges(true);
+        toast.success("Video uploaded successfully!", { id: loadingToast });
+      } else {
+        toast.error(data.error || "Failed to upload video", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("[EditSceneView] Video upload error:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to upload video", { id: loadingToast });
+    } finally {
+      if (e.target) {
+        e.target.value = "";
+      }
+    }
   };
 
   const handleShotClick = (shot: Shot) => {
@@ -932,6 +1262,173 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
         sceneId={scene.id}
       />
 
+      {/* Generate Video Dialog */}
+      <Dialog open={showGenerateVideoDialog} onOpenChange={setShowGenerateVideoDialog}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Generate Video</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Mode Selection */}
+            <div className="space-y-2">
+              <Label className="sr-only">Mode</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={generateMode === "start-end-frames" ? "default" : "outline"}
+                  onClick={() => setGenerateMode("start-end-frames")}
+                  className="flex-1"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  Start/End Frames
+                </Button>
+                <Button
+                  type="button"
+                  variant={generateMode === "ingredients" ? "default" : "outline"}
+                  onClick={() => setGenerateMode("ingredients")}
+                  className="flex-1"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Ingredients
+                </Button>
+              </div>
+            </div>
+
+            {/* Image Uploads - Start/End Frames Mode */}
+            {generateMode === "start-end-frames" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Start Frame Image *</Label>
+                  {startFrameImage ? (
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                      <Image
+                        src={startFrameImage}
+                        alt="Start frame"
+                        fill
+                        className="object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setStartFrameImage(undefined)}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <ImageDropZone
+                      label=""
+                      onImageSelect={(file) => handleImageUpload(file, "start")}
+                      disabled={isUploadingImage}
+                    />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>End Frame Image *</Label>
+                  {endFrameImage ? (
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                      <Image src={endFrameImage} alt="End frame" fill className="object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setEndFrameImage(undefined)}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <ImageDropZone
+                      label=""
+                      onImageSelect={(file) => handleImageUpload(file, "end")}
+                      disabled={isUploadingImage}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Image Uploads - Ingredients Mode */}
+            {generateMode === "ingredients" && (
+              <div className="space-y-2">
+                <Label>Reference Images (up to 3) *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {referenceImages.map((img, index) => (
+                    <div
+                      key={index}
+                      className="relative aspect-video rounded-lg overflow-hidden border border-border group"
+                    >
+                      <Image
+                        src={img}
+                        alt={`Reference ${index + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReferenceImages(referenceImages.filter((_, i) => i !== index))
+                        }
+                        className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {referenceImages.length < 3 && (
+                    <ImageDropZone
+                      label=""
+                      onImageSelect={(file) => handleImageUpload(file, "reference")}
+                      disabled={isUploadingImage}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Prompt */}
+            <div className="space-y-2">
+              <Label htmlFor="generate-prompt">Motion Prompt *</Label>
+              <Textarea
+                id="generate-prompt"
+                value={generatePrompt}
+                onChange={(e) => setGeneratePrompt(e.target.value)}
+                placeholder="Describe the motion or action between the frames..."
+                rows={3}
+                className="bg-background resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowGenerateVideoDialog(false)}
+              disabled={isGeneratingVideo}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleGenerateVideoSubmit}
+              disabled={isGeneratingVideo || !generatePrompt.trim()}
+            >
+              {isGeneratingVideo ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Video
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Screenplay Edit Dialog */}
       <Dialog
         open={isEditingScreenplay}
@@ -1019,6 +1516,15 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden video upload input */}
+      <input
+        ref={videoUploadInputRef}
+        type="file"
+        accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+        onChange={handleVideoFileSelect}
+        className="hidden"
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

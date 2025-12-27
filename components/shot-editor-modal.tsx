@@ -1,18 +1,17 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import Image from "next/image";
 import {
   Film,
   Image as ImageIcon,
   Loader2,
-  Plus,
   Sparkles,
   Trash2,
   Upload,
   Video,
   X,
 } from "lucide-react";
+import Image from "next/image";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Shot, GenerationMode, TransitionType, Transition } from "@/lib/scenes-client";
+import type { GenerationMode, Shot, Transition, TransitionType } from "@/lib/scenes-client";
 
 // ============================================================================
 // TYPES
@@ -117,17 +116,14 @@ function ImageDropZone({
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith("image/")) {
-        onImageSelect(file);
-      }
-    },
-    [onImageSelect]
-  );
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file?.type.startsWith("image/")) {
+      onImag?.type.startsWith;
+    }
+  }, []);
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,12 +140,7 @@ function ImageDropZone({
       <Label className="text-sm">{label}</Label>
       {imageUrl ? (
         <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
-          <Image
-            src={imageUrl}
-            alt={label}
-            fill
-            className="object-cover"
-          />
+          <Image src={imageUrl} alt={label} fill className="object-cover" />
           <button
             type="button"
             onClick={onImageRemove}
@@ -166,15 +157,13 @@ function ImageDropZone({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`
-            aspect-video rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors
+            aspect-video px-2 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors
             ${isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"}
             ${disabled ? "opacity-50 cursor-not-allowed" : ""}
           `}
         >
           <ImageIcon className="h-8 w-8 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            Drop image or click to upload
-          </span>
+          <span className="text-sm text-muted-foreground px-4">Drop image or click to upload</span>
         </div>
       )}
       <input
@@ -188,10 +177,6 @@ function ImageDropZone({
     </div>
   );
 }
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
 
 export function ShotEditorModal({
   shot,
@@ -212,15 +197,9 @@ export function ShotEditorModal({
   const [generationMode, setGenerationMode] = useState<GenerationMode>(
     shot?.generationMode || "text-only"
   );
-  const [startFrameImage, setStartFrameImage] = useState<string | undefined>(
-    shot?.startFrameImage
-  );
-  const [endFrameImage, setEndFrameImage] = useState<string | undefined>(
-    shot?.endFrameImage
-  );
-  const [referenceImages, setReferenceImages] = useState<string[]>(
-    shot?.referenceImages || []
-  );
+  const [startFrameImage, setStartFrameImage] = useState<string | undefined>(shot?.startFrameImage);
+  const [endFrameImage, setEndFrameImage] = useState<string | undefined>(shot?.endFrameImage);
+  const [referenceImages, setReferenceImages] = useState<string[]>(shot?.referenceImages || []);
   const [transitionType, setTransitionType] = useState<TransitionType>(
     shot?.transitionOut?.type || "none"
   );
@@ -233,7 +212,7 @@ export function ShotEditorModal({
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when shot changes
-  const resetState = useCallback(() => {
+  const _resetState = useCallback(() => {
     setTitle(shot?.title || "");
     setPrompt(shot?.prompt || "");
     setSourceType(shot?.sourceType || "generated");
@@ -246,10 +225,7 @@ export function ShotEditorModal({
   }, [shot]);
 
   // Handle image upload for a specific slot
-  const handleImageUpload = async (
-    file: File,
-    slot: "start" | "end" | "reference"
-  ) => {
+  const handleImageUpload = async (file: File, slot: "start" | "end" | "reference") => {
     setIsUploading(true);
     try {
       const formData = new FormData();
@@ -499,9 +475,7 @@ export function ShotEditorModal({
                       <SelectItem key={mode.value} value={mode.value}>
                         <div>
                           <div className="font-medium">{mode.label}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {mode.description}
-                          </div>
+                          <div className="text-xs text-muted-foreground">{mode.description}</div>
                         </div>
                       </SelectItem>
                     ))}
@@ -607,11 +581,7 @@ export function ShotEditorModal({
               />
               {shot.video?.url ? (
                 <div className="relative aspect-video rounded-lg overflow-hidden border border-border">
-                  <video
-                    src={shot.video.url}
-                    controls
-                    className="w-full h-full object-cover"
-                  />
+                  <video src={shot.video.url} controls className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <button
@@ -625,9 +595,7 @@ export function ShotEditorModal({
                   ) : (
                     <>
                       <Video className="h-8 w-8 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">
-                        Click to upload video
-                      </span>
+                      <span className="text-sm text-muted-foreground">Click to upload video</span>
                     </>
                   )}
                 </button>
@@ -691,11 +659,7 @@ export function ShotEditorModal({
             </Button>
           )}
           <div className="flex-1" />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           {sourceType === "generated" ? (
@@ -728,4 +692,3 @@ export function ShotEditorModal({
 }
 
 export default ShotEditorModal;
-

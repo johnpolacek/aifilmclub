@@ -497,9 +497,5 @@ export default function Timeline({
   );
 }
 
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
 export { TransitionIcon, ShotCard, AudioTrackRow };
 export type { TimelineProps };
