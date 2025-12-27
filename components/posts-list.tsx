@@ -20,6 +20,7 @@ interface PostsListProps {
   authorName?: string;
   username?: string;
   projectSlug?: string;
+  showAddButton?: boolean; // Control whether to show the Add New Post button
 }
 
 export function PostsList({
@@ -30,6 +31,7 @@ export function PostsList({
   authorName,
   username,
   projectSlug,
+  showAddButton = true, // Default to true for backward compatibility
 }: PostsListProps) {
   const { user, isLoaded } = useUser();
   const [isOwner, setIsOwner] = useState(false);
@@ -89,7 +91,7 @@ export function PostsList({
 
   return (
     <div className="space-y-6">
-      {canEditPosts && (
+      {canEditPosts && showAddButton && (
         <div>
           <Link href={`/dashboard/projects/${projectId}/posts/new`}>
             <Button>
@@ -107,9 +109,9 @@ export function PostsList({
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-8">
           {posts.map((post) => (
-            <Card key={post.id} className="bg-muted/30 border-border">
+            <Card key={post.id} className="bg-muted/30 border-border overflow-hidden">
               <CardContent className="px-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">

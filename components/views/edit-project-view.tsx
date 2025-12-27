@@ -1,8 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { PostsList } from "@/components/posts-list";
 import type { ProjectFormData } from "@/components/project-form";
 import ProjectForm from "@/components/project-form";
+import { Button } from "@/components/ui/button";
 import type { Post } from "@/lib/posts";
 
 interface EditProjectViewProps {
@@ -53,7 +54,7 @@ export function EditProjectView({
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </Link>
 
-        <div className="space-y-8">
+        <div className="space-y-12">
           <ProjectForm
             initialData={projectData}
             projectId={projectId}
@@ -62,17 +63,29 @@ export function EditProjectView({
             useGridLayout={true}
           />
 
-          <div className="w-full">
-            <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
+          <div className="w-full border-t border-border pt-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Project Posts</h2>
+              <Link href={`/dashboard/projects/${projectId}/posts/new`}>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Post
+                </Button>
+              </Link>
+            </div>
             <div className="space-y-4">
               {posts.map((post) => (
-                <div key={post.id} className="h-[50vh] overflow-hidden">
+                <div
+                  key={post.id}
+                  className="h-[50vh] rounded-xl border border-border overflow-hidden"
+                >
                   <PostsList
                     projectId={projectId}
                     initialPosts={[post]}
                     canEdit={true}
                     username={username}
                     projectSlug={projectSlug}
+                    showAddButton={false}
                   />
                 </div>
               ))}
