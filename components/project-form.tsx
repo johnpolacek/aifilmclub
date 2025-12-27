@@ -22,7 +22,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SceneList } from "@/components/scene-editor";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,6 +165,7 @@ interface ProjectFormProps {
   projectId?: string;
   isEditing?: boolean;
   redirectPath?: string;
+  useGridLayout?: boolean;
 }
 
 export default function ProjectForm({
@@ -172,6 +173,7 @@ export default function ProjectForm({
   projectId,
   isEditing = false,
   redirectPath = "/dashboard",
+  useGridLayout = false,
 }: ProjectFormProps) {
   const router = useRouter();
   const genreSelectId = useId();
@@ -1270,17 +1272,6 @@ export default function ProjectForm({
     }
   };
 
-  const _removeScreenplay = () => {
-    setFormData({
-      ...formData,
-      screenplay: undefined,
-      screenplayText: undefined,
-      screenplayElements: undefined,
-      setting: { ...formData.setting, locations: [] }, // Clear locations when removing screenplay
-    });
-    setShowRemoveScreenplayConfirm(false);
-  };
-
   // Compress image client-side before upload
   const compressImage = (
     file: File,
@@ -1448,13 +1439,13 @@ export default function ProjectForm({
 
   return (
     <form onSubmit={handleSubmit}>
-      <Card className="bg-card border-border">
-        <CardHeader>
+      <div>
+        <div>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pb-4">
               <Film className="h-5 w-5 text-primary" />
               {isEditing ? "Edit Project" : "Create New Project"}
-            </CardTitle>
+            </div>
             {isEditing && (
               <div className="flex items-center gap-2 text-sm">
                 {autoSaveStatus === "saving" && (
@@ -1478,197 +1469,19 @@ export default function ProjectForm({
               </div>
             )}
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Project Info Section */}
-          {!isEditingProjectInfo ? (
-            /* Compact Project Info View */
-            <div className="flex flex-col sm:flex-row gap-4 p-4 rounded-lg border border-border bg-muted/30">
-              {/* Thumbnail */}
-              <div className="w-full sm:w-48 md:w-64 shrink-0">
-                <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted">
-                  {formData.thumbnail && formData.username ? (
-                    <OptimizedImage
-                      type="thumbnail"
-                      filename={formData.thumbnail}
-                      username={formData.username}
-                      alt="Project image"
-                      fill
-                      objectFit="cover"
-                      sizes="256px"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Film className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Info */}
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="text-2xl font-semibold truncate">
-                      {formData.title || "Untitled Project"}
-                    </h3>
-                    {formData.logline && (
-                      <p className="text-muted-foreground line-clamp-2">{formData.logline}</p>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingProjectInfo(true)}
-                    className="shrink-0 bg-transparent"
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.genre && (
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
-                      {formData.genre}
-                    </span>
-                  )}
-                  {formData.duration && (
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground">
-                      {formData.duration}
-                    </span>
-                  )}
-                </div>
-                {formData.filmLink && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    <LinkIcon className="h-3 w-3 inline mr-1" />
-                    {formData.filmLink}
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Expanded Project Info Edit Form */
-            <div className="space-y-6 p-4 rounded-lg border border-border bg-muted/10">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">Project Info</h3>
-                {isEditing && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingProjectInfo(false)}
-                    className="bg-transparent"
-                  >
-                    Done
-                  </Button>
-                )}
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Project Title *</Label>
-                    <Input
-                      id="title"
-                      placeholder="Enter your project title"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="bg-background"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="logline">Logline</Label>
-                    <Input
-                      id="logline"
-                      placeholder="A one-sentence summary of your film's story"
-                      value={formData.logline || ""}
-                      onChange={(e) => setFormData({ ...formData, logline: e.target.value })}
-                      className="bg-background"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      A brief, compelling description of your film in 1-2 sentences
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="genre">Genre</Label>
-                      <Select
-                        value={formData.genre}
-                        onValueChange={(value) => setFormData({ ...formData, genre: value })}
-                      >
-                        <SelectTrigger className="w-full bg-background" id={genreSelectId}>
-                          <SelectValue placeholder="Select genre..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Action">Action</SelectItem>
-                          <SelectItem value="Animation">Animation</SelectItem>
-                          <SelectItem value="Comedy">Comedy</SelectItem>
-                          <SelectItem value="Documentary">Documentary</SelectItem>
-                          <SelectItem value="Drama">Drama</SelectItem>
-                          <SelectItem value="Fantasy">Fantasy</SelectItem>
-                          <SelectItem value="Horror">Horror</SelectItem>
-                          <SelectItem value="Romance">Romance</SelectItem>
-                          <SelectItem value="Sci-Fi">Sci-Fi</SelectItem>
-                          <SelectItem value="Thriller">Thriller</SelectItem>
-                          <SelectItem value="Experimental">Experimental</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="duration">Duration</Label>
-                      <Select
-                        value={formData.duration}
-                        onValueChange={(value) => setFormData({ ...formData, duration: value })}
-                      >
-                        <SelectTrigger className="w-full bg-background" id={durationSelectId}>
-                          <SelectValue placeholder="Select duration..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Short (< 5 min)">Short (&lt; 5 min)</SelectItem>
-                          <SelectItem value="Medium (5-20 min)">Medium (5-20 min)</SelectItem>
-                          <SelectItem value="Long (20-50 min)">Long (20-60 min)</SelectItem>
-                          <SelectItem value="Feature (60+ min)">Feature (60+ min)</SelectItem>
-                          <SelectItem value="Series/Episode">Series / Episodic</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="filmLink">Film Link</Label>
-                    <Input
-                      id="filmLink"
-                      placeholder="YouTube or Vimeo URL (e.g., https://youtube.com/watch?v=...)"
-                      value={formData.filmLink || ""}
-                      onChange={(e) => setFormData({ ...formData, filmLink: e.target.value })}
-                      className="bg-background"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Add a link to your film on YouTube or Vimeo
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="thumbnail">Project Image</Label>
-                  <div className="space-y-4">
-                    {/* Thumbnail Preview */}
-                    <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                      {previewImage ? (
-                        <ImagePreview
-                          src={previewImage}
-                          isUploading={isUploadingImage}
-                          isUploaded={!!formData.thumbnail}
-                          alt="Project image"
-                          aspectRatio="video"
-                          objectFit="cover"
-                        />
-                      ) : formData.thumbnail && formData.username ? (
+        </div>
+        <div className={useGridLayout ? "grid grid-cols-3 gap-6" : "space-y-6"}>
+          {/* Left Column - Project Info, Screenplay, Links, Tools */}
+          {useGridLayout && (
+            <div className="space-y-6 pr-8 border-r border-border">
+              {/* Project Info Section */}
+              {!isEditingProjectInfo ? (
+                /* Compact Project Info View */
+                <div className="flex flex-col gap-4">
+                  {/* Thumbnail */}
+                  <div className="w-full">
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted">
+                      {formData.thumbnail && formData.username ? (
                         <OptimizedImage
                           type="thumbnail"
                           filename={formData.thumbnail}
@@ -1676,918 +1489,2273 @@ export default function ProjectForm({
                           alt="Project image"
                           fill
                           objectFit="cover"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          sizes="256px"
                         />
-                      ) : null}
-                      {/* Upload overlay */}
-                      <button
-                        type="button"
-                        onClick={handleImageClick}
-                        disabled={isUploadingImage}
-                        className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
-                        aria-label="Upload project image"
-                      >
-                        {isUploadingImage ? (
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-                        ) : (
-                          <div className="flex flex-col items-center gap-2">
-                            <Camera className="h-8 w-8 text-white" />
-                            <span className="text-sm text-white font-medium">
-                              {formData.thumbnail ? "Change Image" : "Upload Image"}
-                            </span>
-                          </div>
-                        )}
-                      </button>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Film className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                      )}
                     </div>
-
-                    {/* Upload Button */}
-                    <div className="flex items-center gap-4">
+                  </div>
+                  {/* Info */}
+                  <div className="w-full space-y-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="text-2xl font-semibold truncate">
+                          {formData.title || "Untitled Project"}
+                        </h3>
+                        {formData.logline && (
+                          <p className="text-muted-foreground line-clamp-2">{formData.logline}</p>
+                        )}
+                      </div>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleImageClick}
-                        disabled={isUploadingImage}
+                        size="sm"
+                        onClick={() => setIsEditingProjectInfo(true)}
+                        className="shrink-0 bg-transparent"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.genre && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                          {formData.genre}
+                        </span>
+                      )}
+                      {formData.duration && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                          {formData.duration}
+                        </span>
+                      )}
+                    </div>
+                    {formData.filmLink && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        <LinkIcon className="h-3 w-3 inline mr-1" />
+                        {formData.filmLink}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Expanded Project Info Edit Form */
+                <div className="space-y-6 p-4 rounded-lg border border-border bg-muted/10">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium">Project Info</h3>
+                    {isEditing && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingProjectInfo(false)}
                         className="bg-transparent"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        {isUploadingImage
-                          ? "Uploading..."
-                          : formData.thumbnail
-                            ? "Change Image"
-                            : "Upload Image"}
+                        Done
                       </Button>
-                      <span className="text-sm text-muted-foreground">
-                        {formData.thumbnail ? "Image uploaded" : "No image selected"}
-                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Project Title *</Label>
+                      <Input
+                        id="title"
+                        placeholder="Enter your project title"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="bg-background"
+                        required
+                      />
                     </div>
 
-                    {/* Hidden file input */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      disabled={isUploadingImage}
-                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="logline">Logline</Label>
+                      <Input
+                        id="logline"
+                        placeholder="A one-sentence summary of your film's story"
+                        value={formData.logline || ""}
+                        onChange={(e) => setFormData({ ...formData, logline: e.target.value })}
+                        className="bg-background"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        A brief, compelling description of your film in 1-2 sentences
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="genre">Genre</Label>
+                        <Select
+                          value={formData.genre}
+                          onValueChange={(value) => setFormData({ ...formData, genre: value })}
+                        >
+                          <SelectTrigger className="w-full bg-background" id={genreSelectId}>
+                            <SelectValue placeholder="Select genre..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Action">Action</SelectItem>
+                            <SelectItem value="Animation">Animation</SelectItem>
+                            <SelectItem value="Comedy">Comedy</SelectItem>
+                            <SelectItem value="Documentary">Documentary</SelectItem>
+                            <SelectItem value="Drama">Drama</SelectItem>
+                            <SelectItem value="Fantasy">Fantasy</SelectItem>
+                            <SelectItem value="Horror">Horror</SelectItem>
+                            <SelectItem value="Romance">Romance</SelectItem>
+                            <SelectItem value="Sci-Fi">Sci-Fi</SelectItem>
+                            <SelectItem value="Thriller">Thriller</SelectItem>
+                            <SelectItem value="Experimental">Experimental</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="duration">Duration</Label>
+                        <Select
+                          value={formData.duration}
+                          onValueChange={(value) => setFormData({ ...formData, duration: value })}
+                        >
+                          <SelectTrigger className="w-full bg-background" id={durationSelectId}>
+                            <SelectValue placeholder="Select duration..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Short (< 5 min)">Short (&lt; 5 min)</SelectItem>
+                            <SelectItem value="Medium (5-20 min)">Medium (5-20 min)</SelectItem>
+                            <SelectItem value="Long (20-50 min)">Long (20-60 min)</SelectItem>
+                            <SelectItem value="Feature (60+ min)">Feature (60+ min)</SelectItem>
+                            <SelectItem value="Series/Episode">Series / Episodic</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="filmLink">Film Link</Label>
+                      <Input
+                        id="filmLink"
+                        placeholder="YouTube or Vimeo URL (e.g., https://youtube.com/watch?v=...)"
+                        value={formData.filmLink || ""}
+                        onChange={(e) => setFormData({ ...formData, filmLink: e.target.value })}
+                        className="bg-background"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Add a link to your film on YouTube or Vimeo
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="thumbnail">Project Image</Label>
+                      <div className="space-y-4">
+                        {/* Thumbnail Preview */}
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                          {previewImage ? (
+                            <ImagePreview
+                              src={previewImage}
+                              isUploading={isUploadingImage}
+                              isUploaded={!!formData.thumbnail}
+                              alt="Project image"
+                              aspectRatio="video"
+                              objectFit="cover"
+                            />
+                          ) : formData.thumbnail && formData.username ? (
+                            <OptimizedImage
+                              type="thumbnail"
+                              filename={formData.thumbnail}
+                              username={formData.username}
+                              alt="Project image"
+                              fill
+                              objectFit="cover"
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
+                          ) : null}
+                          {/* Upload overlay */}
+                          <button
+                            type="button"
+                            onClick={handleImageClick}
+                            disabled={isUploadingImage}
+                            className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
+                            aria-label="Upload project image"
+                          >
+                            {isUploadingImage ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                            ) : (
+                              <div className="flex flex-col items-center gap-2">
+                                <Camera className="h-8 w-8 text-white" />
+                                <span className="text-sm text-white font-medium">
+                                  {formData.thumbnail ? "Change Image" : "Upload Image"}
+                                </span>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Upload Button */}
+                        <div className="flex items-center gap-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleImageClick}
+                            disabled={isUploadingImage}
+                            className="bg-transparent"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            {isUploadingImage
+                              ? "Uploading..."
+                              : formData.thumbnail
+                                ? "Change Image"
+                                : "Upload Image"}
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            {formData.thumbnail ? "Image uploaded" : "No image selected"}
+                          </span>
+                        </div>
+
+                        {/* Hidden file input */}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                          disabled={isUploadingImage}
+                        />
+                      </div>
+                    </div>
                   </div>
+                </div>
+              )}
+
+              {/* Screenplay Section */}
+              <div className="space-y-4 pt-4 border-t border-border" suppressHydrationWarning>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <File className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">Screenplay / Script</h3>
+                  </div>
+                  {isEditing && projectId && (formData.screenplayText || formData.screenplay) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
+                      className="bg-transparent"
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit Screenplay
+                    </Button>
+                  )}
+                </div>
+                {!formData.screenplayText && (
+                  <p className="text-sm text-muted-foreground">
+                    Upload a PDF screenplay or use the editor to write your screenplay. The text
+                    will be automatically extracted from PDFs.
+                  </p>
+                )}
+
+                {/* Screenplay Status - One Line */}
+                {formData.screenplayText ? (
+                  <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 rounded-lg border border-border">
+                    <span className="text-sm text-muted-foreground">
+                      {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length}{" "}
+                      words • {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0}{" "}
+                      scenes
+                    </span>
+                    <div className="flex items-center gap-3">
+                      {showRemoveScreenplayConfirm ? (
+                        <>
+                          <span className="text-xs text-muted-foreground">Replace screenplay?</span>
+                          <button
+                            onClick={() => {
+                              setShowRemoveScreenplayConfirm(false);
+                              projectFileInputRef.current?.click();
+                            }}
+                            type="button"
+                            className="text-primary hover:text-primary/80 font-medium text-xs"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setShowRemoveScreenplayConfirm(false)}
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setShowRemoveScreenplayConfirm(true)}
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Replace
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleProjectFileClick}
+                    disabled={isUploadingFile}
+                    className="bg-transparent"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {isUploadingFile ? "Uploading..." : "Upload PDF"}
+                  </Button>
+                )}
+
+                {/* Hidden file input - Always rendered so ref is always available */}
+                <input
+                  ref={projectFileInputRef}
+                  type="file"
+                  onChange={handleProjectFileChange}
+                  className="hidden"
+                  disabled={isUploadingFile}
+                  accept=".pdf,application/pdf"
+                />
+              </div>
+
+              {/* Project Links Section */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Project Links</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add links to your project (YouTube, Vimeo, Instagram, etc.)
+                </p>
+
+                <div className="space-y-3">
+                  {formData.links.links.map((link, index) => (
+                    <div
+                      key={`${link.label}-${link.url}-${index}`}
+                      className="flex items-center gap-2 p-3 bg-muted/30 rounded-md"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{link.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{link.url}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeLink(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter URL (e.g., https://youtube.com/watch?v=...)"
+                      value={newLinkUrl}
+                      onChange={(e) => setNewLinkUrl(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addLink();
+                        }
+                      }}
+                      className="bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addLink}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tools Section */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Tools</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add the tools you used, organized by category
+                </p>
+
+                {/* Add tools by category */}
+                <div className="space-y-4">
+                  {(["video", "image", "sound", "other"] as ToolCategory[]).map((category) => {
+                    const toolsInCategory = getToolsByCategory(category);
+                    return (
+                      <div key={category} className="space-y-2">
+                        <Label htmlFor={`tool-${category}`}>
+                          {getCategoryLabel(category)}
+                          {category === "video" && !hasVideoTool && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        {/* Display added tools for this category */}
+                        {toolsInCategory.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {toolsInCategory.map((tool, _index) => {
+                              const globalIndex = formData.tools.indexOf(tool);
+                              return (
+                                <div
+                                  key={`${category}-${tool.name}-${globalIndex}`}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm"
+                                >
+                                  <span>{tool.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTool(globalIndex)}
+                                    className="hover:text-primary/70 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <Select
+                            value={selectedTool[category]}
+                            onValueChange={(value) => {
+                              setSelectedTool({ ...selectedTool, [category]: value });
+                              if (value !== "Other") {
+                                // Auto-add tool when selected (not "Other")
+                                addTool(category, value);
+                              } else {
+                                setCustomToolInput({ ...customToolInput, [category]: "" });
+                              }
+                            }}
+                            key={`tool-select-${category}`}
+                          >
+                            <SelectTrigger className="w-full bg-background">
+                              <SelectValue
+                                placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COMMON_TOOLS[category].map((tool) => (
+                                <SelectItem key={tool} value={tool}>
+                                  {tool}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedTool[category] === "Other" && (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Enter custom tool"
+                                value={customToolInput[category]}
+                                onChange={(e) =>
+                                  setCustomToolInput({
+                                    ...customToolInput,
+                                    [category]: e.target.value,
+                                  })
+                                }
+                                onKeyPress={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addTool(category);
+                                  }
+                                }}
+                                className="flex-1 bg-background"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => addTool(category)}
+                                disabled={!customToolInput[category].trim()}
+                                className="bg-transparent"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {category === "video" && !hasVideoTool && (
+                          <p className="text-xs text-destructive pb-2">
+                            * At least one Video Generation tool is required
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Screenplay Section */}
-          <div className="space-y-4 pt-4 border-t border-border" suppressHydrationWarning>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <File className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Screenplay / Script</h3>
-              </div>
-              {isEditing && projectId && (formData.screenplayText || formData.screenplay) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
-                  className="bg-transparent"
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit Screenplay
-                </Button>
-              )}
-            </div>
-            {!formData.screenplayText && (
-              <p className="text-sm text-muted-foreground">
-                Upload a PDF screenplay or use the editor to write your screenplay. The text will be
-                automatically extracted from PDFs.
-              </p>
-            )}
+          {/* Right Column - Characters, Locations, Scenes (col-span-2) */}
+          {useGridLayout && (
+            <div className="col-span-2 space-y-6">
+              {/* Characters Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Characters</h3>
+                </div>
 
-            {/* Screenplay Status - One Line */}
-            {formData.screenplayText ? (
-              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 rounded-lg border border-border">
-                <span className="text-sm text-muted-foreground">
-                  {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length} words •{" "}
-                  {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0} scenes
-                </span>
-                <div className="flex items-center gap-3">
-                  {showRemoveScreenplayConfirm ? (
-                    <>
-                      <span className="text-xs text-muted-foreground">Replace screenplay?</span>
-                      <button
-                        onClick={() => {
-                          setShowRemoveScreenplayConfirm(false);
-                          projectFileInputRef.current?.click();
-                        }}
-                        type="button"
-                        className="text-primary hover:text-primary/80 font-medium text-xs"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setShowRemoveScreenplayConfirm(false)}
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground text-xs"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setShowRemoveScreenplayConfirm(true)}
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Replace
-                    </button>
+                <div className="space-y-2">
+                  {/* Character List - Compact One-Liner View */}
+                  {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
+                    <div className="space-y-1.5">
+                      {(formData.characters || []).map((character, index) => (
+                        <button
+                          key={`character-compact-${index}`}
+                          type="button"
+                          className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                          onClick={() => setEditingCharacterIndex(index)}
+                        >
+                          {/* Character Image - Super Small */}
+                          <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                            {character.mainImage && formData.username ? (
+                              <OptimizedImage
+                                type="character"
+                                filename={character.mainImage}
+                                username={formData.username}
+                                alt={character.name || "Character"}
+                                width={32}
+                                height={32}
+                                objectFit="cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-muted">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Character Name */}
+                          <span className="font-medium text-sm shrink-0">
+                            {character.name || "Unnamed"}
+                          </span>
+
+                          {/* Character Appearance - Truncated */}
+                          <span className="text-xs text-muted-foreground truncate flex-1">
+                            {character.appearance || "No appearance description"}
+                          </span>
+
+                          {/* Additional Images Count */}
+                          {(character.images?.length || 0) > 0 && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              +{character.images?.length} img
+                            </span>
+                          )}
+
+                          {/* Edit indicator */}
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                      ))}
+                    </div>
                   )}
-                </div>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleProjectFileClick}
-                disabled={isUploadingFile}
-                className="bg-transparent"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isUploadingFile ? "Uploading..." : "Upload PDF"}
-              </Button>
-            )}
 
-            {/* Hidden file input - Always rendered so ref is always available */}
-            <input
-              ref={projectFileInputRef}
-              type="file"
-              onChange={handleProjectFileChange}
-              className="hidden"
-              disabled={isUploadingFile}
-              accept=".pdf,application/pdf"
-            />
-          </div>
-
-          {/* Characters Section */}
-          <div className="space-y-3 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Characters</h3>
-            </div>
-
-            <div className="space-y-2">
-              {/* Character List - Compact One-Liner View */}
-              {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
-                <div className="space-y-1.5">
-                  {(formData.characters || []).map((character, index) => (
-                    <button
-                      key={`character-compact-${index}`}
-                      type="button"
-                      className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                      onClick={() => setEditingCharacterIndex(index)}
-                    >
-                      {/* Character Image - Super Small */}
-                      <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                        {character.mainImage && formData.username ? (
-                          <OptimizedImage
-                            type="character"
-                            filename={character.mainImage}
-                            username={formData.username}
-                            alt={character.name || "Character"}
-                            width={32}
-                            height={32}
-                            objectFit="cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-muted">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                  {/* Character Edit Form - Expanded View */}
+                  {editingCharacterIndex !== null &&
+                    formData.characters?.[editingCharacterIndex] && (
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">Edit Character</h4>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingCharacterIndex(null)}
+                                className="bg-transparent"
+                              >
+                                Done
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  removeCharacter(editingCharacterIndex);
+                                  setEditingCharacterIndex(null);
+                                }}
+                                className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Character Name */}
-                      <span className="font-medium text-sm shrink-0">
-                        {character.name || "Unnamed"}
-                      </span>
-
-                      {/* Character Appearance - Truncated */}
-                      <span className="text-xs text-muted-foreground truncate flex-1">
-                        {character.appearance || "No appearance description"}
-                      </span>
-
-                      {/* Additional Images Count */}
-                      {(character.images?.length || 0) > 0 && (
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          +{character.images?.length} img
-                        </span>
-                      )}
-
-                      {/* Edit indicator */}
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Character Edit Form - Expanded View */}
-              {editingCharacterIndex !== null && formData.characters?.[editingCharacterIndex] && (
-                <Card className="bg-muted/30 border-border">
-                  <CardContent className="p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">Edit Character</h4>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingCharacterIndex(null)}
-                          className="bg-transparent"
-                        >
-                          Done
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            removeCharacter(editingCharacterIndex);
-                            setEditingCharacterIndex(null);
-                          }}
-                          className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Character Name */}
-                    <div className="space-y-2">
-                      <Label htmlFor={`character-name-${editingCharacterIndex}`}>Name</Label>
-                      <Input
-                        id={`character-name-${editingCharacterIndex}`}
-                        placeholder="Enter character name"
-                        value={formData.characters[editingCharacterIndex].name}
-                        onChange={(e) =>
-                          updateCharacter(editingCharacterIndex, "name", e.target.value)
-                        }
-                        className="bg-background"
-                      />
-                    </div>
-
-                    {/* Character Main Image */}
-                    <div className="space-y-2">
-                      <Label>Main Image</Label>
-                      <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted/30">
-                        {characterPreviewImages[editingCharacterIndex] ? (
-                          <div className="relative group">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={characterPreviewImages[editingCharacterIndex]}
-                              alt={formData.characters[editingCharacterIndex].name || "Character"}
-                              className="w-full h-auto"
+                          {/* Character Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`character-name-${editingCharacterIndex}`}>Name</Label>
+                            <Input
+                              id={`character-name-${editingCharacterIndex}`}
+                              placeholder="Enter character name"
+                              value={formData.characters[editingCharacterIndex].name}
+                              onChange={(e) =>
+                                updateCharacter(editingCharacterIndex, "name", e.target.value)
+                              }
+                              className="bg-background"
                             />
-                            <button
-                              type="button"
-                              onClick={() => handleCharacterMainImageClick(editingCharacterIndex)}
-                              disabled={uploadingCharacterIndex === editingCharacterIndex}
-                              className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                              aria-label="Upload character main image"
-                            >
-                              {uploadingCharacterIndex === editingCharacterIndex ? (
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-                              ) : (
-                                <Camera className="h-8 w-8 text-white" />
-                              )}
-                            </button>
                           </div>
-                        ) : formData.characters[editingCharacterIndex].mainImage &&
-                          formData.username ? (
-                          <div className="relative group">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={getImageUrl({
-                                type: "character",
-                                filename: formData.characters[editingCharacterIndex].mainImage!,
-                                username: formData.username,
-                              })}
-                              alt={formData.characters[editingCharacterIndex].name || "Character"}
-                              className="w-full h-auto"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleCharacterMainImageClick(editingCharacterIndex)}
-                              disabled={uploadingCharacterIndex === editingCharacterIndex}
-                              className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                              aria-label="Upload character main image"
-                            >
-                              {uploadingCharacterIndex === editingCharacterIndex ? (
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-                              ) : (
-                                <Camera className="h-8 w-8 text-white" />
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="w-full min-h-[200px] flex items-center justify-center relative group">
-                            <User className="h-12 w-12 text-muted-foreground" />
-                            <button
-                              type="button"
-                              onClick={() => handleCharacterMainImageClick(editingCharacterIndex)}
-                              disabled={uploadingCharacterIndex === editingCharacterIndex}
-                              className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                              aria-label="Upload character main image"
-                            >
-                              {uploadingCharacterIndex === editingCharacterIndex ? (
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
-                              ) : (
-                                <Camera className="h-8 w-8 text-white" />
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <input
-                        ref={(el) => {
-                          characterFileInputRefs.current[editingCharacterIndex] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleCharacterMainImageChange(e, editingCharacterIndex)}
-                        className="hidden"
-                        disabled={uploadingCharacterIndex === editingCharacterIndex}
-                      />
-                    </div>
 
-                    {/* Additional Character Images */}
-                    <div className="space-y-2">
-                      <Label>Additional Images (Different Angles/Attire)</Label>
-                      <div className="columns-2 md:columns-3 gap-4">
-                        {(formData.characters[editingCharacterIndex].images || []).map(
-                          (image, imageIndex) => (
-                            <div
-                              key={`${editingCharacterIndex}-${imageIndex}`}
-                              className="relative w-full mb-4 break-inside-avoid rounded-lg overflow-hidden border border-border bg-muted/30"
-                            >
-                              {characterAdditionalPreviewImages[editingCharacterIndex]?.[
-                                imageIndex
-                              ] ? (
+                          {/* Character Main Image */}
+                          <div className="space-y-2">
+                            <Label>Main Image</Label>
+                            <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted/30">
+                              {characterPreviewImages[editingCharacterIndex] ? (
                                 <div className="relative group">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={
-                                      characterAdditionalPreviewImages[editingCharacterIndex][
-                                        imageIndex
-                                      ]
+                                    src={characterPreviewImages[editingCharacterIndex]}
+                                    alt={
+                                      formData.characters[editingCharacterIndex].name || "Character"
                                     }
-                                    alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
                                     className="w-full h-auto"
                                   />
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      handleCharacterAdditionalImageClick(
-                                        editingCharacterIndex,
-                                        imageIndex
-                                      )
+                                      handleCharacterMainImageClick(editingCharacterIndex)
                                     }
-                                    disabled={
-                                      uploadingCharacterAdditionalIndex?.characterIndex ===
-                                        editingCharacterIndex &&
-                                      uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
-                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
                                     className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                                    aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                    aria-label="Upload character main image"
                                   >
-                                    {uploadingCharacterAdditionalIndex?.characterIndex ===
-                                      editingCharacterIndex &&
-                                    uploadingCharacterAdditionalIndex?.imageIndex === imageIndex ? (
-                                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
                                     ) : (
-                                      <Camera className="h-6 w-6 text-white" />
+                                      <Camera className="h-8 w-8 text-white" />
                                     )}
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      removeCharacterAdditionalImage(
-                                        editingCharacterIndex,
-                                        imageIndex
-                                      )
-                                    }
-                                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
-                                    aria-label={`Remove image ${imageIndex + 1}`}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
                                 </div>
-                              ) : image && formData.username ? (
+                              ) : formData.characters[editingCharacterIndex].mainImage &&
+                                formData.username ? (
                                 <div className="relative group">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={getImageUrl({
                                       type: "character",
-                                      filename: image,
+                                      filename:
+                                        formData.characters[editingCharacterIndex].mainImage!,
                                       username: formData.username,
                                     })}
-                                    alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
+                                    alt={
+                                      formData.characters[editingCharacterIndex].name || "Character"
+                                    }
                                     className="w-full h-auto"
                                   />
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      handleCharacterAdditionalImageClick(
-                                        editingCharacterIndex,
-                                        imageIndex
-                                      )
+                                      handleCharacterMainImageClick(editingCharacterIndex)
                                     }
-                                    disabled={
-                                      uploadingCharacterAdditionalIndex?.characterIndex ===
-                                        editingCharacterIndex &&
-                                      uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
-                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
                                     className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                                    aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                    aria-label="Upload character main image"
                                   >
-                                    {uploadingCharacterAdditionalIndex?.characterIndex ===
-                                      editingCharacterIndex &&
-                                    uploadingCharacterAdditionalIndex?.imageIndex === imageIndex ? (
-                                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
                                     ) : (
-                                      <Camera className="h-6 w-6 text-white" />
+                                      <Camera className="h-8 w-8 text-white" />
                                     )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      removeCharacterAdditionalImage(
-                                        editingCharacterIndex,
-                                        imageIndex
-                                      )
-                                    }
-                                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
-                                    aria-label={`Remove image ${imageIndex + 1}`}
-                                  >
-                                    <X className="h-3 w-3" />
                                   </button>
                                 </div>
                               ) : (
-                                <div className="w-full min-h-[150px] flex items-center justify-center relative group">
-                                  <Camera className="h-8 w-8 text-muted-foreground" />
+                                <div className="w-full min-h-[200px] flex items-center justify-center relative group">
+                                  <User className="h-12 w-12 text-muted-foreground" />
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      handleCharacterAdditionalImageClick(
-                                        editingCharacterIndex,
-                                        imageIndex
-                                      )
+                                      handleCharacterMainImageClick(editingCharacterIndex)
                                     }
-                                    disabled={
-                                      uploadingCharacterAdditionalIndex?.characterIndex ===
-                                        editingCharacterIndex &&
-                                      uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
-                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
                                     className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
-                                    aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                    aria-label="Upload character main image"
                                   >
-                                    {uploadingCharacterAdditionalIndex?.characterIndex ===
-                                      editingCharacterIndex &&
-                                    uploadingCharacterAdditionalIndex?.imageIndex === imageIndex ? (
-                                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
                                     ) : (
-                                      <Camera className="h-6 w-6 text-white" />
+                                      <Camera className="h-8 w-8 text-white" />
                                     )}
                                   </button>
                                 </div>
                               )}
-                              <input
-                                ref={(el) => {
-                                  characterAdditionalFileInputRefs.current[
-                                    `${editingCharacterIndex}-${imageIndex}`
-                                  ] = el;
-                                }}
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) =>
-                                  handleCharacterAdditionalImageChange(
-                                    e,
-                                    editingCharacterIndex,
-                                    imageIndex
-                                  )
-                                }
-                                className="hidden"
-                                disabled={
-                                  uploadingCharacterAdditionalIndex?.characterIndex ===
-                                    editingCharacterIndex &&
-                                  uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
-                                }
-                              />
                             </div>
-                          )
-                        )}
-                        <div className="relative w-full mb-4 break-inside-avoid">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleAddCharacterAdditionalImageClick(editingCharacterIndex)
-                            }
-                            className="relative w-full min-h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center"
-                            aria-label="Add additional character image"
-                          >
-                            <Plus className="h-8 w-8 text-muted-foreground" />
                             <input
                               ref={(el) => {
-                                characterAddImageInputRefs.current[editingCharacterIndex] = el;
+                                characterFileInputRefs.current[editingCharacterIndex] = el;
                               }}
                               type="file"
                               accept="image/*"
                               onChange={(e) =>
-                                handleAddCharacterAdditionalImageChange(e, editingCharacterIndex)
+                                handleCharacterMainImageChange(e, editingCharacterIndex)
                               }
                               className="hidden"
-                              disabled={
-                                uploadingCharacterAdditionalIndex?.characterIndex ===
-                                editingCharacterIndex
-                              }
+                              disabled={uploadingCharacterIndex === editingCharacterIndex}
                             />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                          </div>
 
-                    {/* Character Appearance */}
-                    <div className="space-y-2">
-                      <Label htmlFor={`character-appearance-${editingCharacterIndex}`}>
-                        Appearance
-                      </Label>
-                      <Textarea
-                        id={`character-appearance-${editingCharacterIndex}`}
-                        placeholder="Describe this character's appearance..."
-                        value={formData.characters[editingCharacterIndex].appearance}
-                        onChange={(e) =>
-                          updateCharacter(editingCharacterIndex, "appearance", e.target.value)
-                        }
-                        rows={3}
-                        className="bg-background resize-none"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addCharacter}
-                className="bg-transparent"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Character
-              </Button>
-            </div>
-          </div>
-
-          {/* Locations/Settings Section - Compact View */}
-          <div className="pt-4 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Camera className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Locations</h3>
-                <span className="text-sm text-muted-foreground">
-                  ({(formData.setting?.locations || []).length})
-                </span>
-              </div>
-              {(formData.setting?.locations || []).length > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
-                  className="text-muted-foreground"
-                >
-                  {isLocationsExpanded ? "Collapse" : "Add Location Images"}
-                </Button>
-              )}
-            </div>
-
-            {/* Expanded Location Editor */}
-            {isLocationsExpanded && (formData.setting?.locations || []).length > 0 && (
-              <div className="mt-3 space-y-2">
-                {(formData.setting?.locations || []).map((location, index) => (
-                  <div
-                    key={`location-${index}`}
-                    className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
-                  >
-                    {/* Location Name (read-only display) */}
-                    <span className="flex-1 text-sm font-medium truncate px-2">
-                      {location.name}
-                    </span>
-
-                    {/* Images */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Main Image */}
-                      {locationPreviewImages[index] ? (
-                        <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
-                          <img
-                            src={locationPreviewImages[index]}
-                            alt={location.name || "Location"}
-                            className="w-full h-full object-cover"
-                          />
-                          {uploadingLocationIndex === index && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <Loader2 className="h-3 w-3 animate-spin text-white" />
+                          {/* Additional Character Images */}
+                          <div className="space-y-2">
+                            <Label>Additional Images (Different Angles/Attire)</Label>
+                            <div className="columns-2 md:columns-3 gap-4">
+                              {(formData.characters[editingCharacterIndex].images || []).map(
+                                (image, imageIndex) => (
+                                  <div
+                                    key={`${editingCharacterIndex}-${imageIndex}`}
+                                    className="relative w-full mb-4 break-inside-avoid rounded-lg overflow-hidden border border-border bg-muted/30"
+                                  >
+                                    {characterAdditionalPreviewImages[editingCharacterIndex]?.[
+                                      imageIndex
+                                    ] ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            characterAdditionalPreviewImages[editingCharacterIndex][
+                                              imageIndex
+                                            ]
+                                          }
+                                          alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeCharacterAdditionalImage(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : image && formData.username ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={getImageUrl({
+                                            type: "character",
+                                            filename: image,
+                                            username: formData.username,
+                                          })}
+                                          alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeCharacterAdditionalImage(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-full min-h-[150px] flex items-center justify-center relative group">
+                                        <Camera className="h-8 w-8 text-muted-foreground" />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                    <input
+                                      ref={(el) => {
+                                        characterAdditionalFileInputRefs.current[
+                                          `${editingCharacterIndex}-${imageIndex}`
+                                        ] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleCharacterAdditionalImageChange(
+                                          e,
+                                          editingCharacterIndex,
+                                          imageIndex
+                                        )
+                                      }
+                                      className="hidden"
+                                      disabled={
+                                        uploadingCharacterAdditionalIndex?.characterIndex ===
+                                          editingCharacterIndex &&
+                                        uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
+                                      }
+                                    />
+                                  </div>
+                                )
+                              )}
+                              <div className="relative w-full mb-4 break-inside-avoid">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddCharacterAdditionalImageClick(editingCharacterIndex)
+                                  }
+                                  className="relative w-full min-h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center"
+                                  aria-label="Add additional character image"
+                                >
+                                  <Plus className="h-8 w-8 text-muted-foreground" />
+                                  <input
+                                    ref={(el) => {
+                                      characterAddImageInputRefs.current[editingCharacterIndex] =
+                                        el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleAddCharacterAdditionalImageChange(
+                                        e,
+                                        editingCharacterIndex
+                                      )
+                                    }
+                                    className="hidden"
+                                    disabled={
+                                      uploadingCharacterAdditionalIndex?.characterIndex ===
+                                      editingCharacterIndex
+                                    }
+                                  />
+                                </button>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      ) : location.image && formData.username ? (
-                        <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
-                          <OptimizedImage
-                            type="location"
-                            filename={location.image}
-                            username={formData.username}
-                            alt={location.name || "Location"}
-                            fill
-                            objectFit="cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleLocationMainImageClick(index)}
-                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                          >
-                            <Pencil className="h-2 w-2 text-white" />
-                          </button>
-                        </div>
-                      ) : null}
+                          </div>
 
-                      {/* Additional Images */}
-                      {(location.images || []).map((image, imageIndex) => (
-                        <div
-                          key={`${index}-${imageIndex}`}
-                          className="relative w-12 h-8 rounded overflow-hidden border border-border group"
-                        >
-                          {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
-                            <img
-                              src={locationAdditionalPreviewImages[index][imageIndex]}
-                              alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                              className="w-full h-full object-cover"
+                          {/* Character Appearance */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`character-appearance-${editingCharacterIndex}`}>
+                              Appearance
+                            </Label>
+                            <Textarea
+                              id={`character-appearance-${editingCharacterIndex}`}
+                              placeholder="Describe this character's appearance..."
+                              value={formData.characters[editingCharacterIndex].appearance}
+                              onChange={(e) =>
+                                updateCharacter(editingCharacterIndex, "appearance", e.target.value)
+                              }
+                              rows={3}
+                              className="bg-background resize-none"
                             />
-                          ) : formData.username ? (
-                            <OptimizedImage
-                              type="location"
-                              filename={image}
-                              username={formData.username}
-                              alt={`${location.name || "Location"} - ${imageIndex + 1}`}
-                              fill
-                              objectFit="cover"
-                            />
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => removeLocationAdditionalImage(index, imageIndex)}
-                            disabled={
-                              uploadingLocationAdditionalIndex?.locationIndex === index &&
-                              uploadingLocationAdditionalIndex?.imageIndex === imageIndex
-                            }
-                            className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
-                          >
-                            <X className="h-2 w-2" />
-                          </button>
-                        </div>
-                      ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
 
-                      {/* Add Image Button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!location.image && !locationPreviewImages[index]) {
-                            handleLocationMainImageClick(index);
-                          } else {
-                            handleAddLocationAdditionalImageClick(index);
-                          }
-                        }}
-                        disabled={uploadingLocationIndex === index}
-                        className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
-                      >
-                        {uploadingLocationIndex === index ? (
-                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                        ) : (
-                          <Plus className="h-3 w-3 text-muted-foreground" />
-                        )}
-                      </button>
-
-                      {/* Hidden file inputs */}
-                      <input
-                        ref={(el) => {
-                          locationFileInputRefs.current[index] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleLocationMainImageChange(e, index)}
-                        className="hidden"
-                        disabled={uploadingLocationIndex === index}
-                      />
-                      <input
-                        ref={(el) => {
-                          locationAddImageInputRefs.current[index] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
-                        className="hidden"
-                        disabled={uploadingLocationAdditionalIndex?.locationIndex === index}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Scenes Section */}
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Clapperboard className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Scenes</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Add scenes to your film. Each scene can have its own screenplay text, characters, and
-              generated images/videos.
-            </p>
-
-            <SceneList
-              projectId={projectId || "new-project"}
-              scenes={formData.scenes || []}
-              characters={formData.characters || []}
-              screenplayText={formData.screenplayText}
-              onScenesChange={(scenes) => setFormData({ ...formData, scenes })}
-            />
-          </div>
-
-          {/* Full Width Sections - Links, Tools, Screenplay */}
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <LinkIcon className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Project Links</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Add links to your project (YouTube, Vimeo, Instagram, etc.)
-            </p>
-
-            <div className="space-y-3">
-              {formData.links.links.map((link, index) => (
-                <div
-                  key={`${link.label}-${link.url}-${index}`}
-                  className="flex items-center gap-2 p-3 bg-muted/30 rounded-md"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{link.label}</p>
-                    <p className="text-xs text-muted-foreground truncate">{link.url}</p>
-                  </div>
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeLink(index)}
-                    className="text-destructive hover:text-destructive"
+                    variant="outline"
+                    onClick={addCharacter}
+                    className="bg-transparent"
                   >
-                    <X className="h-4 w-4" />
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Character
                   </Button>
                 </div>
-              ))}
-
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter URL (e.g., https://youtube.com/watch?v=...)"
-                  value={newLinkUrl}
-                  onChange={(e) => setNewLinkUrl(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addLink();
-                    }
-                  }}
-                  className="bg-background"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addLink}
-                  className="bg-transparent"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
               </div>
-            </div>
-          </div>
 
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Tools</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Add the tools you used, organized by category
-            </p>
+              {/* Locations/Settings Section - Compact View */}
+              <div className="pt-4 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">Locations</h3>
+                    <span className="text-sm text-muted-foreground">
+                      ({(formData.setting?.locations || []).length})
+                    </span>
+                  </div>
+                  {(formData.setting?.locations || []).length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
+                      className="text-muted-foreground"
+                    >
+                      {isLocationsExpanded ? "Collapse" : "Add Location Images"}
+                    </Button>
+                  )}
+                </div>
 
-            {/* Add tools by category */}
-            <div className="space-y-4">
-              {(["video", "image", "sound", "other"] as ToolCategory[]).map((category) => {
-                const toolsInCategory = getToolsByCategory(category);
-                return (
-                  <div key={category} className="space-y-2">
-                    <Label htmlFor={`tool-${category}`}>
-                      {getCategoryLabel(category)}
-                      {category === "video" && !hasVideoTool && (
-                        <span className="text-destructive ml-1">*</span>
-                      )}
-                    </Label>
-                    {/* Display added tools for this category */}
-                    {toolsInCategory.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {toolsInCategory.map((tool, _index) => {
-                          const globalIndex = formData.tools.indexOf(tool);
-                          return (
-                            <div
-                              key={`${category}-${tool.name}-${globalIndex}`}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm"
-                            >
-                              <span>{tool.name}</span>
+                {/* Expanded Location Editor */}
+                {isLocationsExpanded && (formData.setting?.locations || []).length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {(formData.setting?.locations || []).map((location, index) => (
+                      <div
+                        key={`location-${index}`}
+                        className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
+                      >
+                        {/* Location Name (read-only display) */}
+                        <span className="flex-1 text-sm font-medium truncate px-2">
+                          {location.name}
+                        </span>
+
+                        {/* Images */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Main Image */}
+                          {locationPreviewImages[index] ? (
+                            <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
+                              <img
+                                src={locationPreviewImages[index]}
+                                alt={location.name || "Location"}
+                                className="w-full h-full object-cover"
+                              />
+                              {uploadingLocationIndex === index && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                </div>
+                              )}
+                            </div>
+                          ) : location.image && formData.username ? (
+                            <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
+                              <OptimizedImage
+                                type="location"
+                                filename={location.image}
+                                username={formData.username}
+                                alt={location.name || "Location"}
+                                fill
+                                objectFit="cover"
+                              />
                               <button
                                 type="button"
-                                onClick={() => removeTool(globalIndex)}
-                                className="hover:text-primary/70 transition-colors"
+                                onClick={() => handleLocationMainImageClick(index)}
+                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                               >
-                                <X className="h-3 w-3" />
+                                <Pencil className="h-2 w-2 text-white" />
                               </button>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="space-y-2">
-                      <Select
-                        value={selectedTool[category]}
-                        onValueChange={(value) => {
-                          setSelectedTool({ ...selectedTool, [category]: value });
-                          if (value !== "Other") {
-                            // Auto-add tool when selected (not "Other")
-                            addTool(category, value);
-                          } else {
-                            setCustomToolInput({ ...customToolInput, [category]: "" });
-                          }
-                        }}
-                        key={`tool-select-${category}`}
-                      >
-                        <SelectTrigger className="w-full bg-background">
-                          <SelectValue
-                            placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {COMMON_TOOLS[category].map((tool) => (
-                            <SelectItem key={tool} value={tool}>
-                              {tool}
-                            </SelectItem>
+                          ) : null}
+
+                          {/* Additional Images */}
+                          {(location.images || []).map((image, imageIndex) => (
+                            <div
+                              key={`${index}-${imageIndex}`}
+                              className="relative w-12 h-8 rounded overflow-hidden border border-border group"
+                            >
+                              {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                <img
+                                  src={locationAdditionalPreviewImages[index][imageIndex]}
+                                  alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : formData.username ? (
+                                <OptimizedImage
+                                  type="location"
+                                  filename={image}
+                                  username={formData.username}
+                                  alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                  fill
+                                  objectFit="cover"
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => removeLocationAdditionalImage(index, imageIndex)}
+                                disabled={
+                                  uploadingLocationAdditionalIndex?.locationIndex === index &&
+                                  uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                }
+                                className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                              >
+                                <X className="h-2 w-2" />
+                              </button>
+                            </div>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedTool[category] === "Other" && (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Enter custom tool"
-                            value={customToolInput[category]}
-                            onChange={(e) =>
-                              setCustomToolInput({ ...customToolInput, [category]: e.target.value })
-                            }
-                            onKeyPress={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addTool(category);
+
+                          {/* Add Image Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!location.image && !locationPreviewImages[index]) {
+                                handleLocationMainImageClick(index);
+                              } else {
+                                handleAddLocationAdditionalImageClick(index);
                               }
                             }}
-                            className="flex-1 bg-background"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => addTool(category)}
-                            disabled={!customToolInput[category].trim()}
-                            className="bg-transparent"
+                            disabled={uploadingLocationIndex === index}
+                            className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
                           >
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                            {uploadingLocationIndex === index ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            ) : (
+                              <Plus className="h-3 w-3 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {/* Hidden file inputs */}
+                          <input
+                            ref={(el) => {
+                              locationFileInputRefs.current[index] = el;
+                            }}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleLocationMainImageChange(e, index)}
+                            className="hidden"
+                            disabled={uploadingLocationIndex === index}
+                          />
+                          <input
+                            ref={(el) => {
+                              locationAddImageInputRefs.current[index] = el;
+                            }}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
+                            className="hidden"
+                            disabled={uploadingLocationAdditionalIndex?.locationIndex === index}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Scenes Section */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Clapperboard className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Scenes</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add scenes to your film. Each scene can have its own screenplay text, characters,
+                  and generated images/videos.
+                </p>
+
+                <SceneList
+                  projectId={projectId || "new-project"}
+                  scenes={formData.scenes || []}
+                  characters={formData.characters || []}
+                  screenplayText={formData.screenplayText}
+                  onScenesChange={(scenes) => setFormData({ ...formData, scenes })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Default Layout - All sections in order */}
+          {!useGridLayout && (
+            <>
+              {/* Project Info Section */}
+              {!isEditingProjectInfo ? (
+                /* Compact Project Info View */
+                <div className="flex flex-col sm:flex-row gap-4 p-4 rounded-lg border border-border bg-muted/30">
+                  {/* Thumbnail */}
+                  <div className="w-full sm:w-48 md:w-64 shrink-0">
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted">
+                      {formData.thumbnail && formData.username ? (
+                        <OptimizedImage
+                          type="thumbnail"
+                          filename={formData.thumbnail}
+                          username={formData.username}
+                          alt="Project image"
+                          fill
+                          objectFit="cover"
+                          sizes="256px"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Film className="h-8 w-8 text-muted-foreground" />
                         </div>
                       )}
                     </div>
-                    {category === "video" && !hasVideoTool && (
-                      <p className="text-xs text-destructive pb-2">
-                        * At least one Video Generation tool is required
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="text-2xl font-semibold truncate">
+                          {formData.title || "Untitled Project"}
+                        </h3>
+                        {formData.logline && (
+                          <p className="text-muted-foreground line-clamp-2">{formData.logline}</p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingProjectInfo(true)}
+                        className="shrink-0 bg-transparent"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.genre && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+                          {formData.genre}
+                        </span>
+                      )}
+                      {formData.duration && (
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                          {formData.duration}
+                        </span>
+                      )}
+                    </div>
+                    {formData.filmLink && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        <LinkIcon className="h-3 w-3 inline mr-1" />
+                        {formData.filmLink}
                       </p>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              ) : (
+                /* Expanded Project Info Edit Form */
+                <div className="space-y-6 p-4 rounded-lg border border-border bg-muted/10">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium">Project Info</h3>
+                    {isEditing && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingProjectInfo(false)}
+                        className="bg-transparent"
+                      >
+                        Done
+                      </Button>
+                    )}
+                  </div>
 
-          <div className="flex gap-3 pt-4">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Project Title *</Label>
+                        <Input
+                          id="title"
+                          placeholder="Enter your project title"
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          className="bg-background"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="logline">Logline</Label>
+                        <Input
+                          id="logline"
+                          placeholder="A one-sentence summary of your film's story"
+                          value={formData.logline || ""}
+                          onChange={(e) => setFormData({ ...formData, logline: e.target.value })}
+                          className="bg-background"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          A brief, compelling description of your film in 1-2 sentences
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="genre">Genre</Label>
+                          <Select
+                            value={formData.genre}
+                            onValueChange={(value) => setFormData({ ...formData, genre: value })}
+                          >
+                            <SelectTrigger className="w-full bg-background" id={genreSelectId}>
+                              <SelectValue placeholder="Select genre..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Action">Action</SelectItem>
+                              <SelectItem value="Animation">Animation</SelectItem>
+                              <SelectItem value="Comedy">Comedy</SelectItem>
+                              <SelectItem value="Documentary">Documentary</SelectItem>
+                              <SelectItem value="Drama">Drama</SelectItem>
+                              <SelectItem value="Fantasy">Fantasy</SelectItem>
+                              <SelectItem value="Horror">Horror</SelectItem>
+                              <SelectItem value="Romance">Romance</SelectItem>
+                              <SelectItem value="Sci-Fi">Sci-Fi</SelectItem>
+                              <SelectItem value="Thriller">Thriller</SelectItem>
+                              <SelectItem value="Experimental">Experimental</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="duration">Duration</Label>
+                          <Select
+                            value={formData.duration}
+                            onValueChange={(value) => setFormData({ ...formData, duration: value })}
+                          >
+                            <SelectTrigger className="w-full bg-background" id={durationSelectId}>
+                              <SelectValue placeholder="Select duration..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Short (< 5 min)">Short (&lt; 5 min)</SelectItem>
+                              <SelectItem value="Medium (5-20 min)">Medium (5-20 min)</SelectItem>
+                              <SelectItem value="Long (20-50 min)">Long (20-60 min)</SelectItem>
+                              <SelectItem value="Feature (60+ min)">Feature (60+ min)</SelectItem>
+                              <SelectItem value="Series/Episode">Series / Episodic</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="filmLink">Film Link</Label>
+                        <Input
+                          id="filmLink"
+                          placeholder="YouTube or Vimeo URL (e.g., https://youtube.com/watch?v=...)"
+                          value={formData.filmLink || ""}
+                          onChange={(e) => setFormData({ ...formData, filmLink: e.target.value })}
+                          className="bg-background"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Add a link to your film on YouTube or Vimeo
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="thumbnail">Project Image</Label>
+                      <div className="space-y-4">
+                        {/* Thumbnail Preview */}
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                          {previewImage ? (
+                            <ImagePreview
+                              src={previewImage}
+                              isUploading={isUploadingImage}
+                              isUploaded={!!formData.thumbnail}
+                              alt="Project image"
+                              aspectRatio="video"
+                              objectFit="cover"
+                            />
+                          ) : formData.thumbnail && formData.username ? (
+                            <OptimizedImage
+                              type="thumbnail"
+                              filename={formData.thumbnail}
+                              username={formData.username}
+                              alt="Project image"
+                              fill
+                              objectFit="cover"
+                              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            />
+                          ) : null}
+                          {/* Upload overlay */}
+                          <button
+                            type="button"
+                            onClick={handleImageClick}
+                            disabled={isUploadingImage}
+                            className="group absolute inset-0 flex items-center justify-center bg-black/60 opacity-50 hover:opacity-100 transition-all duration-300 cursor-pointer disabled:cursor-not-allowed"
+                            aria-label="Upload project image"
+                          >
+                            {isUploadingImage ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                            ) : (
+                              <div className="flex flex-col items-center gap-2">
+                                <Camera className="h-8 w-8 text-white" />
+                                <span className="text-sm text-white font-medium">
+                                  {formData.thumbnail ? "Change Image" : "Upload Image"}
+                                </span>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Upload Button */}
+                        <div className="flex items-center gap-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleImageClick}
+                            disabled={isUploadingImage}
+                            className="bg-transparent"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            {isUploadingImage
+                              ? "Uploading..."
+                              : formData.thumbnail
+                                ? "Change Image"
+                                : "Upload Image"}
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            {formData.thumbnail ? "Image uploaded" : "No image selected"}
+                          </span>
+                        </div>
+
+                        {/* Hidden file input */}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                          disabled={isUploadingImage}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Screenplay Section */}
+              <div className="space-y-4 pt-4 border-t border-border" suppressHydrationWarning>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <File className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">Screenplay / Script</h3>
+                  </div>
+                  {isEditing && projectId && (formData.screenplayText || formData.screenplay) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
+                      className="bg-transparent"
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit Screenplay
+                    </Button>
+                  )}
+                </div>
+                {!formData.screenplayText && (
+                  <p className="text-sm text-muted-foreground">
+                    Upload a PDF screenplay or use the editor to write your screenplay. The text
+                    will be automatically extracted from PDFs.
+                  </p>
+                )}
+
+                {/* Screenplay Status - One Line */}
+                {formData.screenplayText ? (
+                  <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 rounded-lg border border-border">
+                    <span className="text-sm text-muted-foreground">
+                      {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length}{" "}
+                      words • {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0}{" "}
+                      scenes
+                    </span>
+                    <div className="flex items-center gap-3">
+                      {showRemoveScreenplayConfirm ? (
+                        <>
+                          <span className="text-xs text-muted-foreground">Replace screenplay?</span>
+                          <button
+                            onClick={() => {
+                              setShowRemoveScreenplayConfirm(false);
+                              projectFileInputRef.current?.click();
+                            }}
+                            type="button"
+                            className="text-primary hover:text-primary/80 font-medium text-xs"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setShowRemoveScreenplayConfirm(false)}
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setShowRemoveScreenplayConfirm(true)}
+                          type="button"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Replace
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleProjectFileClick}
+                    disabled={isUploadingFile}
+                    className="bg-transparent"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {isUploadingFile ? "Uploading..." : "Upload PDF"}
+                  </Button>
+                )}
+
+                {/* Hidden file input - Always rendered so ref is always available */}
+                <input
+                  ref={projectFileInputRef}
+                  type="file"
+                  onChange={handleProjectFileChange}
+                  className="hidden"
+                  disabled={isUploadingFile}
+                  accept=".pdf,application/pdf"
+                />
+              </div>
+
+              {/* Characters Section */}
+              <div className="space-y-3 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <User className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Characters</h3>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Character List - Compact One-Liner View */}
+                  {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
+                    <div className="space-y-1.5">
+                      {(formData.characters || []).map((character, index) => (
+                        <button
+                          key={`character-compact-${index}`}
+                          type="button"
+                          className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                          onClick={() => setEditingCharacterIndex(index)}
+                        >
+                          {/* Character Image - Super Small */}
+                          <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
+                            {character.mainImage && formData.username ? (
+                              <OptimizedImage
+                                type="character"
+                                filename={character.mainImage}
+                                username={formData.username}
+                                alt={character.name || "Character"}
+                                width={32}
+                                height={32}
+                                objectFit="cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-muted">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Character Name */}
+                          <span className="font-medium text-sm shrink-0">
+                            {character.name || "Unnamed"}
+                          </span>
+
+                          {/* Character Appearance - Truncated */}
+                          <span className="text-xs text-muted-foreground truncate flex-1">
+                            {character.appearance || "No appearance description"}
+                          </span>
+
+                          {/* Additional Images Count */}
+                          {(character.images?.length || 0) > 0 && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              +{character.images?.length} img
+                            </span>
+                          )}
+
+                          {/* Edit indicator */}
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Character Edit Form - Expanded View */}
+                  {editingCharacterIndex !== null &&
+                    formData.characters?.[editingCharacterIndex] && (
+                      <Card className="bg-muted/30 border-border">
+                        <CardContent className="p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">Edit Character</h4>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingCharacterIndex(null)}
+                                className="bg-transparent"
+                              >
+                                Done
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  removeCharacter(editingCharacterIndex);
+                                  setEditingCharacterIndex(null);
+                                }}
+                                className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Character Name */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`character-name-${editingCharacterIndex}`}>Name</Label>
+                            <Input
+                              id={`character-name-${editingCharacterIndex}`}
+                              placeholder="Enter character name"
+                              value={formData.characters[editingCharacterIndex].name}
+                              onChange={(e) =>
+                                updateCharacter(editingCharacterIndex, "name", e.target.value)
+                              }
+                              className="bg-background"
+                            />
+                          </div>
+
+                          {/* Character Main Image */}
+                          <div className="space-y-2">
+                            <Label>Main Image</Label>
+                            <div className="relative w-full rounded-lg overflow-hidden border border-border bg-muted/30">
+                              {characterPreviewImages[editingCharacterIndex] ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={characterPreviewImages[editingCharacterIndex]}
+                                    alt={
+                                      formData.characters[editingCharacterIndex].name || "Character"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleCharacterMainImageClick(editingCharacterIndex)
+                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload character main image"
+                                  >
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : formData.characters[editingCharacterIndex].mainImage &&
+                                formData.username ? (
+                                <div className="relative group">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={getImageUrl({
+                                      type: "character",
+                                      filename:
+                                        formData.characters[editingCharacterIndex].mainImage!,
+                                      username: formData.username,
+                                    })}
+                                    alt={
+                                      formData.characters[editingCharacterIndex].name || "Character"
+                                    }
+                                    className="w-full h-auto"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleCharacterMainImageClick(editingCharacterIndex)
+                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload character main image"
+                                  >
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-full min-h-[200px] flex items-center justify-center relative group">
+                                  <User className="h-12 w-12 text-muted-foreground" />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleCharacterMainImageClick(editingCharacterIndex)
+                                    }
+                                    disabled={uploadingCharacterIndex === editingCharacterIndex}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label="Upload character main image"
+                                  >
+                                    {uploadingCharacterIndex === editingCharacterIndex ? (
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                                    ) : (
+                                      <Camera className="h-8 w-8 text-white" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              ref={(el) => {
+                                characterFileInputRefs.current[editingCharacterIndex] = el;
+                              }}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleCharacterMainImageChange(e, editingCharacterIndex)
+                              }
+                              className="hidden"
+                              disabled={uploadingCharacterIndex === editingCharacterIndex}
+                            />
+                          </div>
+
+                          {/* Additional Character Images */}
+                          <div className="space-y-2">
+                            <Label>Additional Images (Different Angles/Attire)</Label>
+                            <div className="columns-2 md:columns-3 gap-4">
+                              {(formData.characters[editingCharacterIndex].images || []).map(
+                                (image, imageIndex) => (
+                                  <div
+                                    key={`${editingCharacterIndex}-${imageIndex}`}
+                                    className="relative w-full mb-4 break-inside-avoid rounded-lg overflow-hidden border border-border bg-muted/30"
+                                  >
+                                    {characterAdditionalPreviewImages[editingCharacterIndex]?.[
+                                      imageIndex
+                                    ] ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            characterAdditionalPreviewImages[editingCharacterIndex][
+                                              imageIndex
+                                            ]
+                                          }
+                                          alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeCharacterAdditionalImage(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : image && formData.username ? (
+                                      <div className="relative group">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={getImageUrl({
+                                            type: "character",
+                                            filename: image,
+                                            username: formData.username,
+                                          })}
+                                          alt={`${formData.characters?.[editingCharacterIndex]?.name || "Character"} - ${imageIndex + 1}`}
+                                          className="w-full h-auto"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeCharacterAdditionalImage(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-75 hover:opacity-100 transition-opacity z-10"
+                                          aria-label={`Remove image ${imageIndex + 1}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="w-full min-h-[150px] flex items-center justify-center relative group">
+                                        <Camera className="h-8 w-8 text-muted-foreground" />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCharacterAdditionalImageClick(
+                                              editingCharacterIndex,
+                                              imageIndex
+                                            )
+                                          }
+                                          disabled={
+                                            uploadingCharacterAdditionalIndex?.characterIndex ===
+                                              editingCharacterIndex &&
+                                            uploadingCharacterAdditionalIndex?.imageIndex ===
+                                              imageIndex
+                                          }
+                                          className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                          aria-label={`Upload additional character image ${imageIndex + 1}`}
+                                        >
+                                          {uploadingCharacterAdditionalIndex?.characterIndex ===
+                                            editingCharacterIndex &&
+                                          uploadingCharacterAdditionalIndex?.imageIndex ===
+                                            imageIndex ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                                          ) : (
+                                            <Camera className="h-6 w-6 text-white" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                    <input
+                                      ref={(el) => {
+                                        characterAdditionalFileInputRefs.current[
+                                          `${editingCharacterIndex}-${imageIndex}`
+                                        ] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleCharacterAdditionalImageChange(
+                                          e,
+                                          editingCharacterIndex,
+                                          imageIndex
+                                        )
+                                      }
+                                      className="hidden"
+                                      disabled={
+                                        uploadingCharacterAdditionalIndex?.characterIndex ===
+                                          editingCharacterIndex &&
+                                        uploadingCharacterAdditionalIndex?.imageIndex === imageIndex
+                                      }
+                                    />
+                                  </div>
+                                )
+                              )}
+                              <div className="relative w-full mb-4 break-inside-avoid">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddCharacterAdditionalImageClick(editingCharacterIndex)
+                                  }
+                                  className="relative w-full min-h-[150px] rounded-lg border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors flex items-center justify-center"
+                                  aria-label="Add additional character image"
+                                >
+                                  <Plus className="h-8 w-8 text-muted-foreground" />
+                                  <input
+                                    ref={(el) => {
+                                      characterAddImageInputRefs.current[editingCharacterIndex] =
+                                        el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleAddCharacterAdditionalImageChange(
+                                        e,
+                                        editingCharacterIndex
+                                      )
+                                    }
+                                    className="hidden"
+                                    disabled={
+                                      uploadingCharacterAdditionalIndex?.characterIndex ===
+                                      editingCharacterIndex
+                                    }
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Character Appearance */}
+                          <div className="space-y-2">
+                            <Label htmlFor={`character-appearance-${editingCharacterIndex}`}>
+                              Appearance
+                            </Label>
+                            <Textarea
+                              id={`character-appearance-${editingCharacterIndex}`}
+                              placeholder="Describe this character's appearance..."
+                              value={formData.characters[editingCharacterIndex].appearance}
+                              onChange={(e) =>
+                                updateCharacter(editingCharacterIndex, "appearance", e.target.value)
+                              }
+                              rows={3}
+                              className="bg-background resize-none"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addCharacter}
+                    className="bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Character
+                  </Button>
+                </div>
+              </div>
+
+              {/* Locations/Settings Section - Compact View */}
+              <div className="pt-4 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">Locations</h3>
+                    <span className="text-sm text-muted-foreground">
+                      ({(formData.setting?.locations || []).length})
+                    </span>
+                  </div>
+                  {(formData.setting?.locations || []).length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
+                      className="text-muted-foreground"
+                    >
+                      {isLocationsExpanded ? "Collapse" : "Add Location Images"}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Expanded Location Editor */}
+                {isLocationsExpanded && (formData.setting?.locations || []).length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {(formData.setting?.locations || []).map((location, index) => (
+                      <div
+                        key={`location-${index}`}
+                        className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
+                      >
+                        {/* Location Name (read-only display) */}
+                        <span className="flex-1 text-sm font-medium truncate px-2">
+                          {location.name}
+                        </span>
+
+                        {/* Images */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Main Image */}
+                          {locationPreviewImages[index] ? (
+                            <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
+                              <img
+                                src={locationPreviewImages[index]}
+                                alt={location.name || "Location"}
+                                className="w-full h-full object-cover"
+                              />
+                              {uploadingLocationIndex === index && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                </div>
+                              )}
+                            </div>
+                          ) : location.image && formData.username ? (
+                            <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
+                              <OptimizedImage
+                                type="location"
+                                filename={location.image}
+                                username={formData.username}
+                                alt={location.name || "Location"}
+                                fill
+                                objectFit="cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleLocationMainImageClick(index)}
+                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                              >
+                                <Pencil className="h-2 w-2 text-white" />
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {/* Additional Images */}
+                          {(location.images || []).map((image, imageIndex) => (
+                            <div
+                              key={`${index}-${imageIndex}`}
+                              className="relative w-12 h-8 rounded overflow-hidden border border-border group"
+                            >
+                              {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                                <img
+                                  src={locationAdditionalPreviewImages[index][imageIndex]}
+                                  alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : formData.username ? (
+                                <OptimizedImage
+                                  type="location"
+                                  filename={image}
+                                  username={formData.username}
+                                  alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                                  fill
+                                  objectFit="cover"
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => removeLocationAdditionalImage(index, imageIndex)}
+                                disabled={
+                                  uploadingLocationAdditionalIndex?.locationIndex === index &&
+                                  uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                                }
+                                className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                              >
+                                <X className="h-2 w-2" />
+                              </button>
+                            </div>
+                          ))}
+
+                          {/* Add Image Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!location.image && !locationPreviewImages[index]) {
+                                handleLocationMainImageClick(index);
+                              } else {
+                                handleAddLocationAdditionalImageClick(index);
+                              }
+                            }}
+                            disabled={uploadingLocationIndex === index}
+                            className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
+                          >
+                            {uploadingLocationIndex === index ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            ) : (
+                              <Plus className="h-3 w-3 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {/* Hidden file inputs */}
+                          <input
+                            ref={(el) => {
+                              locationFileInputRefs.current[index] = el;
+                            }}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleLocationMainImageChange(e, index)}
+                            className="hidden"
+                            disabled={uploadingLocationIndex === index}
+                          />
+                          <input
+                            ref={(el) => {
+                              locationAddImageInputRefs.current[index] = el;
+                            }}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
+                            className="hidden"
+                            disabled={uploadingLocationAdditionalIndex?.locationIndex === index}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Scenes Section */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Clapperboard className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Scenes</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add scenes to your film. Each scene can have its own screenplay text, characters,
+                  and generated images/videos.
+                </p>
+
+                <SceneList
+                  projectId={projectId || "new-project"}
+                  scenes={formData.scenes || []}
+                  characters={formData.characters || []}
+                  screenplayText={formData.screenplayText}
+                  onScenesChange={(scenes) => setFormData({ ...formData, scenes })}
+                />
+              </div>
+
+              {/* Full Width Sections - Links, Tools */}
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Project Links</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add links to your project (YouTube, Vimeo, Instagram, etc.)
+                </p>
+
+                <div className="space-y-3">
+                  {formData.links.links.map((link, index) => (
+                    <div
+                      key={`${link.label}-${link.url}-${index}`}
+                      className="flex items-center gap-2 p-3 bg-muted/30 rounded-md"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{link.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{link.url}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeLink(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter URL (e.g., https://youtube.com/watch?v=...)"
+                      value={newLinkUrl}
+                      onChange={(e) => setNewLinkUrl(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addLink();
+                        }
+                      }}
+                      className="bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addLink}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Tools</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Add the tools you used, organized by category
+                </p>
+
+                {/* Add tools by category */}
+                <div className="space-y-4">
+                  {(["video", "image", "sound", "other"] as ToolCategory[]).map((category) => {
+                    const toolsInCategory = getToolsByCategory(category);
+                    return (
+                      <div key={category} className="space-y-2">
+                        <Label htmlFor={`tool-${category}`}>
+                          {getCategoryLabel(category)}
+                          {category === "video" && !hasVideoTool && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        {/* Display added tools for this category */}
+                        {toolsInCategory.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {toolsInCategory.map((tool, _index) => {
+                              const globalIndex = formData.tools.indexOf(tool);
+                              return (
+                                <div
+                                  key={`${category}-${tool.name}-${globalIndex}`}
+                                  className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm"
+                                >
+                                  <span>{tool.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTool(globalIndex)}
+                                    className="hover:text-primary/70 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <Select
+                            value={selectedTool[category]}
+                            onValueChange={(value) => {
+                              setSelectedTool({ ...selectedTool, [category]: value });
+                              if (value !== "Other") {
+                                // Auto-add tool when selected (not "Other")
+                                addTool(category, value);
+                              } else {
+                                setCustomToolInput({ ...customToolInput, [category]: "" });
+                              }
+                            }}
+                            key={`tool-select-${category}`}
+                          >
+                            <SelectTrigger className="w-full bg-background">
+                              <SelectValue
+                                placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COMMON_TOOLS[category].map((tool) => (
+                                <SelectItem key={tool} value={tool}>
+                                  {tool}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedTool[category] === "Other" && (
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Enter custom tool"
+                                value={customToolInput[category]}
+                                onChange={(e) =>
+                                  setCustomToolInput({
+                                    ...customToolInput,
+                                    [category]: e.target.value,
+                                  })
+                                }
+                                onKeyPress={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addTool(category);
+                                  }
+                                }}
+                                className="flex-1 bg-background"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => addTool(category)}
+                                disabled={!customToolInput[category].trim()}
+                                className="bg-transparent"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {category === "video" && !hasVideoTool && (
+                          <p className="text-xs text-destructive pb-2">
+                            * At least one Video Generation tool is required
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className={useGridLayout ? "col-span-3 flex gap-3 pt-4" : "flex gap-3 pt-4"}>
             <Button
               type="submit"
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
@@ -2605,8 +3773,8 @@ export default function ProjectForm({
               Cancel
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </form>
   );
 }

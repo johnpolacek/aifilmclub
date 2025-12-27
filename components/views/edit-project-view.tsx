@@ -59,17 +59,24 @@ export function EditProjectView({
             projectId={projectId}
             isEditing
             redirectPath="/dashboard"
+            useGridLayout={true}
           />
 
-          <div>
+          <div className="w-full">
             <h2 className="text-2xl font-bold mb-6">Project Posts</h2>
-            <PostsList
-              projectId={projectId}
-              initialPosts={posts}
-              canEdit={true}
-              username={username}
-              projectSlug={projectSlug}
-            />
+            <div className="space-y-4">
+              {posts.map((post) => (
+                <div key={post.id} className="h-[50vh] overflow-hidden">
+                  <PostsList
+                    projectId={projectId}
+                    initialPosts={[post]}
+                    canEdit={true}
+                    username={username}
+                    projectSlug={projectSlug}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
