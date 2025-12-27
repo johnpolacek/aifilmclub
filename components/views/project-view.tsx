@@ -34,7 +34,7 @@ function getVideoEmbedInfo(
     if (youtubeMatch?.[1]) {
       return {
         type: "youtube",
-        embedUrl: `https://www.youtube.com/embed/${youtubeMatch[1]}`,
+        embedUrl: `https://www.youtube.com/embed/${youtubeMatch[1]}?rel=0&modestbranding=1&iv_load_policy=3`,
       };
     }
 
@@ -420,10 +420,10 @@ export function ProjectView({
                                   </p>
                                 )}
                                 <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                  {scene.generatedImages?.length > 0 && (
+                                  {scene.generatedImages && scene.generatedImages.length > 0 && (
                                     <span>{scene.generatedImages.length} images</span>
                                   )}
-                                  {scene.generatedVideos?.length > 0 && (
+                                  {scene.generatedVideos && scene.generatedVideos.length > 0 && (
                                     <span>{scene.generatedVideos.length} videos</span>
                                   )}
                                 </div>

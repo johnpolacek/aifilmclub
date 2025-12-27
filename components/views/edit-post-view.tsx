@@ -83,7 +83,7 @@ const renderVideoEmbeds = (content: string): string => {
   // Replace [youtube:VIDEO_ID] with HTML embed
   content = content.replace(
     /\[youtube:([^\]]+)\]/g,
-    '<div class="video-container"><iframe width="100%" height="315" src="https://www.youtube.com/embed/$1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
+    '<div class="video-container"><iframe width="100%" height="315" src="https://www.youtube.com/embed/$1?rel=0&modestbranding=1&iv_load_policy=3" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>'
   );
 
   // Replace [vimeo:VIDEO_ID] with HTML embed
