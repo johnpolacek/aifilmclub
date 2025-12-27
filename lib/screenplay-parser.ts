@@ -210,7 +210,7 @@ export function parseScreenplay(text: string): ParseResult {
  * Extract location key from scene heading for deduplication
  * Normalizes location by removing INT./EXT. prefix and time suffix
  */
-function extractLocationKey(heading: string): string {
+export function extractLocationKey(heading: string): string {
   // Remove INT./EXT. prefix
   let location = heading
     .replace(/^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|INTERIOR|EXTERIOR)\s*/i, "")
@@ -272,12 +272,44 @@ export function labelDuplicateLocationScenes(parsedScenes: ParsedScene[]): Parse
 }
 
 /**
+ * Match extracted location key to project location names
+ * Returns the matching location name or undefined
+ */
+function matchLocationToProject(
+  heading: string,
+  projectLocationNames: string[]
+): string | undefined {
+  if (projectLocationNames.length === 0) return undefined;
+
+  const locationKey = extractLocationKey(heading).toLowerCase();
+  if (!locationKey) return undefined;
+
+  // Try exact match first (case-insensitive)
+  for (const locationName of projectLocationNames) {
+    if (locationName.toLowerCase() === locationKey) {
+      return locationName;
+    }
+  }
+
+  // Try partial match (location key contains or is contained in project location)
+  for (const locationName of projectLocationNames) {
+    const lowerName = locationName.toLowerCase();
+    if (locationKey.includes(lowerName) || lowerName.includes(locationKey)) {
+      return locationName;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Convert parsed scenes to Scene objects for storage
  */
 export function parsedScenesToScenes(
   projectId: string,
   parsedScenes: ParsedScene[],
-  labelDuplicates: boolean = true
+  labelDuplicates: boolean = true,
+  projectLocationNames: string[] = []
 ): Array<{
   id: string;
   projectId: string;
@@ -285,6 +317,9 @@ export function parsedScenesToScenes(
   title: string;
   screenplay: string;
   characters: string[];
+  locationId?: string;
+  shots: [];
+  audioTracks: [];
   generatedImages: [];
   generatedVideos: [];
   createdAt: string;
@@ -297,18 +332,26 @@ export function parsedScenesToScenes(
     ? labelDuplicateLocationScenes(parsedScenes)
     : parsedScenes;
 
-  return scenesToProcess.map((parsed) => ({
-    id: `scene-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    projectId,
-    sceneNumber: parsed.sceneNumber,
-    title: parsed.title,
-    screenplay: `${parsed.heading}\n\n${parsed.content}`,
-    characters: parsed.characters,
-    generatedImages: [],
-    generatedVideos: [],
-    createdAt: now,
-    updatedAt: now,
-  }));
+  return scenesToProcess.map((parsed) => {
+    // Try to match the scene heading to a project location
+    const matchedLocation = matchLocationToProject(parsed.heading, projectLocationNames);
+
+    return {
+      id: `scene-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      projectId,
+      sceneNumber: parsed.sceneNumber,
+      title: parsed.title,
+      screenplay: `${parsed.heading}\n\n${parsed.content}`,
+      characters: parsed.characters,
+      locationId: matchedLocation,
+      shots: [],
+      audioTracks: [],
+      generatedImages: [],
+      generatedVideos: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 }
 
 /**

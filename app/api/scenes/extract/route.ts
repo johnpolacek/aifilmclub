@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json();
-    const { screenplayText, projectId } = body;
+    const { screenplayText, projectId, locationNames } = body;
 
     if (!screenplayText) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     console.log(
       "[extract-scenes] Parsing screenplay:",
-      JSON.stringify({ projectId, textLength: screenplayText.length }, null, 2)
+      JSON.stringify({ projectId, textLength: screenplayText.length, locationCount: locationNames?.length || 0 }, null, 2)
     );
 
     // Parse the screenplay
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convert to Scene objects
-    const scenes = parsedScenesToScenes(projectId, parseResult.scenes);
+    // Convert to Scene objects, passing project location names for automatic matching
+    const scenes = parsedScenesToScenes(projectId, parseResult.scenes, true, locationNames || []);
 
     console.log(
       "[extract-scenes] Extracted scenes:",

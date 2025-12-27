@@ -3217,6 +3217,7 @@ export default function ProjectForm({
                   projectId={projectId || "new-project"}
                   scenes={formData.scenes || []}
                   characters={formData.characters || []}
+                  locations={formData.setting?.locations || []}
                   screenplayText={formData.screenplayText}
                   onScenesChange={(scenes) => setFormData({ ...formData, scenes })}
                 />
@@ -4632,6 +4633,7 @@ export default function ProjectForm({
                   projectId={projectId || "new-project"}
                   scenes={formData.scenes || []}
                   characters={formData.characters || []}
+                  locations={formData.setting?.locations || []}
                   screenplayText={formData.screenplayText}
                   onScenesChange={(scenes) => setFormData({ ...formData, scenes })}
                 />

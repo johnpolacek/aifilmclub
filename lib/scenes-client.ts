@@ -161,6 +161,7 @@ export interface Scene {
   title: string;
   screenplay: string; // Scene-specific screenplay text
   characters: string[]; // Character IDs present in this scene
+  locationId?: string; // Reference to a project location by name
 
   // Timeline content (new shot-based architecture)
   shots: Shot[]; // Ordered video timeline

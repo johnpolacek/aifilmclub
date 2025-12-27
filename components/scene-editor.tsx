@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Character } from "@/components/project-form";
+import type { Character, Location } from "@/components/project-form";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -938,6 +938,7 @@ interface SceneListProps {
   projectId: string;
   scenes: Scene[];
   characters: Character[];
+  locations?: Location[];
   screenplayText?: string;
   onScenesChange: (scenes: Scene[]) => void;
 }
@@ -946,6 +947,7 @@ export function SceneList({
   projectId,
   scenes,
   characters: _characters,
+  locations,
   screenplayText,
   onScenesChange,
 }: SceneListProps) {
@@ -963,12 +965,16 @@ export function SceneList({
     const loadingToast = toast.loading("Extracting scenes from screenplay...");
 
     try {
+      // Get location names for automatic matching
+      const locationNames = locations?.map((loc) => loc.name).filter(Boolean) || [];
+
       const response = await fetch("/api/scenes/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           screenplayText,
           projectId,
+          locationNames,
         }),
       });
 

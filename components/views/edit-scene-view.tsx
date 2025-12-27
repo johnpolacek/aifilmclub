@@ -34,6 +34,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
 import type {
@@ -1428,6 +1435,32 @@ export function EditSceneView({
                 className="bg-background"
               />
             </div>
+
+            {/* Location */}
+            {locations.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="scene-location">Location</Label>
+                <Select
+                  value={scene.locationId || "none"}
+                  onValueChange={(value) => {
+                    setScene({ ...scene, locationId: value === "none" ? undefined : value });
+                    setHasChanges(true);
+                  }}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No location</SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem key={location.name} value={location.name}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Screenplay */}
             <div className="space-y-2">
