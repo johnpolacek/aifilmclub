@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -32,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GenerationMode, Shot, Transition, TransitionType } from "@/lib/scenes-client";
+import type { GenerationMode, Shot } from "@/lib/scenes-client";
 
 // ============================================================================
 // TYPES
@@ -76,15 +75,6 @@ const GENERATION_MODES: { value: GenerationMode; label: string; description: str
   },
 ];
 
-const TRANSITION_TYPES: { value: TransitionType; label: string }[] = [
-  { value: "none", label: "Cut (None)" },
-  { value: "cross-dissolve", label: "Cross Dissolve" },
-  { value: "fade-to-black", label: "Fade to Black" },
-  { value: "fade-from-black", label: "Fade from Black" },
-  { value: "fade-to-white", label: "Fade to White" },
-  { value: "fade-from-white", label: "Fade from White" },
-];
-
 // ============================================================================
 // IMAGE DROP ZONE COMPONENT
 // ============================================================================
@@ -116,14 +106,17 @@ function ImageDropZone({
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file?.type.startsWith("image/")) {
-      onImag?.type.startsWith;
-    }
-  }, []);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file?.type.startsWith("image/")) {
+        onImageSelect(file);
+      }
+    },
+    [onImageSelect]
+  );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,13 +150,13 @@ function ImageDropZone({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`
-            aspect-video px-2 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors
+            text-center aspect-video px-2 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors
             ${isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"}
             ${disabled ? "opacity-50 cursor-not-allowed" : ""}
           `}
         >
-          <ImageIcon className="h-8 w-8 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground px-4">Drop image or click to upload</span>
+          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground px-4">Drop image or click to upload</span>
         </div>
       )}
       <input
@@ -189,7 +182,6 @@ export function ShotEditorModal({
   sceneId,
 }: ShotEditorModalProps) {
   // Local state for editing
-  const [title, setTitle] = useState(shot?.title || "");
   const [prompt, setPrompt] = useState(shot?.prompt || "");
   const [sourceType, setSourceType] = useState<"uploaded" | "generated">(
     shot?.sourceType || "generated"
@@ -200,12 +192,6 @@ export function ShotEditorModal({
   const [startFrameImage, setStartFrameImage] = useState<string | undefined>(shot?.startFrameImage);
   const [endFrameImage, setEndFrameImage] = useState<string | undefined>(shot?.endFrameImage);
   const [referenceImages, setReferenceImages] = useState<string[]>(shot?.referenceImages || []);
-  const [transitionType, setTransitionType] = useState<TransitionType>(
-    shot?.transitionOut?.type || "none"
-  );
-  const [transitionDuration, setTransitionDuration] = useState(
-    shot?.transitionOut?.durationMs || 1000
-  );
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -213,15 +199,12 @@ export function ShotEditorModal({
 
   // Reset state when shot changes
   const _resetState = useCallback(() => {
-    setTitle(shot?.title || "");
     setPrompt(shot?.prompt || "");
     setSourceType(shot?.sourceType || "generated");
     setGenerationMode(shot?.generationMode || "text-only");
     setStartFrameImage(shot?.startFrameImage);
     setEndFrameImage(shot?.endFrameImage);
     setReferenceImages(shot?.referenceImages || []);
-    setTransitionType(shot?.transitionOut?.type || "none");
-    setTransitionDuration(shot?.transitionOut?.durationMs || 1000);
   }, [shot]);
 
   // Handle image upload for a specific slot
@@ -284,17 +267,12 @@ export function ShotEditorModal({
       if (data.success && shot) {
         const updatedShot: Shot = {
           ...shot,
-          title,
           prompt,
           sourceType: "uploaded",
           video: {
             url: data.url,
             status: "completed",
             durationMs: data.durationMs || 5000,
-          },
-          transitionOut: {
-            type: transitionType,
-            durationMs: transitionType === "none" ? 0 : transitionDuration,
           },
           updatedAt: new Date().toISOString(),
         };
@@ -319,21 +297,14 @@ export function ShotEditorModal({
   const handleSave = () => {
     if (!shot) return;
 
-    const transition: Transition = {
-      type: transitionType,
-      durationMs: transitionType === "none" ? 0 : transitionDuration,
-    };
-
     const updatedShot: Shot = {
       ...shot,
-      title,
       prompt,
       sourceType,
       generationMode,
       startFrameImage,
       endFrameImage,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-      transitionOut: transition,
       updatedAt: new Date().toISOString(),
     };
 
@@ -366,21 +337,14 @@ export function ShotEditorModal({
       return;
     }
 
-    const transition: Transition = {
-      type: transitionType,
-      durationMs: transitionType === "none" ? 0 : transitionDuration,
-    };
-
     const updatedShot: Shot = {
       ...shot,
-      title,
       prompt,
       sourceType: "generated",
       generationMode,
       startFrameImage,
       endFrameImage,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-      transitionOut: transition,
       video: {
         url: "",
         status: "processing",
@@ -422,17 +386,6 @@ export function ShotEditorModal({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Title */}
-          <div className="space-y-2">
-            <Label htmlFor="shot-title">Shot Title</Label>
-            <Input
-              id="shot-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Wide establishing shot"
-            />
-          </div>
-
           {/* Source Type Toggle */}
           <div className="space-y-2">
             <Label>Source</Label>
@@ -461,21 +414,34 @@ export function ShotEditorModal({
           {sourceType === "generated" ? (
             <>
               {/* Generation Mode */}
-              <div className="space-y-2">
+              <div className="space-y-2 w-full">
                 <Label>Generation Mode</Label>
                 <Select
                   value={generationMode}
                   onValueChange={(v) => setGenerationMode(v as GenerationMode)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger className="w-full h-auto! py-3 [&>span]:flex-1 [&>span]:text-center">
+                    <SelectValue>
+                      <div className="flex flex-col items-center w-full">
+                        <div className="font-medium">
+                          {GENERATION_MODES.find((m) => m.value === generationMode)?.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {GENERATION_MODES.find((m) => m.value === generationMode)?.description}
+                        </div>
+                      </div>
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {GENERATION_MODES.map((mode) => (
-                      <SelectItem key={mode.value} value={mode.value}>
-                        <div>
+                      <SelectItem
+                        key={mode.value}
+                        value={mode.value}
+                        className="h-auto! py-3 justify-center pl-8"
+                      >
+                        <div className="flex flex-col items-center text-center">
                           <div className="font-medium">{mode.label}</div>
-                          <div className="text-xs text-muted-foreground">{mode.description}</div>
+                          <div className="text-xs">{mode.description}</div>
                         </div>
                       </SelectItem>
                     ))}
@@ -553,7 +519,7 @@ export function ShotEditorModal({
               {/* Prompt */}
               <div className="space-y-2">
                 <Label htmlFor="shot-prompt">
-                  {generationMode === "text-only" ? "Video Description" : "Motion Prompt"}
+                  {generationMode === "text-only" ? "Video Description" : "Prompt"}
                 </Label>
                 <Textarea
                   id="shot-prompt"
@@ -562,7 +528,7 @@ export function ShotEditorModal({
                   placeholder={
                     generationMode === "text-only"
                       ? "Describe the video you want to generate..."
-                      : "Describe how the scene should animate..."
+                      : "Describe how the scene should play out..."
                   }
                   rows={3}
                 />
@@ -602,48 +568,6 @@ export function ShotEditorModal({
               )}
             </div>
           )}
-
-          {/* Transition to next shot */}
-          <div className="space-y-2 pt-4 border-t border-border">
-            <Label>Transition to Next Shot</Label>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <Select
-                  value={transitionType}
-                  onValueChange={(v) => setTransitionType(v as TransitionType)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSITION_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {transitionType !== "none" && (
-                <div className="w-32">
-                  <Select
-                    value={transitionDuration.toString()}
-                    onValueChange={(v) => setTransitionDuration(Number(v))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="500">0.5s</SelectItem>
-                      <SelectItem value="1000">1s</SelectItem>
-                      <SelectItem value="1500">1.5s</SelectItem>
-                      <SelectItem value="2000">2s</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">

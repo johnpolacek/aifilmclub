@@ -21,6 +21,7 @@ export {
   calculateTimelinePositions,
   createNewAudioTrack,
   createNewShot,
+  getDefaultTransition,
   getSceneDuration,
 } from "./scenes-client";
 
@@ -33,7 +34,6 @@ import type {
   Scene,
   Shot,
   ShotVideo,
-  TransitionType,
   VideoSourceType,
 } from "./scenes-client";
 
@@ -54,6 +54,7 @@ function ensureSceneFields(scene: Scene): Scene {
     ...scene,
     shots: scene.shots || [],
     audioTracks: scene.audioTracks || [],
+    transitionOut: scene.transitionOut || { type: "none", durationMs: 0 },
     generatedImages: scene.generatedImages || [],
     generatedVideos: scene.generatedVideos || [],
   };
@@ -222,6 +223,7 @@ export function createNewScene(projectId: string, sceneNumber: number): Scene {
     characters: [],
     shots: [],
     audioTracks: [],
+    transitionOut: { type: "none", durationMs: 0 },
     // Legacy fields for migration compatibility
     generatedImages: [],
     generatedVideos: [],
@@ -684,7 +686,6 @@ export function migrateSceneToShots(scene: Scene): Scene {
   const shots: Shot[] = scene.generatedVideos.map((video, index) => ({
     id: `shot-migrated-${video.id}`,
     order: index,
-    title: `Shot ${index + 1}`,
     prompt: video.prompt,
     sourceType: "generated" as VideoSourceType,
     generationMode: "text-only" as GenerationMode,
@@ -694,10 +695,6 @@ export function migrateSceneToShots(scene: Scene): Scene {
       durationMs: video.duration ? video.duration * 1000 : 5000, // Convert seconds to ms
       error: video.error,
     },
-    transitionOut: {
-      type: "none" as TransitionType,
-      durationMs: 0,
-    },
     createdAt: video.createdAt,
     updatedAt: now,
   }));
@@ -706,6 +703,7 @@ export function migrateSceneToShots(scene: Scene): Scene {
     ...scene,
     shots,
     audioTracks: scene.audioTracks || [],
+    transitionOut: scene.transitionOut || { type: "none", durationMs: 0 },
     // Keep legacy data for reference
     generatedVideos: scene.generatedVideos,
     generatedImages: scene.generatedImages,

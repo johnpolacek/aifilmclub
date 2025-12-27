@@ -1,8 +1,8 @@
-import type { TransitionType, Transition, Shot } from "./scenes";
+import type { Scene, Transition, TransitionType } from "./scenes";
 
 /**
  * Transition utility functions
- * Provides helpers for working with transitions between shots
+ * Provides helpers for working with transitions between scenes
  */
 
 // ============================================================================
@@ -109,10 +109,7 @@ export function getDefaultTransition(): Transition {
 /**
  * Create a transition with the specified type and duration
  */
-export function createTransition(
-  type: TransitionType,
-  durationMs: number = 1000
-): Transition {
+export function createTransition(type: TransitionType, durationMs: number = 1000): Transition {
   return {
     type,
     durationMs: type === "none" ? 0 : durationMs,
@@ -138,19 +135,23 @@ export function getTransitionMetadata(type: TransitionType): TransitionMetadata 
 // ============================================================================
 
 /**
- * Calculate when a transition starts and ends within the timeline
+ * Calculate when a scene transition starts and ends within the film timeline
  */
-export function getTransitionTiming(
-  shot: Shot,
-  shotStartTimeMs: number
+export function getSceneTransitionTiming(
+  scene: Scene,
+  sceneStartTimeMs: number
 ): { transitionStartMs: number; transitionEndMs: number } | null {
-  if (shot.transitionOut.type === "none") {
+  if (scene.transitionOut.type === "none") {
     return null;
   }
 
-  const videoDurationMs = shot.video?.durationMs || 5000;
-  const transitionStartMs = shotStartTimeMs + videoDurationMs;
-  const transitionEndMs = transitionStartMs + shot.transitionOut.durationMs;
+  // Calculate scene duration from all shots
+  const sceneDurationMs = scene.shots.reduce((total, shot) => {
+    return total + (shot.video?.durationMs || 5000);
+  }, 0);
+
+  const transitionStartMs = sceneStartTimeMs + sceneDurationMs;
+  const transitionEndMs = transitionStartMs + scene.transitionOut.durationMs;
 
   return {
     transitionStartMs,
@@ -159,42 +160,45 @@ export function getTransitionTiming(
 }
 
 /**
- * Check if a specific time is within a transition
+ * Check if a specific time is within a scene transition
  */
-export function isInTransition(
-  shots: Shot[],
+export function isInSceneTransition(
+  scenes: Scene[],
   currentTimeMs: number
-): { inTransition: boolean; shot: Shot | null; progress: number } {
+): { inTransition: boolean; scene: Scene | null; progress: number } {
   let accumulatedTimeMs = 0;
 
-  for (let i = 0; i < shots.length; i++) {
-    const shot = shots[i];
-    const videoDurationMs = shot.video?.durationMs || 5000;
-    const videoEndMs = accumulatedTimeMs + videoDurationMs;
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    // Calculate scene duration from all shots
+    const sceneDurationMs = scene.shots.reduce((total, shot) => {
+      return total + (shot.video?.durationMs || 5000);
+    }, 0);
+    const sceneEndMs = accumulatedTimeMs + sceneDurationMs;
 
-    // Check if we're past this shot's video
-    if (currentTimeMs >= videoEndMs) {
-      // Check if we're in this shot's transition
-      if (shot.transitionOut.type !== "none" && i < shots.length - 1) {
-        const transitionEndMs = videoEndMs + shot.transitionOut.durationMs;
+    // Check if we're past this scene's content
+    if (currentTimeMs >= sceneEndMs) {
+      // Check if we're in this scene's transition
+      if (scene.transitionOut.type !== "none" && i < scenes.length - 1) {
+        const transitionEndMs = sceneEndMs + scene.transitionOut.durationMs;
         if (currentTimeMs < transitionEndMs) {
-          const progress = (currentTimeMs - videoEndMs) / shot.transitionOut.durationMs;
+          const progress = (currentTimeMs - sceneEndMs) / scene.transitionOut.durationMs;
           return {
             inTransition: true,
-            shot,
+            scene,
             progress: Math.min(1, Math.max(0, progress)),
           };
         }
         accumulatedTimeMs = transitionEndMs;
       } else {
-        accumulatedTimeMs = videoEndMs;
+        accumulatedTimeMs = sceneEndMs;
       }
     } else {
       break;
     }
   }
 
-  return { inTransition: false, shot: null, progress: 0 };
+  return { inTransition: false, scene: null, progress: 0 };
 }
 
 // ============================================================================
@@ -209,7 +213,7 @@ export function generateTransitionCSS(): string {
 
   for (const metadata of Object.values(TRANSITION_METADATA)) {
     if (metadata.cssKeyframes) {
-      css += metadata.cssKeyframes + "\n";
+      css += `${metadata.cssKeyframes}\n`;
     }
   }
 
@@ -246,15 +250,12 @@ export function generateTransitionCSS(): string {
 /**
  * Get the CSS class for a transition effect
  */
-export function getTransitionClass(
-  type: TransitionType,
-  direction: "in" | "out"
-): string {
+export function getTransitionClass(type: TransitionType, direction: "in" | "out"): string {
   if (type === "none") return "";
-  
+
   const metadata = TRANSITION_METADATA[type];
   if (!metadata.cssClass) return "";
-  
+
   return `${metadata.cssClass}-${direction}`;
 }
 
@@ -314,8 +315,6 @@ export function calculateTransitionState(
 
     case "fade-from-white":
       return calculateTransitionState("fade-to-white", 1 - progress);
-
-    case "none":
     default:
       return {
         outgoing: { opacity: progress < 0.5 ? 1 : 0, filter: "none" },
@@ -323,4 +322,3 @@ export function calculateTransitionState(
       };
   }
 }
-

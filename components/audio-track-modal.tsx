@@ -143,7 +143,7 @@ export function AudioTrackModal({
 
       if (data.success) {
         setSourceUrl(data.audioUrl);
-        setName(name || `Audio from ${selectedShot.title}`);
+        setName(name || `Audio from Shot ${selectedShot.order + 1}`);
         toast.success("Audio extracted successfully");
       } else {
         toast.error(data.error || "Failed to extract audio");
@@ -307,7 +307,7 @@ export function AudioTrackModal({
                   <SelectContent>
                     {shotsWithVideos.map((shot) => (
                       <SelectItem key={shot.id} value={shot.id}>
-                        {shot.title}
+                        Shot {shot.order + 1}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -62,7 +62,6 @@ export interface ShotVideo {
 export interface Shot {
   id: string;
   order: number; // Position in timeline
-  title: string;
   prompt: string; // Text prompt for generation
 
   // Video source configuration
@@ -76,9 +75,6 @@ export interface Shot {
 
   // Final video
   video?: ShotVideo;
-
-  // Transition to next shot
-  transitionOut: Transition;
 
   // Timeline position (calculated from order + durations)
   startTimeMs?: number;
@@ -167,6 +163,9 @@ export interface Scene {
   shots: Shot[]; // Ordered video timeline
   audioTracks: AudioTrack[]; // Multiple audio layers
 
+  // Transition to next scene
+  transitionOut: Transition;
+
   // Legacy fields (kept for migration compatibility)
   generatedImages?: GeneratedImage[];
   generatedVideos?: GeneratedVideo[];
@@ -182,19 +181,14 @@ export interface Scene {
 /**
  * Create a new shot with default values
  */
-export function createNewShot(order: number, title?: string): Shot {
+export function createNewShot(order: number): Shot {
   const now = new Date().toISOString();
   return {
     id: `shot-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     order,
-    title: title || `Shot ${order + 1}`,
     prompt: "",
     sourceType: "generated",
     generationMode: "text-only",
-    transitionOut: {
-      type: "none",
-      durationMs: 0,
-    },
     createdAt: now,
     updatedAt: now,
   };
@@ -227,12 +221,12 @@ export function createNewAudioTrack(
 
 /**
  * Calculate timeline positions for all shots in a scene
- * Based on video durations and transition durations
+ * Based on video durations (shots cut directly to each other within a scene)
  */
 export function calculateTimelinePositions(shots: Shot[]): Shot[] {
   let currentTimeMs = 0;
 
-  return shots.map((shot, index) => {
+  return shots.map((shot) => {
     const updatedShot = {
       ...shot,
       startTimeMs: currentTimeMs,
@@ -242,17 +236,12 @@ export function calculateTimelinePositions(shots: Shot[]): Shot[] {
     const videoDurationMs = shot.video?.durationMs || 5000;
     currentTimeMs += videoDurationMs;
 
-    // Add transition duration (if not the last shot)
-    if (index < shots.length - 1) {
-      currentTimeMs += shot.transitionOut.durationMs;
-    }
-
     return updatedShot;
   });
 }
 
 /**
- * Get total timeline duration for a scene
+ * Get total timeline duration for a scene (shots only, transition is to next scene)
  */
 export function getSceneDuration(scene: Scene): number {
   if (!scene.shots || scene.shots.length === 0) {
@@ -260,14 +249,20 @@ export function getSceneDuration(scene: Scene): number {
   }
 
   let totalMs = 0;
-  scene.shots.forEach((shot, index) => {
+  scene.shots.forEach((shot) => {
     // Add video duration (default to 5 seconds if not set)
     totalMs += shot.video?.durationMs || 5000;
-    // Add transition duration (except for last shot)
-    if (index < scene.shots.length - 1) {
-      totalMs += shot.transitionOut.durationMs;
-    }
   });
 
   return totalMs;
+}
+
+/**
+ * Get the default transition (cut/none)
+ */
+export function getDefaultTransition(): Transition {
+  return {
+    type: "none",
+    durationMs: 0,
+  };
 }

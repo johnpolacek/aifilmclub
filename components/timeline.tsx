@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ChevronRight,
   GripVertical,
   ImageIcon,
   Loader2,
@@ -9,21 +8,14 @@ import {
   Plus,
   Sparkles,
   Trash2,
-  Upload,
   Video,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
-import type { AudioTrack, Shot, TransitionType } from "@/lib/scenes-client";
+import type { AudioTrack, Shot } from "@/lib/scenes-client";
 
 // ============================================================================
 // TYPES
@@ -36,74 +28,13 @@ interface TimelineProps {
   selectedAudioTrackId?: string;
   onShotClick: (shot: Shot) => void;
   onShotReorder: (shotIds: string[]) => void;
-  onTransitionChange: (shotId: string, transition: TransitionType) => void;
   onAudioTrackClick: (track: AudioTrack) => void;
   onAudioTrackVolumeChange: (trackId: string, volume: number) => void;
   onAudioTrackMuteToggle: (trackId: string) => void;
   onAudioTrackDelete: (trackId: string) => void;
-  onGenerateVideo: () => void;
-  onUploadVideo: () => void;
+  onAddShot: () => void;
   onAddAudioTrack: () => void;
   pixelsPerSecond?: number;
-}
-
-// ============================================================================
-// TRANSITION ICON COMPONENT
-// ============================================================================
-
-const TRANSITION_ICONS: Record<TransitionType, string> = {
-  none: "→",
-  "cross-dissolve": "⨉",
-  "fade-to-black": "●→",
-  "fade-from-black": "→●",
-  "fade-to-white": "○→",
-  "fade-from-white": "→○",
-};
-
-const TRANSITION_LABELS: Record<TransitionType, string> = {
-  none: "Cut",
-  "cross-dissolve": "Cross Dissolve",
-  "fade-to-black": "Fade to Black",
-  "fade-from-black": "Fade from Black",
-  "fade-to-white": "Fade to White",
-  "fade-from-white": "Fade from White",
-};
-
-interface TransitionIconProps {
-  transition: TransitionType;
-  onTransitionChange: (type: TransitionType) => void;
-}
-
-function TransitionIcon({ transition, onTransitionChange }: TransitionIconProps) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex-shrink-0 w-6 h-6 rounded-full bg-muted hover:bg-muted/80 border border-border flex items-center justify-center text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
-          title={TRANSITION_LABELS[transition]}
-        >
-          {transition === "none" ? (
-            <ChevronRight className="h-3 w-3" />
-          ) : (
-            <span className="text-[10px]">{TRANSITION_ICONS[transition]}</span>
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-40">
-        {(Object.keys(TRANSITION_LABELS) as TransitionType[]).map((type) => (
-          <DropdownMenuItem
-            key={type}
-            onClick={() => onTransitionChange(type)}
-            className={transition === type ? "bg-accent" : ""}
-          >
-            <span className="w-6 text-center mr-2">{TRANSITION_ICONS[type]}</span>
-            {TRANSITION_LABELS[type]}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 // ============================================================================
@@ -193,7 +124,11 @@ function ShotCard({
         shot.video?.url ? (
           <video src={shot.video.url} className="w-full h-full object-cover" muted playsInline />
         ) : (
-          <img src={thumbnail} alt={shot.title} className="w-full h-full object-cover" />
+          <img
+            src={thumbnail}
+            alt={`Shot ${shot.order + 1}`}
+            className="w-full h-full object-cover"
+          />
         )
       ) : (
         <div className="w-full h-full bg-muted/50 flex items-center justify-center">
@@ -212,11 +147,8 @@ function ShotCard({
       {/* Top-right: Status */}
       <div className="absolute top-1 right-1 p-0.5 rounded bg-black/40">{getStatusIcon()}</div>
 
-      {/* Bottom: Title and mode */}
-      <div className="absolute bottom-0 left-0 right-0 p-1 flex items-center justify-between">
-        <span className="text-[10px] text-white font-medium truncate max-w-[60%]">
-          {shot.title}
-        </span>
+      {/* Bottom: Mode indicator */}
+      <div className="absolute bottom-0 left-0 right-0 p-1 flex items-center justify-end">
         <span className="text-[8px] bg-primary/80 text-primary-foreground px-1 rounded">
           {getModeIndicator()}
         </span>
@@ -335,13 +267,11 @@ export default function Timeline({
   selectedAudioTrackId,
   onShotClick,
   onShotReorder,
-  onTransitionChange,
   onAudioTrackClick,
   onAudioTrackVolumeChange,
   onAudioTrackMuteToggle,
   onAudioTrackDelete,
-  onGenerateVideo,
-  onUploadVideo,
+  onAddShot,
   onAddAudioTrack,
   pixelsPerSecond = 20,
 }: TimelineProps) {
@@ -349,10 +279,9 @@ export default function Timeline({
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // Calculate total timeline duration
-  const totalDurationMs = shots.reduce((total, shot, index) => {
+  const totalDurationMs = shots.reduce((total, shot) => {
     const videoDuration = shot.video?.durationMs || 5000;
-    const transitionDuration = index < shots.length - 1 ? shot.transitionOut.durationMs : 0;
-    return total + videoDuration + transitionDuration;
+    return total + videoDuration;
   }, 0);
 
   // Handle shot reordering
@@ -421,49 +350,30 @@ export default function Timeline({
       {/* Video track */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
         <div ref={timelineRef} className="flex-1 flex items-center gap-1 overflow-x-auto py-1">
-          {shots.map((shot, index) => (
-            <div key={shot.id} className="flex items-center gap-1">
-              <ShotCard
-                shot={shot}
-                isSelected={selectedShotId === shot.id}
-                isDragging={draggedShotId === shot.id}
-                onClick={() => onShotClick(shot)}
-                onDragStart={() => handleDragStart(shot.id)}
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(shot.id)}
-                onDragEnd={handleDragEnd}
-                pixelsPerSecond={pixelsPerSecond}
-              />
-              {/* Transition icon (not after last shot) */}
-              {index < shots.length - 1 && (
-                <TransitionIcon
-                  transition={shot.transitionOut.type}
-                  onTransitionChange={(type) => onTransitionChange(shot.id, type)}
-                />
-              )}
-            </div>
+          {shots.map((shot) => (
+            <ShotCard
+              key={shot.id}
+              shot={shot}
+              isSelected={selectedShotId === shot.id}
+              isDragging={draggedShotId === shot.id}
+              onClick={() => onShotClick(shot)}
+              onDragStart={() => handleDragStart(shot.id)}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(shot.id)}
+              onDragEnd={handleDragEnd}
+              pixelsPerSecond={pixelsPerSecond}
+            />
           ))}
-          {/* Generate Video and Upload Video buttons */}
-          <div className="flex flex-col items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onGenerateVideo}
-              className="w-42 px-3 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-medium">Generate Video</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onUploadVideo}
-              className="w-42 px-3 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
-            >
-              <Upload className="h-4 w-4" />
-              <span className="text-xs font-medium">Upload Video</span>
-            </Button>
-          </div>
+          {/* Add Shot button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onAddShot}
+            className="h-16 px-4 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="text-xs font-medium">Add Shot</span>
+          </Button>
         </div>
       </div>
 
@@ -497,5 +407,5 @@ export default function Timeline({
   );
 }
 
-export { TransitionIcon, ShotCard, AudioTrackRow };
+export { ShotCard, AudioTrackRow };
 export type { TimelineProps };

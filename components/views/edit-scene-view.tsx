@@ -43,14 +43,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
-import type {
-  AudioTrack,
-  GenerationMode,
-  Scene,
-  Shot,
-  ShotVideo,
-  TransitionType,
-} from "@/lib/scenes-client";
+import type { AudioTrack, GenerationMode, Scene, Shot, ShotVideo } from "@/lib/scenes-client";
 import { createNewShot } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
@@ -497,6 +490,7 @@ export function EditSceneView({
     shots: initialScene.shots || [],
     audioTracks: initialScene.audioTracks || [],
     generatedImages: initialScene.generatedImages || [],
+    transitionOut: initialScene.transitionOut || { type: "none", durationMs: 0 },
   }));
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -871,7 +865,7 @@ export function EditSceneView({
 
   const videoUploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerateVideoClick = () => {
+  const _handleGenerateVideoClick = () => {
     setGeneratePrompt("");
     setStartFrameImage(undefined);
     setEndFrameImage(undefined);
@@ -939,7 +933,6 @@ export function EditSceneView({
     try {
       // Create a new shot first
       const newShot = createNewShot(scene.shots.length);
-      newShot.title = `Generated: ${generatePrompt.substring(0, 30)}...`;
       newShot.prompt = generatePrompt;
       newShot.sourceType = "generated";
       newShot.generationMode =
@@ -1019,7 +1012,7 @@ export function EditSceneView({
     }
   };
 
-  const handleUploadVideoClick = () => {
+  const _handleUploadVideoClick = () => {
     videoUploadInputRef.current?.click();
   };
 
@@ -1068,7 +1061,6 @@ export function EditSceneView({
 
         // Create a new shot with the uploaded video
         const newShot = createNewShot(scene.shots.length);
-        newShot.title = `Uploaded: ${file.name}`;
         newShot.sourceType = "uploaded";
         newShot.video = {
           url: data.url,
@@ -1098,6 +1090,12 @@ export function EditSceneView({
 
   const handleShotClick = (shot: Shot) => {
     setSelectedShot(shot);
+    setShowShotEditor(true);
+  };
+
+  const handleAddShot = () => {
+    const newShot = createNewShot(scene.shots.length);
+    setSelectedShot(newShot);
     setShowShotEditor(true);
   };
 
@@ -1143,24 +1141,6 @@ export function EditSceneView({
         .filter((s): s is Shot => s !== null);
       return { ...prev, shots: reorderedShots };
     });
-    setHasChanges(true);
-  };
-
-  const handleTransitionChange = (shotId: string, transitionType: TransitionType) => {
-    setScene((prev) => ({
-      ...prev,
-      shots: prev.shots.map((s) =>
-        s.id === shotId
-          ? {
-              ...s,
-              transitionOut: {
-                type: transitionType,
-                durationMs: transitionType === "none" ? 0 : 1000,
-              },
-            }
-          : s
-      ),
-    }));
     setHasChanges(true);
   };
 
@@ -1579,20 +1559,18 @@ export function EditSceneView({
                 selectedAudioTrackId={selectedAudioTrack?.id}
                 onShotClick={handleShotClick}
                 onShotReorder={handleShotReorder}
-                onTransitionChange={handleTransitionChange}
                 onAudioTrackClick={handleAudioTrackClick}
                 onAudioTrackVolumeChange={handleAudioTrackVolumeChange}
                 onAudioTrackMuteToggle={handleAudioTrackMuteToggle}
                 onAudioTrackDelete={handleAudioTrackDelete}
-                onGenerateVideo={handleGenerateVideoClick}
-                onUploadVideo={handleUploadVideoClick}
+                onAddShot={handleAddShot}
                 onAddAudioTrack={handleAddAudioTrack}
               />
             </div>
 
             {/* Instructions */}
             <p className="text-xs text-muted-foreground text-center">
-              Click a shot to edit • Drag to reorder • Click transition icons to change effect
+              Click a shot to edit • Drag to reorder
             </p>
           </div>
         </div>
@@ -1832,7 +1810,7 @@ export function EditSceneView({
           <div className="shrink-0 border-t pt-4 space-y-4 bg-background">
             <div className="space-y-2">
               <Label htmlFor="generate-prompt" className="text-base font-medium">
-                Motion Prompt
+                Prompt
               </Label>
               <div className="flex gap-3">
                 <Textarea

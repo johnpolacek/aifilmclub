@@ -872,97 +872,134 @@ export default function ProjectForm({
     e: React.ChangeEvent<HTMLInputElement>,
     characterIndex: number
   ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
+    // Convert FileList to array
+    const fileArray = Array.from(files);
 
-    // Validate raw file size (max 20MB - we'll compress it)
+    // Validate all files
     const maxRawSize = 20 * 1024 * 1024; // 20MB
-    if (file.size > maxRawSize) {
-      toast.error("Image must be less than 20MB");
-      return;
+    const validFiles: File[] = [];
+    for (const file of fileArray) {
+      if (!file.type.startsWith("image/")) {
+        toast.error(`"${file.name}" is not an image file, skipping...`);
+        continue;
+      }
+      if (file.size > maxRawSize) {
+        toast.error(`"${file.name}" is too large (max 20MB), skipping...`);
+        continue;
+      }
+      validFiles.push(file);
     }
 
-    // Get the next image index
+    if (validFiles.length === 0) return;
+
+    // Get starting image index
     const currentImages = formData.characters?.[characterIndex]?.images || [];
-    const imageIndex = currentImages.length;
+    const nextImageIndex = currentImages.length;
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setCharacterAdditionalPreviewImages({
-        ...characterAdditionalPreviewImages,
-        [characterIndex]: {
-          ...characterAdditionalPreviewImages[characterIndex],
-          [imageIndex]: reader.result as string,
-        },
-      });
-    };
-    reader.readAsDataURL(file);
+    // Show initial loading toast
+    const loadingToast = toast.loading(
+      `Uploading ${validFiles.length} image${validFiles.length > 1 ? "s" : ""}...`
+    );
+    setUploadingCharacterAdditionalIndex({ characterIndex, imageIndex: nextImageIndex });
 
-    // Compress and upload image
-    setUploadingCharacterAdditionalIndex({ characterIndex, imageIndex });
-    const loadingToast = toast.loading("Compressing image...");
+    const uploadedFilenames: string[] = [];
+    const newPreviews: Record<number, string> = {};
 
     try {
-      // Compress image client-side (maintain original aspect ratio, max 3840x3840 to accommodate any orientation)
-      const compressedFile = await compressImage(file, 3840, 3840, 0.85);
+      const { uploadCharacterImage } = await import("@/lib/actions/projects");
 
-      // Validate compressed size (max 2MB)
-      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
-      if (compressedFile.size > maxCompressedSize) {
-        toast.error("Compressed image is still too large. Please try a smaller image.", {
-          id: loadingToast,
-        });
-        setUploadingCharacterAdditionalIndex(null);
-        return;
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        const imageIndex = nextImageIndex + i;
+
+        // Create preview for this image
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          newPreviews[imageIndex] = reader.result as string;
+          setCharacterAdditionalPreviewImages((prev) => ({
+            ...prev,
+            [characterIndex]: {
+              ...prev[characterIndex],
+              [imageIndex]: reader.result as string,
+            },
+          }));
+        };
+        reader.readAsDataURL(file);
+
+        toast.loading(`Uploading image ${i + 1} of ${validFiles.length}...`, { id: loadingToast });
+
+        // Compress image client-side
+        const compressedFile = await compressImage(file, 3840, 3840, 0.85);
+
+        // Validate compressed size (max 2MB)
+        const maxCompressedSize = 2 * 1024 * 1024; // 2MB
+        if (compressedFile.size > maxCompressedSize) {
+          toast.error(`"${file.name}" is still too large after compression, skipping...`);
+          continue;
+        }
+
+        const uploadFormData = new FormData();
+        uploadFormData.append("image", compressedFile);
+
+        const result = await uploadCharacterImage(uploadFormData);
+
+        if (result.success && result.imageFilename) {
+          uploadedFilenames.push(result.imageFilename);
+        } else {
+          toast.error(`Failed to upload "${file.name}"`);
+        }
       }
 
-      toast.loading("Uploading character image...", { id: loadingToast });
-
-      const { uploadCharacterImage } = await import("@/lib/actions/projects");
-      const uploadFormData = new FormData();
-      uploadFormData.append("image", compressedFile);
-
-      const result = await uploadCharacterImage(uploadFormData);
-
-      if (result.success && result.imageFilename) {
+      if (uploadedFilenames.length > 0) {
+        // Update form data with all uploaded images
         const newCharacters = [...(formData.characters || [])];
-        const currentImages = newCharacters[characterIndex].images || [];
+        const existingImages = newCharacters[characterIndex].images || [];
         newCharacters[characterIndex] = {
           ...newCharacters[characterIndex],
-          images: [...currentImages, result.imageFilename],
+          images: [...existingImages, ...uploadedFilenames],
         };
         setFormData({
           ...formData,
           characters: newCharacters,
         });
-        const newPreviews = { ...characterAdditionalPreviewImages };
-        if (newPreviews[characterIndex]) {
-          delete newPreviews[characterIndex][imageIndex];
-        }
-        setCharacterAdditionalPreviewImages(newPreviews);
-        toast.success("Character image uploaded successfully!", {
-          id: loadingToast,
+
+        // Clear previews for uploaded images
+        setCharacterAdditionalPreviewImages((prev) => {
+          const updated = { ...prev };
+          if (updated[characterIndex]) {
+            for (let i = 0; i < uploadedFilenames.length; i++) {
+              delete updated[characterIndex][nextImageIndex + i];
+            }
+          }
+          return updated;
         });
+
+        toast.success(
+          `${uploadedFilenames.length} image${uploadedFilenames.length > 1 ? "s" : ""} uploaded successfully!`,
+          { id: loadingToast }
+        );
+      } else {
+        toast.error("No images were uploaded", { id: loadingToast });
       }
     } catch (error) {
-      console.error("Error uploading character image:", error);
+      console.error("Error uploading character images:", JSON.stringify({ error }, null, 2));
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to upload character image";
-      toast.error(errorMessage, {
-        id: loadingToast,
+        error instanceof Error ? error.message : "Failed to upload character images";
+      toast.error(errorMessage, { id: loadingToast });
+
+      // Clear all previews on error
+      setCharacterAdditionalPreviewImages((prev) => {
+        const updated = { ...prev };
+        if (updated[characterIndex]) {
+          for (const key of Object.keys(newPreviews)) {
+            delete updated[characterIndex][Number(key)];
+          }
+        }
+        return updated;
       });
-      const newPreviews = { ...characterAdditionalPreviewImages };
-      if (newPreviews[characterIndex]) {
-        delete newPreviews[characterIndex][imageIndex];
-      }
-      setCharacterAdditionalPreviewImages(newPreviews);
     } finally {
       setUploadingCharacterAdditionalIndex(null);
       // Reset file input
@@ -2685,6 +2722,7 @@ export default function ProjectForm({
                                     }}
                                     type="file"
                                     accept="image/*"
+                                    multiple
                                     onChange={(e) =>
                                       handleAddCharacterAdditionalImageChange(
                                         e,
@@ -2866,52 +2904,84 @@ export default function ProjectForm({
                           return (
                             <>
                               {locationsToShow.map((location, index) => (
-                                <button
-                                  key={`location-compact-${index}`}
-                                  type="button"
-                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                                  onClick={() => setEditingLocationIndex(index)}
-                                >
-                                  {/* Edit indicator */}
-                                  <div className="pt-0.5 shrink-0">
-                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                                  </div>
+                                <div key={`location-compact-${index}`} className="relative">
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                    onClick={() => setEditingLocationIndex(index)}
+                                  >
+                                    {/* Edit indicator */}
+                                    <div className="pt-0.5 shrink-0">
+                                      <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                    </div>
 
-                                  {/* Location Image - Super Small */}
-                                  <div className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                                    {location.image && formData.username ? (
-                                      <OptimizedImage
-                                        type="location"
-                                        filename={location.image}
-                                        username={formData.username}
-                                        alt={location.name || "Location"}
-                                        fill
-                                        objectFit="cover"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center bg-muted">
-                                        <Camera className="h-4 w-4 text-muted-foreground" />
-                                      </div>
-                                    )}
-                                  </div>
+                                    {/* Location Image - Super Small - Clickable for upload */}
+                                    <div
+                                      className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0 group/img cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleLocationMainImageClick(index);
+                                      }}
+                                      title={
+                                        location.image
+                                          ? "Click to replace image"
+                                          : "Click to add image"
+                                      }
+                                    >
+                                      {uploadingLocationIndex === index ? (
+                                        <div className="w-full h-full flex items-center justify-center bg-muted">
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                                        </div>
+                                      ) : location.image && formData.username ? (
+                                        <>
+                                          <OptimizedImage
+                                            type="location"
+                                            filename={location.image}
+                                            username={formData.username}
+                                            alt={location.name || "Location"}
+                                            fill
+                                            objectFit="cover"
+                                          />
+                                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Camera className="h-3 w-3 text-white" />
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-muted group-hover/img:bg-primary/10 transition-colors">
+                                          <Camera className="h-4 w-4 text-muted-foreground group-hover/img:text-primary transition-colors" />
+                                        </div>
+                                      )}
+                                    </div>
 
-                                  {/* Location Name */}
-                                  <span className="font-medium text-sm shrink-0">
-                                    {location.name || "Unnamed"}
-                                  </span>
-
-                                  {/* Location Description - Truncated */}
-                                  <span className="text-xs text-muted-foreground truncate flex-1">
-                                    {location.description || "No description"}
-                                  </span>
-
-                                  {/* Additional Images Count */}
-                                  {(location.images?.length || 0) > 0 && (
-                                    <span className="text-xs text-muted-foreground shrink-0">
-                                      +{location.images?.length} img
+                                    {/* Location Name */}
+                                    <span className="font-medium text-sm shrink-0">
+                                      {location.name || "Unnamed"}
                                     </span>
-                                  )}
-                                </button>
+
+                                    {/* Location Description - Truncated */}
+                                    <span className="text-xs text-muted-foreground truncate flex-1">
+                                      {location.description || "No description"}
+                                    </span>
+
+                                    {/* Additional Images Count */}
+                                    {(location.images?.length || 0) > 0 && (
+                                      <span className="text-xs text-muted-foreground shrink-0">
+                                        +{location.images?.length} img
+                                      </span>
+                                    )}
+                                  </button>
+                                  {/* Hidden file input for compact view upload */}
+                                  <input
+                                    ref={(el) => {
+                                      locationFileInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleLocationMainImageChange(e, index)}
+                                    className="hidden"
+                                    disabled={uploadingLocationIndex === index}
+                                  />
+                                </div>
                               ))}
                             </>
                           );
@@ -4171,6 +4241,7 @@ export default function ProjectForm({
                                     }}
                                     type="file"
                                     accept="image/*"
+                                    multiple
                                     onChange={(e) =>
                                       handleAddCharacterAdditionalImageChange(
                                         e,
@@ -4341,52 +4412,84 @@ export default function ProjectForm({
                           return (
                             <>
                               {locationsToShow.map((location, index) => (
-                                <button
-                                  key={`location-compact-${index}`}
-                                  type="button"
-                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                                  onClick={() => setEditingLocationIndex(index)}
-                                >
-                                  {/* Edit indicator */}
-                                  <div className="pt-0.5 shrink-0">
-                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                                  </div>
+                                <div key={`location-compact-${index}`} className="relative">
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                    onClick={() => setEditingLocationIndex(index)}
+                                  >
+                                    {/* Edit indicator */}
+                                    <div className="pt-0.5 shrink-0">
+                                      <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                    </div>
 
-                                  {/* Location Image - Super Small */}
-                                  <div className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                                    {location.image && formData.username ? (
-                                      <OptimizedImage
-                                        type="location"
-                                        filename={location.image}
-                                        username={formData.username}
-                                        alt={location.name || "Location"}
-                                        fill
-                                        objectFit="cover"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center bg-muted">
-                                        <Camera className="h-4 w-4 text-muted-foreground" />
-                                      </div>
-                                    )}
-                                  </div>
+                                    {/* Location Image - Super Small - Clickable for upload */}
+                                    <div
+                                      className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0 group/img cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleLocationMainImageClick(index);
+                                      }}
+                                      title={
+                                        location.image
+                                          ? "Click to replace image"
+                                          : "Click to add image"
+                                      }
+                                    >
+                                      {uploadingLocationIndex === index ? (
+                                        <div className="w-full h-full flex items-center justify-center bg-muted">
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                                        </div>
+                                      ) : location.image && formData.username ? (
+                                        <>
+                                          <OptimizedImage
+                                            type="location"
+                                            filename={location.image}
+                                            username={formData.username}
+                                            alt={location.name || "Location"}
+                                            fill
+                                            objectFit="cover"
+                                          />
+                                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Camera className="h-3 w-3 text-white" />
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-muted group-hover/img:bg-primary/10 transition-colors">
+                                          <Camera className="h-4 w-4 text-muted-foreground group-hover/img:text-primary transition-colors" />
+                                        </div>
+                                      )}
+                                    </div>
 
-                                  {/* Location Name */}
-                                  <span className="font-medium text-sm shrink-0">
-                                    {location.name || "Unnamed"}
-                                  </span>
-
-                                  {/* Location Description - Truncated */}
-                                  <span className="text-xs text-muted-foreground truncate flex-1">
-                                    {location.description || "No description"}
-                                  </span>
-
-                                  {/* Additional Images Count */}
-                                  {(location.images?.length || 0) > 0 && (
-                                    <span className="text-xs text-muted-foreground shrink-0">
-                                      +{location.images?.length} img
+                                    {/* Location Name */}
+                                    <span className="font-medium text-sm shrink-0">
+                                      {location.name || "Unnamed"}
                                     </span>
-                                  )}
-                                </button>
+
+                                    {/* Location Description - Truncated */}
+                                    <span className="text-xs text-muted-foreground truncate flex-1">
+                                      {location.description || "No description"}
+                                    </span>
+
+                                    {/* Additional Images Count */}
+                                    {(location.images?.length || 0) > 0 && (
+                                      <span className="text-xs text-muted-foreground shrink-0">
+                                        +{location.images?.length} img
+                                      </span>
+                                    )}
+                                  </button>
+                                  {/* Hidden file input for compact view upload */}
+                                  <input
+                                    ref={(el) => {
+                                      locationFileInputRefs.current[index] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleLocationMainImageChange(e, index)}
+                                    className="hidden"
+                                    disabled={uploadingLocationIndex === index}
+                                  />
+                                </div>
                               ))}
                             </>
                           );
