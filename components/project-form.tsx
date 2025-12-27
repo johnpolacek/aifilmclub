@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ExtractConfirmDialog } from "@/components/extract-confirm-dialog";
 import { SceneList } from "@/components/scene-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +41,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
 import type { Scene } from "@/lib/scenes-client";
+import { extractAllCharacters, extractAllLocations } from "@/lib/screenplay-parser";
 
 // Types
 export interface ProjectLinks {
@@ -110,6 +112,7 @@ const COMMON_TOOLS = {
     "Ideogram",
     "Flux",
     "Adobe Firefly",
+    "Nano Banana Pro",
     "Other",
   ],
   video: [
@@ -239,9 +242,13 @@ export default function ProjectForm({
   const [editingCharacterIndex, setEditingCharacterIndex] = useState<number | null>(null);
   const [confirmingCharacterDelete, setConfirmingCharacterDelete] = useState<number | null>(null);
   const [showAllCharacters, setShowAllCharacters] = useState(false);
+  const [showExtractCharactersDialog, setShowExtractCharactersDialog] = useState(false);
+  const [isExtractingCharacters, setIsExtractingCharacters] = useState(false);
   const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
   const [confirmingLocationDelete, setConfirmingLocationDelete] = useState<number | null>(null);
   const [showAllLocations, setShowAllLocations] = useState(false);
+  const [showExtractLocationsDialog, setShowExtractLocationsDialog] = useState(false);
+  const [isExtractingLocations, setIsExtractingLocations] = useState(false);
   const [isEditingProjectInfo, setIsEditingProjectInfo] = useState(!isEditing); // Start expanded for new projects
 
   // Section refs for scrolling
@@ -530,6 +537,127 @@ export default function ProjectForm({
       ...formData,
       characters: newCharacters,
     });
+  };
+
+  // Extract characters from screenplay
+  const handleExtractCharacters = () => {
+    if (!formData.screenplayText?.trim()) {
+      toast.error("No screenplay text to extract characters from. Please add a screenplay first.");
+      return;
+    }
+
+    // If there are existing characters, show confirmation dialog
+    if ((formData.characters?.length || 0) > 0) {
+      setShowExtractCharactersDialog(true);
+    } else {
+      performCharacterExtraction();
+    }
+  };
+
+  const performCharacterExtraction = () => {
+    if (!formData.screenplayText?.trim()) return;
+
+    setIsExtractingCharacters(true);
+    const loadingToast = toast.loading("Extracting characters from screenplay...");
+
+    try {
+      const characterNames = extractAllCharacters(formData.screenplayText);
+
+      if (characterNames.length === 0) {
+        toast.error(
+          "No characters found. Characters must have at least 3 dialogue cues (ALL CAPS names) to be extracted.",
+          { id: loadingToast }
+        );
+        return;
+      }
+
+      // Convert to Character objects
+      const newCharacters: Character[] = characterNames.map((name) => ({
+        name,
+        appearance: "",
+      }));
+
+      setFormData({
+        ...formData,
+        characters: newCharacters,
+      });
+
+      toast.success(
+        `Extracted ${characterNames.length} character${characterNames.length !== 1 ? "s" : ""} from screenplay`,
+        { id: loadingToast }
+      );
+    } catch (error) {
+      console.error(
+        "[ProjectForm] Error extracting characters:",
+        JSON.stringify({ error }, null, 2)
+      );
+      toast.error("Failed to extract characters", { id: loadingToast });
+    } finally {
+      setIsExtractingCharacters(false);
+      setShowExtractCharactersDialog(false);
+    }
+  };
+
+  // Extract locations from screenplay
+  const handleExtractLocations = () => {
+    if (!formData.screenplayText?.trim()) {
+      toast.error("No screenplay text to extract locations from. Please add a screenplay first.");
+      return;
+    }
+
+    // If there are existing locations, show confirmation dialog
+    if ((formData.setting?.locations?.length || 0) > 0) {
+      setShowExtractLocationsDialog(true);
+    } else {
+      performLocationExtraction();
+    }
+  };
+
+  const performLocationExtraction = () => {
+    if (!formData.screenplayText?.trim()) return;
+
+    setIsExtractingLocations(true);
+    const loadingToast = toast.loading("Extracting locations from screenplay...");
+
+    try {
+      const locationNames = extractAllLocations(formData.screenplayText);
+
+      if (locationNames.length === 0) {
+        toast.error(
+          "No locations found in the screenplay. Locations are detected from scene headings (INT./EXT.).",
+          { id: loadingToast }
+        );
+        return;
+      }
+
+      // Convert to Location objects
+      const newLocations: Location[] = locationNames.map((name) => ({
+        name,
+        description: "",
+      }));
+
+      setFormData({
+        ...formData,
+        setting: {
+          ...formData.setting,
+          locations: newLocations,
+        },
+      });
+
+      toast.success(
+        `Extracted ${locationNames.length} location${locationNames.length !== 1 ? "s" : ""} from screenplay`,
+        { id: loadingToast }
+      );
+    } catch (error) {
+      console.error(
+        "[ProjectForm] Error extracting locations:",
+        JSON.stringify({ error }, null, 2)
+      );
+      toast.error("Failed to extract locations", { id: loadingToast });
+    } finally {
+      setIsExtractingLocations(false);
+      setShowExtractLocationsDialog(false);
+    }
   };
 
   const handleCharacterMainImageClick = (index: number) => {
@@ -2230,35 +2358,6 @@ export default function ProjectForm({
                                 )}
                               </button>
                             ))}
-                            {characters.length > 10 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const wasShowingAll = showAllCharacters;
-                                  setShowAllCharacters(!showAllCharacters);
-                                  // Scroll to top when showing less
-                                  if (wasShowingAll) {
-                                    setTimeout(() => {
-                                      charactersSectionRef.current?.scrollIntoView({
-                                        behavior: "smooth",
-                                        block: "start",
-                                      });
-                                    }, 0);
-                                  }
-                                }}
-                                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
-                              >
-                                <ChevronsDown
-                                  className={cn(
-                                    "h-4 w-4 transition-transform duration-300",
-                                    showAllCharacters ? "rotate-180" : ""
-                                  )}
-                                />
-                                {showAllCharacters
-                                  ? "Show Less"
-                                  : `Show All (${characters.length})`}
-                              </button>
-                            )}
                           </>
                         );
                       })()}
@@ -2670,15 +2769,80 @@ export default function ProjectForm({
                       </Card>
                     )}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addCharacter}
-                    className="bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Character
-                  </Button>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addCharacter}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Character
+                    </Button>
+                    {formData.screenplayText?.trim() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleExtractCharacters}
+                        disabled={isExtractingCharacters}
+                        className="bg-transparent"
+                      >
+                        {isExtractingCharacters ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Extracting...
+                          </>
+                        ) : (
+                          <>
+                            <Film className="h-4 w-4 mr-2" />
+                            Extract from Screenplay
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {(formData.characters?.length || 0) > 10 && (
+                      <>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const wasShowingAll = showAllCharacters;
+                            setShowAllCharacters(!showAllCharacters);
+                            if (wasShowingAll) {
+                              setTimeout(() => {
+                                charactersSectionRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 0);
+                            }
+                          }}
+                          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                        >
+                          <ChevronsDown
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-300",
+                              showAllCharacters ? "rotate-180" : ""
+                            )}
+                          />
+                          {showAllCharacters
+                            ? "Show Less"
+                            : `Show All (${formData.characters?.length})`}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Extract Characters Confirmation Dialog */}
+                  <ExtractConfirmDialog
+                    open={showExtractCharactersDialog}
+                    onOpenChange={setShowExtractCharactersDialog}
+                    title="Replace All Characters?"
+                    description={`This will replace all ${formData.characters?.length || 0} existing character${(formData.characters?.length || 0) !== 1 ? "s" : ""} with characters extracted from the screenplay. This action cannot be undone.`}
+                    confirmLabel="Replace All Characters"
+                    isLoading={isExtractingCharacters}
+                    onConfirm={performCharacterExtraction}
+                  />
                 </div>
               </div>
 
@@ -2749,35 +2913,6 @@ export default function ProjectForm({
                                   )}
                                 </button>
                               ))}
-                              {locations.length > 10 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const wasShowingAll = showAllLocations;
-                                    setShowAllLocations(!showAllLocations);
-                                    // Scroll to top when showing less
-                                    if (wasShowingAll) {
-                                      setTimeout(() => {
-                                        locationsSectionRef.current?.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "start",
-                                        });
-                                      }, 0);
-                                    }
-                                  }}
-                                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
-                                >
-                                  <ChevronsDown
-                                    className={cn(
-                                      "h-4 w-4 transition-transform duration-300",
-                                      showAllLocations ? "rotate-180" : ""
-                                    )}
-                                  />
-                                  {showAllLocations
-                                    ? "Show Less"
-                                    : `Show All (${locations.length})`}
-                                </button>
-                              )}
                             </>
                           );
                         })()}
@@ -3190,15 +3325,80 @@ export default function ProjectForm({
                       </Card>
                     )}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addLocation}
-                    className="bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Location
-                  </Button>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addLocation}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Location
+                    </Button>
+                    {formData.screenplayText?.trim() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleExtractLocations}
+                        disabled={isExtractingLocations}
+                        className="bg-transparent"
+                      >
+                        {isExtractingLocations ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Extracting...
+                          </>
+                        ) : (
+                          <>
+                            <Film className="h-4 w-4 mr-2" />
+                            Extract from Screenplay
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {(formData.setting?.locations?.length || 0) > 10 && (
+                      <>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const wasShowingAll = showAllLocations;
+                            setShowAllLocations(!showAllLocations);
+                            if (wasShowingAll) {
+                              setTimeout(() => {
+                                locationsSectionRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 0);
+                            }
+                          }}
+                          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                        >
+                          <ChevronsDown
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-300",
+                              showAllLocations ? "rotate-180" : ""
+                            )}
+                          />
+                          {showAllLocations
+                            ? "Show Less"
+                            : `Show All (${formData.setting?.locations?.length})`}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Extract Locations Confirmation Dialog */}
+                  <ExtractConfirmDialog
+                    open={showExtractLocationsDialog}
+                    onOpenChange={setShowExtractLocationsDialog}
+                    title="Replace All Locations?"
+                    description={`This will replace all ${formData.setting?.locations?.length || 0} existing location${(formData.setting?.locations?.length || 0) !== 1 ? "s" : ""} with locations extracted from the screenplay. This action cannot be undone.`}
+                    confirmLabel="Replace All Locations"
+                    isLoading={isExtractingLocations}
+                    onConfirm={performLocationExtraction}
+                  />
                 </div>
               </div>
 
@@ -3644,35 +3844,6 @@ export default function ProjectForm({
                                 )}
                               </button>
                             ))}
-                            {characters.length > 10 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const wasShowingAll = showAllCharacters;
-                                  setShowAllCharacters(!showAllCharacters);
-                                  // Scroll to top when showing less
-                                  if (wasShowingAll) {
-                                    setTimeout(() => {
-                                      charactersSectionRef.current?.scrollIntoView({
-                                        behavior: "smooth",
-                                        block: "start",
-                                      });
-                                    }, 0);
-                                  }
-                                }}
-                                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
-                              >
-                                <ChevronsDown
-                                  className={cn(
-                                    "h-4 w-4 transition-transform duration-300",
-                                    showAllCharacters ? "rotate-180" : ""
-                                  )}
-                                />
-                                {showAllCharacters
-                                  ? "Show Less"
-                                  : `Show All (${characters.length})`}
-                              </button>
-                            )}
                           </>
                         );
                       })()}
@@ -4084,15 +4255,69 @@ export default function ProjectForm({
                       </Card>
                     )}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addCharacter}
-                    className="bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Character
-                  </Button>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addCharacter}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Character
+                    </Button>
+                    {formData.screenplayText?.trim() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleExtractCharacters}
+                        disabled={isExtractingCharacters}
+                        className="bg-transparent"
+                      >
+                        {isExtractingCharacters ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Extracting...
+                          </>
+                        ) : (
+                          <>
+                            <Film className="h-4 w-4 mr-2" />
+                            Extract from Screenplay
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {(formData.characters?.length || 0) > 10 && (
+                      <>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const wasShowingAll = showAllCharacters;
+                            setShowAllCharacters(!showAllCharacters);
+                            if (wasShowingAll) {
+                              setTimeout(() => {
+                                charactersSectionRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 0);
+                            }
+                          }}
+                          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                        >
+                          <ChevronsDown
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-300",
+                              showAllCharacters ? "rotate-180" : ""
+                            )}
+                          />
+                          {showAllCharacters
+                            ? "Show Less"
+                            : `Show All (${formData.characters?.length})`}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -4163,35 +4388,6 @@ export default function ProjectForm({
                                   )}
                                 </button>
                               ))}
-                              {locations.length > 10 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const wasShowingAll = showAllLocations;
-                                    setShowAllLocations(!showAllLocations);
-                                    // Scroll to top when showing less
-                                    if (wasShowingAll) {
-                                      setTimeout(() => {
-                                        locationsSectionRef.current?.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "start",
-                                        });
-                                      }, 0);
-                                    }
-                                  }}
-                                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-2 transition-colors"
-                                >
-                                  <ChevronsDown
-                                    className={cn(
-                                      "h-4 w-4 transition-transform duration-300",
-                                      showAllLocations ? "rotate-180" : ""
-                                    )}
-                                  />
-                                  {showAllLocations
-                                    ? "Show Less"
-                                    : `Show All (${locations.length})`}
-                                </button>
-                              )}
                             </>
                           );
                         })()}
@@ -4606,15 +4802,69 @@ export default function ProjectForm({
                       </Card>
                     )}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addLocation}
-                    className="bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Location
-                  </Button>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addLocation}
+                      className="bg-transparent"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Location
+                    </Button>
+                    {formData.screenplayText?.trim() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleExtractLocations}
+                        disabled={isExtractingLocations}
+                        className="bg-transparent"
+                      >
+                        {isExtractingLocations ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Extracting...
+                          </>
+                        ) : (
+                          <>
+                            <Film className="h-4 w-4 mr-2" />
+                            Extract from Screenplay
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {(formData.setting?.locations?.length || 0) > 10 && (
+                      <>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const wasShowingAll = showAllLocations;
+                            setShowAllLocations(!showAllLocations);
+                            if (wasShowingAll) {
+                              setTimeout(() => {
+                                locationsSectionRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 0);
+                            }
+                          }}
+                          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                        >
+                          <ChevronsDown
+                            className={cn(
+                              "h-4 w-4 transition-transform duration-300",
+                              showAllLocations ? "rotate-180" : ""
+                            )}
+                          />
+                          {showAllLocations
+                            ? "Show Less"
+                            : `Show All (${formData.setting?.locations?.length})`}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 

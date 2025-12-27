@@ -271,4 +271,3 @@ export function getSceneDuration(scene: Scene): number {
 
   return totalMs;
 }
-

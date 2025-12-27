@@ -1353,7 +1353,7 @@ export function EditSceneView({
     }
   };
 
-  const toggleCharacter = (characterName: string) => {
+  const _toggleCharacter = (characterName: string) => {
     const currentCharacters = scene.characters || [];
     const isSelected = currentCharacters.includes(characterName);
 
@@ -1389,15 +1389,6 @@ export function EditSceneView({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
               <Button type="button" onClick={handleSave} disabled={isSaving || !hasChanges}>
                 {isSaving ? (
                   <>
@@ -1527,27 +1518,22 @@ export function EditSceneView({
             </div>
 
             {/* Characters */}
-            {characters.length > 0 && (
+            {characters.length > 0 && scene.characters.length > 0 && (
               <div className="space-y-2">
                 <Label>Characters</Label>
                 <div className="flex flex-wrap gap-2">
-                  {characters.map((character) => {
-                    const isSelected = scene.characters.includes(character.name);
-                    return (
-                      <button
-                        key={character.name}
-                        type="button"
-                        onClick={() => toggleCharacter(character.name)}
-                        className={`px-2 py-1 rounded-full text-xs font-medium transition-colors ${
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
-                      >
-                        {character.name}
-                      </button>
-                    );
-                  })}
+                  {characters
+                    .filter((character) => scene.characters.includes(character.name))
+                    .map((character) => {
+                      return (
+                        <div
+                          key={character.name}
+                          className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground"
+                        >
+                          {character.name}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -1609,6 +1595,20 @@ export function EditSceneView({
               Click a shot to edit • Drag to reorder • Click transition icons to change effect
             </p>
           </div>
+        </div>
+
+        {/* Delete Scene Button */}
+        <div className="flex justify-end mt-8 pt-6 border-t border-border">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDeleteDialog(true)}
+            className="text-xs text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-2 w-2 mr-1" />
+            Delete Scene
+          </Button>
         </div>
       </div>
 

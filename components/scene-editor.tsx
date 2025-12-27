@@ -16,18 +16,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ExtractConfirmDialog } from "@/components/extract-confirm-dialog";
 import type { Character, Location } from "@/components/project-form";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -269,7 +262,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
               // Update the video in the scene
               setEditedScene((prev) => ({
                 ...prev,
-                generatedVideos: prev.generatedVideos.map((v) =>
+                generatedVideos: (prev.generatedVideos ?? []).map((v) =>
                   v.id === videoId
                     ? {
                         ...v,
@@ -291,7 +284,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
               // Update the video status to failed
               setEditedScene((prev) => ({
                 ...prev,
-                generatedVideos: prev.generatedVideos.map((v) =>
+                generatedVideos: (prev.generatedVideos ?? []).map((v) =>
                   v.id === videoId ? { ...v, status: "failed" as const, error: data.error } : v
                 ),
               }));
@@ -342,7 +335,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
       if (data.success && data.image) {
         setEditedScene((prev) => ({
           ...prev,
-          generatedImages: [...prev.generatedImages, data.image as GeneratedImage],
+          generatedImages: [...(prev.generatedImages ?? []), data.image as GeneratedImage],
         }));
         setImagePrompt("");
         toast.success("Image generated successfully!", { id: loadingToast });
@@ -393,7 +386,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
 
         setEditedScene((prev) => ({
           ...prev,
-          generatedVideos: [...prev.generatedVideos, newVideo],
+          generatedVideos: [...(prev.generatedVideos ?? []), newVideo],
         }));
 
         // Add to pending videos for polling
@@ -449,7 +442,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         };
         setEditedScene((prev) => ({
           ...prev,
-          generatedImages: [...prev.generatedImages, newImage],
+          generatedImages: [...(prev.generatedImages ?? []), newImage],
         }));
         toast.success("Image uploaded successfully!", { id: loadingToast });
       } else {
@@ -498,7 +491,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         };
         setEditedScene((prev) => ({
           ...prev,
-          generatedVideos: [...prev.generatedVideos, newVideo],
+          generatedVideos: [...(prev.generatedVideos ?? []), newVideo],
         }));
         toast.success("Video uploaded successfully!", { id: loadingToast });
       } else {
@@ -533,7 +526,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
     }
   };
 
-  const toggleCharacter = (characterName: string) => {
+  const _toggleCharacter = (characterName: string) => {
     const currentCharacters = editedScene.characters || [];
     const isSelected = currentCharacters.includes(characterName);
 
@@ -683,27 +676,22 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         </div>
 
         {/* Characters in Scene */}
-        {characters.length > 0 && (
+        {characters.length > 0 && editedScene.characters.length > 0 && (
           <div className="space-y-2">
             <Label>Characters in this Scene</Label>
             <div className="flex flex-wrap gap-2">
-              {characters.map((character) => {
-                const isSelected = editedScene.characters.includes(character.name);
-                return (
-                  <button
-                    key={character.name}
-                    type="button"
-                    onClick={() => toggleCharacter(character.name)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      isSelected
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {character.name}
-                  </button>
-                );
-              })}
+              {characters
+                .filter((character) => editedScene.characters.includes(character.name))
+                .map((character) => {
+                  return (
+                    <div
+                      key={character.name}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium bg-muted text-muted-foreground"
+                    >
+                      {character.name}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -776,13 +764,13 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
           </div>
 
           {/* Images Preview */}
-          {editedScene.generatedImages.length > 0 && (
+          {(editedScene.generatedImages?.length ?? 0) > 0 && (
             <div className="space-y-2">
               <Label className="text-sm text-muted-foreground">
-                Images ({editedScene.generatedImages.length})
+                Images ({editedScene.generatedImages?.length ?? 0})
               </Label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {editedScene.generatedImages.map((image) => (
+                {(editedScene.generatedImages ?? []).map((image) => (
                   <div
                     key={image.id}
                     className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30 group"
@@ -869,13 +857,13 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
           </div>
 
           {/* Videos Preview */}
-          {editedScene.generatedVideos.length > 0 && (
+          {(editedScene.generatedVideos?.length ?? 0) > 0 && (
             <div className="space-y-2">
               <Label className="text-sm text-muted-foreground">
-                Videos ({editedScene.generatedVideos.length})
+                Videos ({editedScene.generatedVideos?.length ?? 0})
               </Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {editedScene.generatedVideos.map((video) => (
+                {(editedScene.generatedVideos ?? []).map((video) => (
                   <div
                     key={video.id}
                     className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30"
@@ -946,7 +934,7 @@ interface SceneListProps {
 export function SceneList({
   projectId,
   scenes,
-  characters: _characters,
+  characters,
   locations,
   screenplayText,
   onScenesChange,
@@ -965,8 +953,9 @@ export function SceneList({
     const loadingToast = toast.loading("Extracting scenes from screenplay...");
 
     try {
-      // Get location names for automatic matching
+      // Get location and character names for automatic matching
       const locationNames = locations?.map((loc) => loc.name).filter(Boolean) || [];
+      const characterNames = characters?.map((char) => char.name).filter(Boolean) || [];
 
       const response = await fetch("/api/scenes/extract", {
         method: "POST",
@@ -975,6 +964,7 @@ export function SceneList({
           screenplayText,
           projectId,
           locationNames,
+          characterNames,
         }),
       });
 
@@ -1129,42 +1119,15 @@ export function SceneList({
       </div>
 
       {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Replace All Scenes?</DialogTitle>
-            <DialogDescription>
-              This will replace all {scenes.length} existing scene{scenes.length !== 1 ? "s" : ""}{" "}
-              with scenes extracted from the screenplay. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowConfirmDialog(false)}
-              disabled={isExtracting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={performExtraction}
-              disabled={isExtracting}
-            >
-              {isExtracting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                "Replace All Scenes"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ExtractConfirmDialog
+        open={showConfirmDialog}
+        onOpenChange={setShowConfirmDialog}
+        title="Replace All Scenes?"
+        description={`This will replace all ${scenes.length} existing scene${scenes.length !== 1 ? "s" : ""} with scenes extracted from the screenplay. This action cannot be undone.`}
+        confirmLabel="Replace All Scenes"
+        isLoading={isExtracting}
+        onConfirm={performExtraction}
+      />
     </div>
   );
 }

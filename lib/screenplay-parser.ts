@@ -83,9 +83,9 @@ function extractTitle(heading: string): string {
 }
 
 /**
- * Extract character names from scene content
+ * Extract character names from scene content (dialogue cues only)
  */
-function extractCharacters(content: string): string[] {
+function extractCharactersFromDialogue(content: string): string[] {
   const lines = content.split("\n");
   const characters = new Set<string>();
 
@@ -121,9 +121,66 @@ function extractCharacters(content: string): string[] {
 }
 
 /**
- * Parse screenplay text into scenes
+ * Match project character names found in scene content (narrative/action lines)
+ * Returns character names that appear in the scene
  */
-export function parseScreenplay(text: string): ParseResult {
+function matchCharactersInNarrative(content: string, projectCharacterNames: string[]): string[] {
+  if (projectCharacterNames.length === 0) return [];
+
+  const matchedCharacters = new Set<string>();
+  const contentLower = content.toLowerCase();
+
+  for (const characterName of projectCharacterNames) {
+    if (!characterName) continue;
+
+    // Create a word-boundary regex to match the character name
+    // This prevents matching "MARK" inside "MARKER" or "BOOKMARK"
+    const namePattern = new RegExp(
+      `\\b${characterName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "i"
+    );
+
+    if (namePattern.test(contentLower) || namePattern.test(content)) {
+      matchedCharacters.add(characterName);
+    }
+  }
+
+  return Array.from(matchedCharacters);
+}
+
+/**
+ * Extract all character references from scene content
+ * Combines dialogue cues and narrative mentions of project characters
+ */
+function extractCharacters(content: string, projectCharacterNames: string[] = []): string[] {
+  // Get characters from dialogue cues (ALL CAPS names)
+  const dialogueCharacters = extractCharactersFromDialogue(content);
+
+  // Get characters mentioned in narrative (matched against project characters)
+  const narrativeCharacters = matchCharactersInNarrative(content, projectCharacterNames);
+
+  // Combine both, using a Set to avoid duplicates
+  const allCharacters = new Set<string>();
+
+  // Add dialogue characters (these are from the screenplay itself)
+  for (const char of dialogueCharacters) {
+    allCharacters.add(char);
+  }
+
+  // Add narrative matches (these are project character names)
+  for (const char of narrativeCharacters) {
+    allCharacters.add(char);
+  }
+
+  return Array.from(allCharacters);
+}
+
+/**
+ * Parse screenplay text into scenes
+ * @param text - The screenplay text to parse
+ * @param projectCharacterNames - Optional list of project character names to match in narrative
+ */
+export function parseScreenplay(text: string, projectCharacterNames: string[] = []): ParseResult {
   if (!text || typeof text !== "string") {
     return {
       success: false,
@@ -152,7 +209,7 @@ export function parseScreenplay(text: string): ParseResult {
             title: currentScene.title || `Scene ${sceneNumber}`,
             heading: currentScene.heading,
             content,
-            characters: extractCharacters(content),
+            characters: extractCharacters(content, projectCharacterNames),
             startIndex: currentScene.startIndex || 0,
             endIndex: text.indexOf(trimmedLine, currentScene.startIndex || 0),
           });
@@ -186,7 +243,7 @@ export function parseScreenplay(text: string): ParseResult {
         title: currentScene.title || `Scene ${sceneNumber}`,
         heading: currentScene.heading,
         content,
-        characters: extractCharacters(content),
+        characters: extractCharacters(content, projectCharacterNames),
         startIndex: currentScene.startIndex || 0,
         endIndex: text.length,
       });
@@ -204,6 +261,106 @@ export function parseScreenplay(text: string): ParseResult {
       error: error instanceof Error ? error.message : "Failed to parse screenplay",
     };
   }
+}
+
+/**
+ * Extract all unique character names from screenplay text
+ * Returns an array of character names found in dialogue cues
+ * Only includes characters who speak at least minDialogueCount times (default: 3)
+ */
+export function extractAllCharacters(text: string, minDialogueCount: number = 3): string[] {
+  if (!text || typeof text !== "string") return [];
+
+  const lines = text.split("\n");
+  const characterCounts = new Map<string, number>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Check if this line looks like a character name (all caps, short)
+    if (
+      line.length > 0 &&
+      line.length < 40 &&
+      line === line.toUpperCase() &&
+      !isSceneHeading(line) &&
+      !line.startsWith("(") &&
+      !line.endsWith(")") &&
+      !/^\d+\.?\s*$/.test(line) && // Not just a number
+      !/^(FADE|CUT|DISSOLVE|SMASH|MATCH|JUMP|TIME|CONTINUED|MORE|CONT'D|THE END|END CREDITS|CREDITS ROLL)/.test(
+        line
+      )
+    ) {
+      const match = line.match(CHARACTER_NAME_PATTERN);
+      if (match) {
+        let characterName = match[1].trim();
+        // Remove parentheticals like (V.O.), (O.S.), etc.
+        characterName = characterName.replace(/\s*\(.*?\)\s*/g, "").trim();
+        if (characterName.length > 1 && characterName.length < 30) {
+          // Count occurrences instead of just adding to a set
+          characterCounts.set(characterName, (characterCounts.get(characterName) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  // Filter to only include characters with at least minDialogueCount speaking parts
+  // Sort by dialogue count (descending) so characters who speak most appear first
+  const characters: Array<{ name: string; count: number }> = [];
+  for (const [name, count] of characterCounts) {
+    if (count >= minDialogueCount) {
+      characters.push({ name, count });
+    }
+  }
+
+  // Sort by count descending, then alphabetically for ties
+  characters.sort((a, b) => {
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return characters.map((c) => c.name);
+}
+
+/**
+ * Extract all unique locations from screenplay text
+ * Returns an array of location names from scene headings
+ */
+export function extractAllLocations(text: string): string[] {
+  if (!text || typeof text !== "string") return [];
+
+  const lines = text.split("\n");
+  const locations = new Set<string>();
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (isSceneHeading(trimmedLine)) {
+      // Extract location from scene heading
+      let location = trimmedLine
+        .replace(/^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|INTERIOR|EXTERIOR)\s*/i, "")
+        .trim();
+
+      // Remove time of day suffix
+      location = location
+        .replace(
+          /\s*[-–—]\s*(DAY|NIGHT|MORNING|EVENING|AFTERNOON|LATER|CONTINUOUS|SAME|MOMENTS LATER).*$/i,
+          ""
+        )
+        .trim();
+
+      if (location.length > 0) {
+        // Title case the location for better display
+        location = location
+          .split(" ")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(" ");
+        locations.add(location);
+      }
+    }
+  }
+
+  return Array.from(locations).sort();
 }
 
 /**
