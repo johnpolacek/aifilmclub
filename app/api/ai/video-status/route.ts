@@ -81,6 +81,7 @@ export async function GET(request: Request) {
       status: result.status,
       videoUrl: finalVideoUrl,
       operationId,
+      durationMs: result.durationMs, // Video duration in milliseconds (from Veo 3.1)
     });
   } catch (error) {
     console.error(

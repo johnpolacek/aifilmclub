@@ -11,6 +11,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes";
+import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
@@ -786,11 +787,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
                     key={image.id}
                     className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30 group"
                   >
-                    <img
-                      src={image.imageUrl}
-                      alt={image.prompt}
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={image.imageUrl} alt={image.prompt} fill className="object-cover" />
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
                       <p className="text-xs text-white line-clamp-2">{image.prompt}</p>
                     </div>

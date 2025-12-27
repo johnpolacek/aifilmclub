@@ -9,15 +9,17 @@ import {
   Plus,
   Save,
   Trash2,
-  Upload,
-  Video,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AudioTrackModal } from "@/components/audio-track-modal";
 import type { Character } from "@/components/project-form";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
+import { ShotEditorModal } from "@/components/shot-editor-modal";
+import Timeline from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,11 +32,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes";
+import type { AudioTrack, Scene, Shot, ShotVideo, TransitionType } from "@/lib/scenes-client";
+import { createNewShot } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
+import { cn } from "@/lib/utils";
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 interface EditSceneViewProps {
   scene: Scene;
@@ -43,47 +50,108 @@ interface EditSceneViewProps {
   characters: Character[];
 }
 
-export function EditSceneView({
-  scene: initialScene,
-  projectId,
-  projectTitle,
-  characters,
-}: EditSceneViewProps) {
+// ============================================================================
+// SCREENPLAY FORMATTING HELPERS
+// ============================================================================
+
+/**
+ * Get CSS classes for element type styling (read-only view)
+ */
+function getElementStyles(type: ScreenplayElement["type"]): string {
+  switch (type) {
+    case "scene_heading":
+      return "font-bold uppercase tracking-wide text-primary pt-4";
+    case "action":
+      return "font-normal";
+    case "character":
+      return "uppercase font-semibold mt-6 text-center";
+    case "parenthetical":
+      return "italic text-muted-foreground text-sm text-center";
+    case "dialogue":
+      return "text-left";
+    case "transition":
+      return "uppercase text-right font-semibold text-muted-foreground mt-4";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Get wrapper classes for centering blocks
+ */
+function getWrapperStyles(type: ScreenplayElement["type"]): string {
+  switch (type) {
+    case "character":
+      return "flex justify-center";
+    case "parenthetical":
+      return "flex justify-center";
+    case "dialogue":
+      return "flex justify-center";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Get max-width for element types
+ */
+function getMaxWidth(type: ScreenplayElement["type"]): string {
+  switch (type) {
+    case "dialogue":
+      return "w-full max-w-[35ch]";
+    case "parenthetical":
+      return "w-full max-w-[35ch]";
+    case "character":
+      return "w-full max-w-[35ch]";
+    default:
+      return "w-full";
+  }
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export function EditSceneView({ scene: initialScene, projectId, characters }: EditSceneViewProps) {
   const router = useRouter();
-  const [scene, setScene] = useState<Scene>(initialScene);
+  const [scene, setScene] = useState<Scene>(() => ({
+    ...initialScene,
+    shots: initialScene.shots || [],
+    audioTracks: initialScene.audioTracks || [],
+    generatedImages: initialScene.generatedImages || [],
+  }));
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Screenplay editing state - structured elements
+  // Screenplay editing state
   const [isEditingScreenplay, setIsEditingScreenplay] = useState(false);
   const [screenplayElements, setScreenplayElements] = useState<ScreenplayElement[]>([]);
   const [focusedElementIndex, setFocusedElementIndex] = useState(0);
   const elementRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
 
-  // Image state
-  const [imagePrompt, setImagePrompt] = useState("");
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  // Shot editing state
+  const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
+  const [showShotEditor, setShowShotEditor] = useState(false);
+  const [pendingShots, setPendingShots] = useState<Map<string, string>>(new Map()); // shotId -> operationId
 
-  // Video state
-  const [videoPrompt, setVideoPrompt] = useState("");
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const [pendingVideos, setPendingVideos] = useState<Map<string, string>>(new Map());
+  // Audio track editing state
+  const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
+  const [showAudioTrackEditor, setShowAudioTrackEditor] = useState(false);
 
-  // Poll for video completion
+  // ============================================================================
+  // POLLING FOR SHOT VIDEO COMPLETION
+  // ============================================================================
+
   useEffect(() => {
-    if (pendingVideos.size === 0) return;
+    if (pendingShots.size === 0) return;
 
     const pollInterval = setInterval(async () => {
-      for (const [videoId, operationId] of pendingVideos.entries()) {
+      for (const [shotId, operationId] of pendingShots.entries()) {
         try {
           const response = await fetch(
-            `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${videoId}`
+            `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${shotId}`
           );
           const data = await response.json();
 
@@ -91,20 +159,24 @@ export function EditSceneView({
             if (data.status === "completed" && data.videoUrl) {
               setScene((prev) => ({
                 ...prev,
-                generatedVideos: prev.generatedVideos.map((v) =>
-                  v.id === videoId
+                shots: prev.shots.map((s) =>
+                  s.id === shotId
                     ? {
-                        ...v,
-                        status: "completed" as const,
-                        videoUrl: data.videoUrl,
-                        completedAt: new Date().toISOString(),
+                        ...s,
+                        video: {
+                          ...s.video,
+                          url: data.videoUrl,
+                          status: "completed" as const,
+                          durationMs: data.durationMs || 5000,
+                        },
+                        updatedAt: new Date().toISOString(),
                       }
-                    : v
+                    : s
                 ),
               }));
-              setPendingVideos((prev) => {
+              setPendingShots((prev) => {
                 const next = new Map(prev);
-                next.delete(videoId);
+                next.delete(shotId);
                 return next;
               });
               toast.success("Video generation completed!");
@@ -112,13 +184,23 @@ export function EditSceneView({
             } else if (data.status === "failed") {
               setScene((prev) => ({
                 ...prev,
-                generatedVideos: prev.generatedVideos.map((v) =>
-                  v.id === videoId ? { ...v, status: "failed" as const, error: data.error } : v
+                shots: prev.shots.map((s) =>
+                  s.id === shotId
+                    ? {
+                        ...s,
+                        video: {
+                          url: s.video?.url || "",
+                          status: "failed" as const,
+                          operationId: s.video?.operationId,
+                          error: data.error,
+                        } as ShotVideo,
+                      }
+                    : s
                 ),
               }));
-              setPendingVideos((prev) => {
+              setPendingShots((prev) => {
                 const next = new Map(prev);
-                next.delete(videoId);
+                next.delete(shotId);
                 return next;
               });
               toast.error("Video generation failed");
@@ -127,16 +209,19 @@ export function EditSceneView({
         } catch (error) {
           console.error(
             "[EditSceneView] Error polling video status:",
-            JSON.stringify({ videoId, error }, null, 2)
+            JSON.stringify({ shotId, error }, null, 2)
           );
         }
       }
     }, 5000);
 
     return () => clearInterval(pollInterval);
-  }, [pendingVideos, projectId, scene.id]);
+  }, [pendingShots, projectId, scene.id]);
 
-  // Screenplay editing handlers
+  // ============================================================================
+  // SCREENPLAY EDITING HANDLERS
+  // ============================================================================
+
   const handleScreenplayEdit = () => {
     const elements = scene.screenplay
       ? parseScreenplayToElements(scene.screenplay)
@@ -302,106 +387,85 @@ export function EditSceneView({
     }
   }, []);
 
-  // Image handlers
-  const handleGenerateImage = async () => {
-    if (!imagePrompt.trim()) {
-      toast.error("Please enter a prompt for image generation");
-      return;
-    }
+  // ============================================================================
+  // SHOT HANDLERS
+  // ============================================================================
 
-    setIsGeneratingImage(true);
-    const loadingToast = toast.loading("Generating image...");
-
-    try {
-      const response = await fetch("/api/ai/generate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: imagePrompt,
-          projectId,
-          sceneId: scene.id,
-          aspectRatio: "16:9",
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.image) {
-        setScene((prev) => ({
-          ...prev,
-          generatedImages: [...prev.generatedImages, data.image as GeneratedImage],
-        }));
-        setImagePrompt("");
-        setHasChanges(true);
-        toast.success("Image generated successfully!", { id: loadingToast });
-      } else {
-        toast.error(data.error || "Failed to generate image", { id: loadingToast });
-      }
-    } catch (error) {
-      console.error("[EditSceneView] Error generating image:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to generate image", { id: loadingToast });
-    } finally {
-      setIsGeneratingImage(false);
-    }
+  const handleAddShot = () => {
+    const newShot = createNewShot(scene.shots.length);
+    setSelectedShot(newShot);
+    setShowShotEditor(true);
   };
 
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingImage(true);
-    const loadingToast = toast.loading("Uploading image...");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", scene.id);
-      formData.append("mediaType", "image");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const newImage: GeneratedImage = {
-          id: data.id,
-          prompt: `Uploaded: ${file.name}`,
-          imageUrl: data.url,
-          model: "other",
-          createdAt: new Date().toISOString(),
-        };
-        setScene((prev) => ({
-          ...prev,
-          generatedImages: [...prev.generatedImages, newImage],
-        }));
-        setHasChanges(true);
-        toast.success("Image uploaded successfully!", { id: loadingToast });
-      } else {
-        toast.error(data.error || "Failed to upload image", { id: loadingToast });
-      }
-    } catch (error) {
-      console.error("[EditSceneView] Error uploading image:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to upload image", { id: loadingToast });
-    } finally {
-      setIsUploadingImage(false);
-      if (e.target) {
-        e.target.value = "";
-      }
-    }
+  const handleShotClick = (shot: Shot) => {
+    setSelectedShot(shot);
+    setShowShotEditor(true);
   };
 
-  // Video handlers
-  const handleGenerateVideo = async () => {
-    if (!videoPrompt.trim()) {
-      toast.error("Please enter a prompt for video generation");
-      return;
-    }
+  const handleShotSave = (updatedShot: Shot) => {
+    setScene((prev) => {
+      const existingIndex = prev.shots.findIndex((s) => s.id === updatedShot.id);
+      if (existingIndex >= 0) {
+        // Update existing shot
+        const newShots = [...prev.shots];
+        newShots[existingIndex] = updatedShot;
+        return { ...prev, shots: newShots };
+      } else {
+        // Add new shot
+        return { ...prev, shots: [...prev.shots, updatedShot] };
+      }
+    });
+    setHasChanges(true);
+    setShowShotEditor(false);
+    setSelectedShot(null);
+  };
 
-    setIsGeneratingVideo(true);
+  const handleShotDelete = (shotId: string) => {
+    setScene((prev) => ({
+      ...prev,
+      shots: prev.shots.filter((s) => s.id !== shotId).map((s, i) => ({ ...s, order: i })),
+    }));
+    setHasChanges(true);
+    setShowShotEditor(false);
+    setSelectedShot(null);
+  };
+
+  const handleShotReorder = (shotIds: string[]) => {
+    setScene((prev) => {
+      const shotMap = new Map(prev.shots.map((s) => [s.id, s]));
+      const reorderedShots = shotIds
+        .map((id, index) => {
+          const shot = shotMap.get(id);
+          if (shot) {
+            return { ...shot, order: index };
+          }
+          return null;
+        })
+        .filter((s): s is Shot => s !== null);
+      return { ...prev, shots: reorderedShots };
+    });
+    setHasChanges(true);
+  };
+
+  const handleTransitionChange = (shotId: string, transitionType: TransitionType) => {
+    setScene((prev) => ({
+      ...prev,
+      shots: prev.shots.map((s) =>
+        s.id === shotId
+          ? {
+              ...s,
+              transitionOut: {
+                type: transitionType,
+                durationMs: transitionType === "none" ? 0 : 1000,
+              },
+            }
+          : s
+      ),
+    }));
+    setHasChanges(true);
+  };
+
+  const handleGenerateVideo = async (shot: Shot) => {
     const loadingToast = toast.loading("Starting video generation...");
 
     try {
@@ -409,104 +473,119 @@ export function EditSceneView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: videoPrompt,
+          prompt: shot.prompt,
           projectId,
           sceneId: scene.id,
+          shotId: shot.id,
           aspectRatio: "16:9",
-          durationSeconds: 5,
+          durationSeconds: 8,
+          generationMode: shot.generationMode,
+          startFrameImage: shot.startFrameImage,
+          endFrameImage: shot.endFrameImage,
+          referenceImages: shot.referenceImages,
         }),
       });
 
       const data = await response.json();
 
       if (data.success && data.video) {
-        const newVideo: GeneratedVideo = {
-          id: data.video.id,
-          prompt: videoPrompt,
-          videoUrl: "",
-          model: "veo-2",
-          status: "processing",
-          createdAt: new Date().toISOString(),
-        };
-
+        // Update the shot with the pending video info
         setScene((prev) => ({
           ...prev,
-          generatedVideos: [...prev.generatedVideos, newVideo],
+          shots: prev.shots.map((s) =>
+            s.id === shot.id
+              ? {
+                  ...shot,
+                  video: {
+                    url: "",
+                    status: "processing" as const,
+                    operationId: data.video.operationId,
+                  },
+                }
+              : s
+          ),
         }));
 
-        setPendingVideos((prev) => {
+        // Add to pending shots for polling
+        setPendingShots((prev) => {
           const next = new Map(prev);
-          next.set(data.video.id, data.video.operationId);
+          next.set(shot.id, data.video.operationId);
           return next;
         });
 
-        setVideoPrompt("");
         setHasChanges(true);
-        toast.success("Video generation started! This may take a few minutes.", {
-          id: loadingToast,
-        });
+        toast.success("Video generation started!", { id: loadingToast });
+        setShowShotEditor(false);
+        setSelectedShot(null);
       } else {
         toast.error(data.error || "Failed to start video generation", { id: loadingToast });
       }
     } catch (error) {
       console.error("[EditSceneView] Error generating video:", JSON.stringify({ error }, null, 2));
       toast.error("Failed to start video generation", { id: loadingToast });
-    } finally {
-      setIsGeneratingVideo(false);
     }
   };
 
-  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // ============================================================================
+  // AUDIO TRACK HANDLERS
+  // ============================================================================
 
-    setIsUploadingVideo(true);
-    const loadingToast = toast.loading("Uploading video...");
+  const handleAddAudioTrack = () => {
+    setSelectedAudioTrack(null);
+    setShowAudioTrackEditor(true);
+  };
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", scene.id);
-      formData.append("mediaType", "video");
+  const handleAudioTrackClick = (track: AudioTrack) => {
+    setSelectedAudioTrack(track);
+    setShowAudioTrackEditor(true);
+  };
 
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const newVideo: GeneratedVideo = {
-          id: data.id,
-          prompt: `Uploaded: ${file.name}`,
-          videoUrl: data.url,
-          model: "other",
-          status: "completed",
-          createdAt: new Date().toISOString(),
-        };
-        setScene((prev) => ({
-          ...prev,
-          generatedVideos: [...prev.generatedVideos, newVideo],
-        }));
-        setHasChanges(true);
-        toast.success("Video uploaded successfully!", { id: loadingToast });
+  const handleAudioTrackSave = (track: AudioTrack) => {
+    setScene((prev) => {
+      const existingIndex = prev.audioTracks.findIndex((t) => t.id === track.id);
+      if (existingIndex >= 0) {
+        const newTracks = [...prev.audioTracks];
+        newTracks[existingIndex] = track;
+        return { ...prev, audioTracks: newTracks };
       } else {
-        toast.error(data.error || "Failed to upload video", { id: loadingToast });
+        return { ...prev, audioTracks: [...prev.audioTracks, track] };
       }
-    } catch (error) {
-      console.error("[EditSceneView] Error uploading video:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to upload video", { id: loadingToast });
-    } finally {
-      setIsUploadingVideo(false);
-      if (e.target) {
-        e.target.value = "";
-      }
-    }
+    });
+    setHasChanges(true);
+    setShowAudioTrackEditor(false);
+    setSelectedAudioTrack(null);
   };
 
-  // Save scene
+  const handleAudioTrackDelete = (trackId: string) => {
+    setScene((prev) => ({
+      ...prev,
+      audioTracks: prev.audioTracks.filter((t) => t.id !== trackId),
+    }));
+    setHasChanges(true);
+    setShowAudioTrackEditor(false);
+    setSelectedAudioTrack(null);
+  };
+
+  const handleAudioTrackVolumeChange = (trackId: string, volume: number) => {
+    setScene((prev) => ({
+      ...prev,
+      audioTracks: prev.audioTracks.map((t) => (t.id === trackId ? { ...t, volume } : t)),
+    }));
+    setHasChanges(true);
+  };
+
+  const handleAudioTrackMuteToggle = (trackId: string) => {
+    setScene((prev) => ({
+      ...prev,
+      audioTracks: prev.audioTracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t)),
+    }));
+    setHasChanges(true);
+  };
+
+  // ============================================================================
+  // SAVE / DELETE SCENE
+  // ============================================================================
+
   const handleSave = async () => {
     if (!scene.title.trim()) {
       toast.error("Scene title is required");
@@ -547,7 +626,6 @@ export function EditSceneView({
     }
   };
 
-  // Delete scene
   const handleDelete = async () => {
     setIsDeleting(true);
     const loadingToast = toast.loading("Deleting scene...");
@@ -590,9 +668,9 @@ export function EditSceneView({
   };
 
   return (
-    <div className="min-h-screen bg-background pt-20">
+    <div className="min-h-screen bg-background flex flex-col pt-20">
       {/* Header */}
-      <div className="sticky top-0 z-10 border-t border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -639,15 +717,17 @@ export function EditSceneView({
         </div>
       </div>
 
-      <div className="container mx-auto px-4 lg:px-8 py-12">
-        <div className="max-w-8xl mx-auto space-y-6 grid lg:grid-cols-3 gap-6">
-          {/* Left Column */}
+      {/* Main Content */}
+      <div className="flex-1 container mx-auto px-4 lg:px-8 py-6">
+        <div className="grid lg:grid-cols-4 gap-6">
+          {/* Left Sidebar - Scene Info */}
           <div className="space-y-6 pr-6">
+            {/* Scene Title */}
             <div className="space-y-2">
               <Label htmlFor="scene-title">Scene Title *</Label>
               <Input
                 id="scene-title"
-                placeholder="Enter scene title (e.g., 'Opening - City Street')"
+                placeholder="Enter scene title"
                 value={scene.title}
                 onChange={(e) => {
                   setScene({ ...scene, title: e.target.value });
@@ -656,270 +736,152 @@ export function EditSceneView({
                 className="bg-background"
               />
             </div>
-            <div className="mb-2">Screenplay</div>
-            <button
-              type="button"
-              onClick={handleScreenplayEdit}
-              className="w-full rounded-md border border-input bg-background cursor-pointer hover:bg-muted/30 transition-colors group text-left overflow-hidden"
-            >
+
+            {/* Screenplay */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Screenplay</Label>
+                <button
+                  type="button"
+                  onClick={handleScreenplayEdit}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  <span>{scene.screenplay ? "Edit" : "Add"}</span>
+                </button>
+              </div>
               {scene.screenplay ? (
-                <div className="relative p-3">
-                  <pre
-                    className="font-mono text-xs text-muted-foreground whitespace-pre-wrap text-left max-h-[120px] overflow-hidden"
-                    style={{
-                      fontFamily:
-                        "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
-                    }}
-                  >
-                    {scene.screenplay}
-                  </pre>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Edit className="h-4 w-4 text-primary" />
+                <div className="rounded-md border border-input bg-background overflow-hidden max-h-[600px] overflow-y-auto">
+                  <div className="px-4 pb-4 font-mono text-sm leading-relaxed space-y-1">
+                    {(() => {
+                      const elements = parseScreenplayToElements(scene.screenplay);
+                      return elements.map((element, index) => {
+                        // Add extra spacing when action follows dialogue
+                        const prevElement = index > 0 ? elements[index - 1] : null;
+                        const needsExtraSpacing =
+                          element.type === "action" && prevElement?.type === "dialogue";
+
+                        return (
+                          <div
+                            key={element.id || index}
+                            className={cn(
+                              "py-0.5",
+                              getWrapperStyles(element.type),
+                              needsExtraSpacing && "pt-4"
+                            )}
+                          >
+                            <p
+                              className={cn(
+                                "whitespace-pre-wrap",
+                                getMaxWidth(element.type),
+                                getElementStyles(element.type)
+                              )}
+                            >
+                              {element.content || "\u00A0"}
+                            </p>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 py-3 px-3">
-                  <Plus className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                    Add screenplay text...
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleScreenplayEdit}
+                  className="w-full rounded-md border border-input bg-background cursor-pointer hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2 py-3 px-3">
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                      Add screenplay...
+                    </p>
+                  </div>
+                </button>
               )}
-            </button>
-            <div>Characters</div>
+            </div>
+
+            {/* Characters */}
             {characters.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {characters.map((character) => {
-                  const isSelected = scene.characters.includes(character.name);
-                  return (
-                    <button
-                      key={character.name}
-                      type="button"
-                      onClick={() => toggleCharacter(character.name)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                        isSelected
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {character.name}
-                    </button>
-                  );
-                })}
+              <div className="space-y-2">
+                <Label>Characters</Label>
+                <div className="flex flex-wrap gap-2">
+                  {characters.map((character) => {
+                    const isSelected = scene.characters.includes(character.name);
+                    return (
+                      <button
+                        key={character.name}
+                        type="button"
+                        onClick={() => toggleCharacter(character.name)}
+                        className={`px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {character.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
+
+            {/* Reference Images */}
+            {scene.generatedImages && scene.generatedImages.length > 0 && (
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    Reference Images
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 gap-2">
+                    {scene.generatedImages.slice(0, 4).map((image) => (
+                      <div
+                        key={image.id}
+                        className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30"
+                      >
+                        <Image
+                          src={image.imageUrl}
+                          alt={image.prompt}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-          {/* Right Column */}
-          <div className="col-span-2">
-            {/* Images */}
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ImageIcon className="h-5 w-5 text-primary" />
-                  Images
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Upload Image */}
-                <div className="flex gap-2">
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    onChange={handleUploadImage}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={isUploadingImage}
-                    className="flex-1 bg-transparent"
-                  >
-                    {isUploadingImage ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Image
-                      </>
-                    )}
-                  </Button>
-                </div>
 
-                {/* Generate Image */}
-                <div className="space-y-2">
-                  <Textarea
-                    placeholder="Or describe an image to generate..."
-                    value={imagePrompt}
-                    onChange={(e) => setImagePrompt(e.target.value)}
-                    rows={2}
-                    className="bg-background resize-none"
-                    disabled={isGeneratingImage}
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleGenerateImage}
-                    disabled={isGeneratingImage || !imagePrompt.trim()}
-                    className="w-full"
-                  >
-                    {isGeneratingImage ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="h-4 w-4 mr-2" />
-                        Generate Image
-                      </>
-                    )}
-                  </Button>
-                </div>
+          {/* Main Area - Timeline */}
+          <div className="lg:col-span-3 space-y-4">
+            {/* Timeline Component */}
+            <div className="overflow-hidden">
+              <Timeline
+                shots={scene.shots}
+                audioTracks={scene.audioTracks}
+                selectedShotId={selectedShot?.id}
+                selectedAudioTrackId={selectedAudioTrack?.id}
+                onShotClick={handleShotClick}
+                onShotReorder={handleShotReorder}
+                onTransitionChange={handleTransitionChange}
+                onAudioTrackClick={handleAudioTrackClick}
+                onAudioTrackVolumeChange={handleAudioTrackVolumeChange}
+                onAudioTrackMuteToggle={handleAudioTrackMuteToggle}
+                onAudioTrackDelete={handleAudioTrackDelete}
+                onAddShot={handleAddShot}
+                onAddAudioTrack={handleAddAudioTrack}
+              />
+            </div>
 
-                {/* Images Preview */}
-                {scene.generatedImages.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">
-                      Images ({scene.generatedImages.length})
-                    </Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {scene.generatedImages.map((image) => (
-                        <div
-                          key={image.id}
-                          className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30 group"
-                        >
-                          <img
-                            src={image.imageUrl}
-                            alt={image.prompt}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                            <p className="text-xs text-white line-clamp-2">{image.prompt}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Videos */}
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Video className="h-5 w-5 text-primary" />
-                  Videos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Upload Video */}
-                <div className="flex gap-2">
-                  <input
-                    ref={videoInputRef}
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
-                    onChange={handleUploadVideo}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => videoInputRef.current?.click()}
-                    disabled={isUploadingVideo}
-                    className="flex-1 bg-transparent"
-                  >
-                    {isUploadingVideo ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Video
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Generate Video */}
-                <div className="space-y-2">
-                  <Textarea
-                    placeholder="Or describe a video to generate..."
-                    value={videoPrompt}
-                    onChange={(e) => setVideoPrompt(e.target.value)}
-                    rows={2}
-                    className="bg-background resize-none"
-                    disabled={isGeneratingVideo}
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleGenerateVideo}
-                    disabled={isGeneratingVideo || !videoPrompt.trim()}
-                    className="w-full"
-                  >
-                    {isGeneratingVideo ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4 mr-2" />
-                        Generate Video
-                      </>
-                    )}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Video generation may take several minutes to complete.
-                  </p>
-                </div>
-
-                {/* Videos Preview */}
-                {scene.generatedVideos.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">
-                      Videos ({scene.generatedVideos.length})
-                    </Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {scene.generatedVideos.map((video) => (
-                        <div
-                          key={video.id}
-                          className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30"
-                        >
-                          {video.status === "completed" && video.videoUrl ? (
-                            <video
-                              src={video.videoUrl}
-                              className="w-full h-full object-cover"
-                              controls
-                            >
-                              <track kind="captions" />
-                            </video>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center h-full gap-2">
-                              {video.status === "processing" && (
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                              )}
-                              <span className="text-sm text-muted-foreground">
-                                {video.status === "pending" && "Pending..."}
-                                {video.status === "processing" && "Processing..."}
-                                {video.status === "failed" &&
-                                  `Failed: ${video.error || "Unknown error"}`}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Instructions */}
+            <p className="text-xs text-muted-foreground text-center">
+              Click a shot to edit • Drag to reorder • Click transition icons to change effect
+            </p>
           </div>
         </div>
       </div>
@@ -930,6 +892,36 @@ export function EditSceneView({
           Unsaved changes
         </div>
       )}
+
+      {/* Shot Editor Modal */}
+      <ShotEditorModal
+        shot={selectedShot}
+        open={showShotEditor}
+        onOpenChange={setShowShotEditor}
+        onSave={handleShotSave}
+        onDelete={
+          selectedShot && scene.shots.some((s) => s.id === selectedShot.id)
+            ? handleShotDelete
+            : undefined
+        }
+        onGenerateVideo={handleGenerateVideo}
+        projectId={projectId}
+        sceneId={scene.id}
+      />
+
+      {/* Audio Track Modal */}
+      <AudioTrackModal
+        track={selectedAudioTrack}
+        shots={scene.shots}
+        open={showAudioTrackEditor}
+        onOpenChange={setShowAudioTrackEditor}
+        onSave={handleAudioTrackSave}
+        onDelete={
+          selectedAudioTrack ? () => handleAudioTrackDelete(selectedAudioTrack.id) : undefined
+        }
+        projectId={projectId}
+        sceneId={scene.id}
+      />
 
       {/* Screenplay Edit Dialog */}
       <Dialog

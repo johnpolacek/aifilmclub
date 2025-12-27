@@ -1,50 +1,43 @@
-import { getObjectFromS3, listObjectsInS3, putObjectToS3 } from "./s3";
 import { getProject, saveProject } from "./projects";
+import { getObjectFromS3, listObjectsInS3, putObjectToS3 } from "./s3";
+
+// Re-export all types from client-safe module for server-side usage
+export type {
+  AudioSourceType,
+  AudioTrack,
+  GeneratedImage,
+  GeneratedVideo,
+  GenerationMode,
+  Scene,
+  Shot,
+  ShotVideo,
+  Transition,
+  TransitionType,
+  VideoSourceType,
+} from "./scenes-client";
+
+// Re-export client-safe helper functions
+export {
+  calculateTimelinePositions,
+  createNewAudioTrack,
+  createNewShot,
+  getSceneDuration,
+} from "./scenes-client";
+
+// Import types for use in this file
+import type {
+  AudioTrack,
+  GeneratedImage,
+  GeneratedVideo,
+  GenerationMode,
+  Scene,
+  Shot,
+  ShotVideo,
+  TransitionType,
+  VideoSourceType,
+} from "./scenes-client";
 
 const SCENES_PREFIX = "scenes/";
-
-/**
- * Scene interface - represents a single scene in a film project
- */
-export interface Scene {
-  id: string;
-  projectId: string;
-  sceneNumber: number;
-  title: string;
-  screenplay: string; // Scene-specific screenplay text
-  characters: string[]; // Character IDs present in this scene
-  generatedImages: GeneratedImage[];
-  generatedVideos: GeneratedVideo[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Generated image from AI
- */
-export interface GeneratedImage {
-  id: string;
-  prompt: string;
-  imageUrl: string;
-  model: "nano-banana-pro" | "imagen-3" | "other";
-  createdAt: string;
-}
-
-/**
- * Generated video from AI
- */
-export interface GeneratedVideo {
-  id: string;
-  prompt: string;
-  videoUrl: string;
-  thumbnailUrl?: string;
-  model: "veo-3.1" | "veo-2" | "other";
-  status: "pending" | "processing" | "completed" | "failed";
-  duration?: number; // Duration in seconds
-  createdAt: string;
-  completedAt?: string;
-  error?: string;
-}
 
 /**
  * Get the S3 key for a scene
@@ -54,8 +47,22 @@ function getSceneKey(projectId: string, sceneId: string): string {
 }
 
 /**
+ * Ensure a scene has all required fields (for backward compatibility)
+ */
+function ensureSceneFields(scene: Scene): Scene {
+  return {
+    ...scene,
+    shots: scene.shots || [],
+    audioTracks: scene.audioTracks || [],
+    generatedImages: scene.generatedImages || [],
+    generatedVideos: scene.generatedVideos || [],
+  };
+}
+
+/**
  * Get a scene by ID
  * First checks the project's scenes array, then falls back to separate S3 storage
+ * Ensures backward compatibility by initializing missing fields
  */
 export async function getScene(projectId: string, sceneId: string): Promise<Scene | null> {
   try {
@@ -64,7 +71,7 @@ export async function getScene(projectId: string, sceneId: string): Promise<Scen
     if (project?.scenes) {
       const sceneFromProject = project.scenes.find((s) => s.id === sceneId);
       if (sceneFromProject) {
-        return sceneFromProject;
+        return ensureSceneFields(sceneFromProject);
       }
     }
 
@@ -76,7 +83,8 @@ export async function getScene(projectId: string, sceneId: string): Promise<Scen
       return null;
     }
 
-    return JSON.parse(data) as Scene;
+    const scene = JSON.parse(data) as Scene;
+    return ensureSceneFields(scene);
   } catch (error) {
     console.error("Error getting scene:", JSON.stringify({ projectId, sceneId, error }, null, 2));
     return null;
@@ -92,11 +100,11 @@ export async function saveScene(projectId: string, sceneData: Scene): Promise<vo
   try {
     // First, check if this scene exists in the project's scenes array
     const project = await getProject(projectId);
-    
+
     if (project) {
       const scenes = project.scenes || [];
       const existingIndex = scenes.findIndex((s) => s.id === sceneData.id);
-      
+
       if (existingIndex !== -1) {
         // Update existing scene in project
         scenes[existingIndex] = sceneData;
@@ -117,7 +125,10 @@ export async function saveScene(projectId: string, sceneData: Scene): Promise<vo
     const body = JSON.stringify(sceneData, null, 2);
     await putObjectToS3(key, body);
   } catch (error) {
-    console.error("Error saving scene:", JSON.stringify({ projectId, sceneId: sceneData.id, error }, null, 2));
+    console.error(
+      "Error saving scene:",
+      JSON.stringify({ projectId, sceneId: sceneData.id, error }, null, 2)
+    );
     throw error;
   }
 }
@@ -165,10 +176,10 @@ export async function deleteScene(projectId: string, sceneId: string): Promise<v
   try {
     // First, check if this scene exists in the project's scenes array
     const project = await getProject(projectId);
-    
+
     if (project?.scenes) {
       const existingIndex = project.scenes.findIndex((s) => s.id === sceneId);
-      
+
       if (existingIndex !== -1) {
         // Remove scene from project and renumber remaining scenes
         const updatedScenes = project.scenes.filter((s) => s.id !== sceneId);
@@ -209,11 +220,302 @@ export function createNewScene(projectId: string, sceneNumber: number): Scene {
     title: `Scene ${sceneNumber}`,
     screenplay: "",
     characters: [],
+    shots: [],
+    audioTracks: [],
+    // Legacy fields for migration compatibility
     generatedImages: [],
     generatedVideos: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+// ============================================================================
+// SHOT HELPERS
+// ============================================================================
+
+/**
+ * Add a shot to a scene
+ */
+export async function addShotToScene(
+  projectId: string,
+  sceneId: string,
+  shot: Shot
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene) {
+      return null;
+    }
+
+    // Initialize shots array if needed
+    if (!scene.shots) {
+      scene.shots = [];
+    }
+
+    scene.shots.push(shot);
+    // Sort by order
+    scene.shots.sort((a, b) => a.order - b.order);
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error adding shot to scene:",
+      JSON.stringify({ projectId, sceneId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Update a shot in a scene
+ */
+export async function updateShot(
+  projectId: string,
+  sceneId: string,
+  shotId: string,
+  updates: Partial<Shot>
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.shots) {
+      return null;
+    }
+
+    const shotIndex = scene.shots.findIndex((s) => s.id === shotId);
+    if (shotIndex === -1) {
+      return null;
+    }
+
+    scene.shots[shotIndex] = {
+      ...scene.shots[shotIndex],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error updating shot:",
+      JSON.stringify({ projectId, sceneId, shotId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Delete a shot from a scene
+ */
+export async function deleteShot(
+  projectId: string,
+  sceneId: string,
+  shotId: string
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.shots) {
+      return null;
+    }
+
+    scene.shots = scene.shots.filter((s) => s.id !== shotId);
+    // Reorder remaining shots
+    scene.shots.forEach((shot, index) => {
+      shot.order = index;
+    });
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error deleting shot:",
+      JSON.stringify({ projectId, sceneId, shotId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Reorder shots in a scene
+ */
+export async function reorderShots(
+  projectId: string,
+  sceneId: string,
+  shotIds: string[]
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.shots) {
+      return null;
+    }
+
+    const shotMap = new Map(scene.shots.map((s) => [s.id, s]));
+    scene.shots = shotIds
+      .map((id, index) => {
+        const shot = shotMap.get(id);
+        if (shot) {
+          shot.order = index;
+          shot.updatedAt = new Date().toISOString();
+        }
+        return shot;
+      })
+      .filter((s): s is Shot => s !== undefined);
+
+    scene.updatedAt = new Date().toISOString();
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error reordering shots:",
+      JSON.stringify({ projectId, sceneId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Update a shot's video status
+ */
+export async function updateShotVideoStatus(
+  projectId: string,
+  sceneId: string,
+  shotId: string,
+  videoUpdates: Partial<ShotVideo>
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.shots) {
+      return null;
+    }
+
+    const shotIndex = scene.shots.findIndex((s) => s.id === shotId);
+    if (shotIndex === -1) {
+      return null;
+    }
+
+    scene.shots[shotIndex].video = {
+      ...scene.shots[shotIndex].video,
+      ...videoUpdates,
+    } as ShotVideo;
+    scene.shots[shotIndex].updatedAt = new Date().toISOString();
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error updating shot video status:",
+      JSON.stringify({ projectId, sceneId, shotId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+// ============================================================================
+// AUDIO TRACK HELPERS
+// ============================================================================
+
+/**
+ * Add an audio track to a scene
+ */
+export async function addAudioTrackToScene(
+  projectId: string,
+  sceneId: string,
+  audioTrack: AudioTrack
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene) {
+      return null;
+    }
+
+    // Initialize audioTracks array if needed
+    if (!scene.audioTracks) {
+      scene.audioTracks = [];
+    }
+
+    scene.audioTracks.push(audioTrack);
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error adding audio track to scene:",
+      JSON.stringify({ projectId, sceneId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Update an audio track in a scene
+ */
+export async function updateAudioTrack(
+  projectId: string,
+  sceneId: string,
+  audioTrackId: string,
+  updates: Partial<AudioTrack>
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.audioTracks) {
+      return null;
+    }
+
+    const trackIndex = scene.audioTracks.findIndex((t) => t.id === audioTrackId);
+    if (trackIndex === -1) {
+      return null;
+    }
+
+    scene.audioTracks[trackIndex] = {
+      ...scene.audioTracks[trackIndex],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error updating audio track:",
+      JSON.stringify({ projectId, sceneId, audioTrackId, error }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Delete an audio track from a scene
+ */
+export async function deleteAudioTrack(
+  projectId: string,
+  sceneId: string,
+  audioTrackId: string
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene || !scene.audioTracks) {
+      return null;
+    }
+
+    scene.audioTracks = scene.audioTracks.filter((t) => t.id !== audioTrackId);
+    scene.updatedAt = new Date().toISOString();
+
+    await saveScene(projectId, scene);
+    return scene;
+  } catch (error) {
+    console.error(
+      "Error deleting audio track:",
+      JSON.stringify({ projectId, sceneId, audioTrackId, error }, null, 2)
+    );
+    throw error;
+  }
 }
 
 /**
@@ -254,19 +556,26 @@ export async function addGeneratedImageToScene(
       return null;
     }
 
+    // Initialize generatedImages if needed
+    if (!scene.generatedImages) {
+      scene.generatedImages = [];
+    }
     scene.generatedImages.push(image);
     scene.updatedAt = new Date().toISOString();
 
     await saveScene(projectId, scene);
     return scene;
   } catch (error) {
-    console.error("Error adding image to scene:", JSON.stringify({ projectId, sceneId, error }, null, 2));
+    console.error(
+      "Error adding image to scene:",
+      JSON.stringify({ projectId, sceneId, error }, null, 2)
+    );
     throw error;
   }
 }
 
 /**
- * Add a generated video to a scene
+ * Add a generated video to a scene (legacy - prefer addShotToScene)
  */
 export async function addGeneratedVideoToScene(
   projectId: string,
@@ -279,19 +588,26 @@ export async function addGeneratedVideoToScene(
       return null;
     }
 
+    // Initialize generatedVideos if needed
+    if (!scene.generatedVideos) {
+      scene.generatedVideos = [];
+    }
     scene.generatedVideos.push(video);
     scene.updatedAt = new Date().toISOString();
 
     await saveScene(projectId, scene);
     return scene;
   } catch (error) {
-    console.error("Error adding video to scene:", JSON.stringify({ projectId, sceneId, error }, null, 2));
+    console.error(
+      "Error adding video to scene:",
+      JSON.stringify({ projectId, sceneId, error }, null, 2)
+    );
     throw error;
   }
 }
 
 /**
- * Update a generated video's status
+ * Update a generated video's status (legacy - prefer updateShotVideoStatus)
  */
 export async function updateVideoStatus(
   projectId: string,
@@ -302,7 +618,7 @@ export async function updateVideoStatus(
 ): Promise<Scene | null> {
   try {
     const scene = await getScene(projectId, sceneId);
-    if (!scene) {
+    if (!scene || !scene.generatedVideos) {
       return null;
     }
 
@@ -321,9 +637,165 @@ export async function updateVideoStatus(
     await saveScene(projectId, scene);
     return scene;
   } catch (error) {
-    console.error("Error updating video status:", JSON.stringify({ projectId, sceneId, videoId, error }, null, 2));
+    console.error(
+      "Error updating video status:",
+      JSON.stringify({ projectId, sceneId, videoId, error }, null, 2)
+    );
     throw error;
   }
 }
 
+// ============================================================================
+// MIGRATION HELPERS
+// ============================================================================
 
+/**
+ * Check if a scene needs migration from legacy generatedVideos to shots
+ */
+export function sceneNeedsMigration(scene: Scene): boolean {
+  // Scene needs migration if it has legacy generatedVideos but no shots
+  const hasLegacyVideos = Boolean(scene.generatedVideos && scene.generatedVideos.length > 0);
+  const hasNoShots = !scene.shots || scene.shots.length === 0;
+  return hasLegacyVideos && hasNoShots;
+}
+
+/**
+ * Migrate a scene from legacy generatedVideos to the new shots-based architecture
+ * This converts each generatedVideo to a Shot
+ */
+export function migrateSceneToShots(scene: Scene): Scene {
+  // If scene already has shots, no migration needed
+  if (scene.shots && scene.shots.length > 0) {
+    return scene;
+  }
+
+  // If no legacy videos, just ensure shots and audioTracks exist
+  if (!scene.generatedVideos || scene.generatedVideos.length === 0) {
+    return {
+      ...scene,
+      shots: scene.shots || [],
+      audioTracks: scene.audioTracks || [],
+    };
+  }
+
+  const now = new Date().toISOString();
+
+  // Convert each generatedVideo to a Shot
+  const shots: Shot[] = scene.generatedVideos.map((video, index) => ({
+    id: `shot-migrated-${video.id}`,
+    order: index,
+    title: `Shot ${index + 1}`,
+    prompt: video.prompt,
+    sourceType: "generated" as VideoSourceType,
+    generationMode: "text-only" as GenerationMode,
+    video: {
+      url: video.videoUrl,
+      status: video.status,
+      durationMs: video.duration ? video.duration * 1000 : 5000, // Convert seconds to ms
+      error: video.error,
+    },
+    transitionOut: {
+      type: "none" as TransitionType,
+      durationMs: 0,
+    },
+    createdAt: video.createdAt,
+    updatedAt: now,
+  }));
+
+  return {
+    ...scene,
+    shots,
+    audioTracks: scene.audioTracks || [],
+    // Keep legacy data for reference
+    generatedVideos: scene.generatedVideos,
+    generatedImages: scene.generatedImages,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Migrate a scene and save it
+ */
+export async function migrateAndSaveScene(
+  projectId: string,
+  sceneId: string
+): Promise<Scene | null> {
+  try {
+    const scene = await getScene(projectId, sceneId);
+    if (!scene) {
+      return null;
+    }
+
+    if (!sceneNeedsMigration(scene)) {
+      // No migration needed, but ensure arrays exist
+      if (!scene.shots) scene.shots = [];
+      if (!scene.audioTracks) scene.audioTracks = [];
+      return scene;
+    }
+
+    console.log(
+      "[migrateAndSaveScene] Migrating scene:",
+      JSON.stringify(
+        { projectId, sceneId, videoCount: scene.generatedVideos?.length || 0 },
+        null,
+        2
+      )
+    );
+
+    const migratedScene = migrateSceneToShots(scene);
+    await saveScene(projectId, migratedScene);
+
+    console.log(
+      "[migrateAndSaveScene] Migration complete:",
+      JSON.stringify({ projectId, sceneId, shotCount: migratedScene.shots.length }, null, 2)
+    );
+
+    return migratedScene;
+  } catch (error) {
+    console.error("Error migrating scene:", JSON.stringify({ projectId, sceneId, error }, null, 2));
+    throw error;
+  }
+}
+
+/**
+ * Migrate all scenes for a project
+ */
+export async function migrateProjectScenes(projectId: string): Promise<number> {
+  try {
+    const project = await getProject(projectId);
+    if (!project || !project.scenes) {
+      return 0;
+    }
+
+    let migratedCount = 0;
+    const updatedScenes: Scene[] = [];
+
+    for (const scene of project.scenes) {
+      if (sceneNeedsMigration(scene)) {
+        const migratedScene = migrateSceneToShots(scene);
+        updatedScenes.push(migratedScene);
+        migratedCount++;
+      } else {
+        // Ensure arrays exist even if no migration needed
+        updatedScenes.push({
+          ...scene,
+          shots: scene.shots || [],
+          audioTracks: scene.audioTracks || [],
+        });
+      }
+    }
+
+    if (migratedCount > 0) {
+      await saveProject(projectId, { ...project, scenes: updatedScenes });
+      console.log(
+        "[migrateProjectScenes] Migration complete:",
+        JSON.stringify({ projectId, migratedCount }, null, 2)
+      );
+    }
+
+    return migratedCount;
+  } catch (error) {
+    console.error("Error migrating project scenes:", JSON.stringify({ projectId, error }, null, 2));
+    throw error;
+  }
+}

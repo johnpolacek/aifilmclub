@@ -1,10 +1,16 @@
 import { google } from "@ai-sdk/google";
 import { experimental_generateImage } from "ai";
+import type { GenerationMode } from "@/lib/scenes";
 
 /**
  * Google Gemini AI Service
  * Uses Vercel AI SDK for image and video generation
+ * Supports Veo 3.1 for advanced video generation
  */
+
+// ============================================================================
+// IMAGE GENERATION TYPES
+// ============================================================================
 
 /**
  * Image generation options
@@ -27,14 +33,30 @@ export interface ImageGenerationResult {
   error?: string;
 }
 
+// ============================================================================
+// VIDEO GENERATION TYPES (Veo 3.1)
+// ============================================================================
+
 /**
- * Video generation options
+ * Video generation options for Veo 3.1
+ * Supports multiple generation modes:
+ * - text-only: Generate from text prompt only
+ * - start-frame: Generate from start frame image + prompt
+ * - start-end-frame: Generate from start and end frame images + prompt
+ * - reference-images: Generate using up to 3 reference images + prompt
  */
 export interface VideoGenerationOptions {
   prompt: string;
   aspectRatio?: "16:9" | "9:16";
   durationSeconds?: 5 | 8;
-  image?: string; // Optional reference image URL or base64
+
+  // Generation mode
+  generationMode?: GenerationMode;
+
+  // Image inputs based on mode
+  startFrameImage?: string; // Base64 or URL for start frame
+  endFrameImage?: string; // Base64 or URL for end frame
+  referenceImages?: string[]; // Up to 3 reference images (base64 or URL)
 }
 
 /**
@@ -45,6 +67,7 @@ export interface VideoGenerationResult {
   videoId?: string; // Job ID for polling
   videoUrl?: string;
   status?: "pending" | "processing" | "completed" | "failed";
+  durationMs?: number;
   error?: string;
 }
 
@@ -105,51 +128,181 @@ export async function generateImage(
 }
 
 /**
- * Generate a video using Google Gemini (Veo 2)
+ * Convert image URL or base64 to the format expected by Veo API
+ */
+async function prepareImageForVeo(
+  imageInput: string
+): Promise<{ mimeType: string; data: string } | null> {
+  try {
+    // If it's already base64 data
+    if (imageInput.startsWith("data:")) {
+      const matches = imageInput.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        return {
+          mimeType: matches[1],
+          data: matches[2],
+        };
+      }
+    }
+
+    // If it's a URL, fetch and convert to base64
+    if (imageInput.startsWith("http://") || imageInput.startsWith("https://")) {
+      const response = await fetch(imageInput);
+      if (!response.ok) {
+        console.error(
+          "[prepareImageForVeo] Failed to fetch image:",
+          JSON.stringify({ url: imageInput }, null, 2)
+        );
+        return null;
+      }
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      const contentType = response.headers.get("content-type") || "image/png";
+      return {
+        mimeType: contentType,
+        data: base64,
+      };
+    }
+
+    // Assume it's raw base64
+    return {
+      mimeType: "image/png",
+      data: imageInput,
+    };
+  } catch (error) {
+    console.error(
+      "[prepareImageForVeo] Error:",
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+    );
+    return null;
+  }
+}
+
+/**
+ * Generate a video using Google Veo 3.1
+ * Supports multiple generation modes:
+ * - text-only: Generate from text prompt only
+ * - start-frame: Generate from start frame image + prompt
+ * - start-end-frame: Generate from start and end frame images + prompt
+ * - reference-images: Generate using up to 3 reference images + prompt
+ *
  * Note: Video generation is async - this starts the job and returns a job ID
  */
 export async function generateVideo(
   options: VideoGenerationOptions
 ): Promise<VideoGenerationResult> {
-  const { prompt, aspectRatio = "16:9", durationSeconds = 5 } = options;
+  const {
+    prompt,
+    aspectRatio = "16:9",
+    durationSeconds = 8,
+    generationMode = "text-only",
+    startFrameImage,
+    endFrameImage,
+    referenceImages,
+  } = options;
 
   if (!prompt) {
     return { success: false, error: "Prompt is required" };
   }
 
   try {
-    // Note: As of now, Veo video generation through Vercel AI SDK may require
-    // direct API calls or specific setup. This is a placeholder for the implementation.
-    // The actual implementation will depend on how Vercel exposes Veo through their SDK.
-    
-    // For now, we'll use the Google Generative AI API directly for video generation
-    // This requires the GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_GEMINI_API_KEY env var
-    
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       return { success: false, error: "Google API key not configured" };
     }
 
-    // Create a video generation request
-    // Note: This is using the Generative Language API for video generation
+    // Build the request based on generation mode
+    // Using Veo 3.1 model
+    const modelId = "veo-3.1-generate-preview";
+
+    // Build instance object based on generation mode
+    interface VeoInstance {
+      prompt: string;
+      image?: { bytesBase64Encoded: string; mimeType: string };
+      lastFrame?: { bytesBase64Encoded: string; mimeType: string };
+      referenceImages?: Array<{ bytesBase64Encoded: string; mimeType: string }>;
+    }
+
+    const instance: VeoInstance = { prompt };
+
+    // Add images based on generation mode
+    if (generationMode === "start-frame" && startFrameImage) {
+      const preparedImage = await prepareImageForVeo(startFrameImage);
+      if (preparedImage) {
+        instance.image = {
+          bytesBase64Encoded: preparedImage.data,
+          mimeType: preparedImage.mimeType,
+        };
+      }
+    } else if (generationMode === "start-end-frame" && startFrameImage) {
+      const preparedStartImage = await prepareImageForVeo(startFrameImage);
+      if (preparedStartImage) {
+        instance.image = {
+          bytesBase64Encoded: preparedStartImage.data,
+          mimeType: preparedStartImage.mimeType,
+        };
+      }
+      if (endFrameImage) {
+        const preparedEndImage = await prepareImageForVeo(endFrameImage);
+        if (preparedEndImage) {
+          instance.lastFrame = {
+            bytesBase64Encoded: preparedEndImage.data,
+            mimeType: preparedEndImage.mimeType,
+          };
+        }
+      }
+    } else if (
+      generationMode === "reference-images" &&
+      referenceImages &&
+      referenceImages.length > 0
+    ) {
+      // Up to 3 reference images
+      const preparedRefs: Array<{ bytesBase64Encoded: string; mimeType: string }> = [];
+      for (const refImage of referenceImages.slice(0, 3)) {
+        const prepared = await prepareImageForVeo(refImage);
+        if (prepared) {
+          preparedRefs.push({
+            bytesBase64Encoded: prepared.data,
+            mimeType: prepared.mimeType,
+          });
+        }
+      }
+      if (preparedRefs.length > 0) {
+        instance.referenceImages = preparedRefs;
+      }
+    }
+
+    console.log(
+      "[generateVideo] Starting Veo 3.1 generation:",
+      JSON.stringify(
+        {
+          mode: generationMode,
+          promptLength: prompt.length,
+          hasStartFrame: !!instance.image,
+          hasEndFrame: !!instance.lastFrame,
+          referenceCount: instance.referenceImages?.length || 0,
+        },
+        null,
+        2
+      )
+    );
+
+    // Create a video generation request using Veo 3.1
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predictLongRunning?key=${apiKey}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          instances: [
-            {
-              prompt,
-            },
-          ],
+          instances: [instance],
           parameters: {
             aspectRatio,
             durationSeconds,
             personGeneration: "allow_adult",
+            generateAudio: true, // Veo 3.1 supports native audio
           },
         }),
       }
@@ -163,15 +316,15 @@ export async function generateVideo(
       );
       return {
         success: false,
-        error: `API Error: ${response.status}`,
+        error: `API Error: ${response.status} - ${errorText}`,
       };
     }
 
     const data = await response.json();
-    
+
     // The response contains an operation name for polling
     const operationName = data.name;
-    
+
     if (!operationName) {
       return {
         success: false,
@@ -207,16 +360,14 @@ export async function generateVideo(
 /**
  * Check the status of a video generation job
  */
-export async function checkVideoStatus(
-  videoId: string
-): Promise<VideoGenerationResult> {
+export async function checkVideoStatus(videoId: string): Promise<VideoGenerationResult> {
   if (!videoId) {
     return { success: false, error: "Video ID is required" };
   }
 
   try {
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       return { success: false, error: "Google API key not configured" };
     }
@@ -257,9 +408,10 @@ export async function checkVideoStatus(
         };
       }
 
-      // Extract video URL from response
-      const videoUrl = data.response?.generatedSamples?.[0]?.video?.uri;
-      
+      // Extract video URL and metadata from response
+      const generatedSample = data.response?.generatedSamples?.[0];
+      const videoUrl = generatedSample?.video?.uri;
+
       if (!videoUrl) {
         return {
           success: false,
@@ -269,11 +421,17 @@ export async function checkVideoStatus(
         };
       }
 
+      // Extract duration if available (Veo 3.1 provides this)
+      // Duration is typically in seconds, convert to ms
+      const durationSeconds = generatedSample?.video?.durationSeconds;
+      const durationMs = durationSeconds ? Math.round(durationSeconds * 1000) : undefined;
+
       return {
         success: true,
         videoId,
         videoUrl,
         status: "completed",
+        durationMs,
       };
     }
 
@@ -303,5 +461,3 @@ export async function checkVideoStatus(
     };
   }
 }
-
-

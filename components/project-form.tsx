@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
-import type { Scene } from "@/lib/scenes";
+import type { Scene } from "@/lib/scenes-client";
 
 // Types
 export interface ProjectLinks {
