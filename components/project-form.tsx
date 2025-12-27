@@ -1270,7 +1270,7 @@ export default function ProjectForm({
     }
   };
 
-  const removeScreenplay = () => {
+  const _removeScreenplay = () => {
     setFormData({
       ...formData,
       screenplay: undefined,
@@ -1762,154 +1762,57 @@ export default function ProjectForm({
               </p>
             )}
 
-            {/* Screenplay Preview */}
-            {formData.screenplayText && (
-              <div className="p-4 bg-muted/30 rounded-lg border border-border">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground line-clamp-3">
-                      {formData.screenplayText.substring(0, 200)}
-                      {formData.screenplayText.length > 200 ? "..." : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length}{" "}
-                      words • {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0}{" "}
-                      scenes
-                    </p>
-                  </div>
-                  {isEditing && projectId && (
-                    <Button
+            {/* Screenplay Status - One Line */}
+            {formData.screenplayText ? (
+              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 rounded-lg border border-border">
+                <span className="text-sm text-muted-foreground">
+                  {formData.screenplayText.split(/\s+/).filter((w) => w.length > 0).length} words •{" "}
+                  {formData.screenplayText.match(/^(INT\.|EXT\.)/gm)?.length || 0} scenes
+                </span>
+                <div className="flex items-center gap-3">
+                  {showRemoveScreenplayConfirm ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">Replace screenplay?</span>
+                      <button
+                        onClick={() => {
+                          setShowRemoveScreenplayConfirm(false);
+                          projectFileInputRef.current?.click();
+                        }}
+                        type="button"
+                        className="text-primary hover:text-primary/80 font-medium text-xs"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setShowRemoveScreenplayConfirm(false)}
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowRemoveScreenplayConfirm(true)}
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
-                      className="shrink-0 bg-transparent"
+                      className="text-xs text-muted-foreground hover:text-foreground"
                     >
-                      Open Editor
-                    </Button>
+                      Replace
+                    </button>
                   )}
                 </div>
               </div>
-            )}
-
-            {/* Empty State - No Screenplay */}
-            {!formData.screenplayText && !formData.screenplay && (
-              <div className="p-6 bg-muted/30 rounded-lg border border-border border-dashed">
-                <div className="text-center space-y-4">
-                  <div className="flex justify-center">
-                    <div className="rounded-full bg-muted p-3">
-                      <File className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium mb-1">No screenplay yet</p>
-                    <p className="text-xs text-muted-foreground">
-                      Create a new screenplay or upload an existing PDF
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    {isEditing && projectId ? (
-                      <Button
-                        type="button"
-                        onClick={() => router.push(`/dashboard/projects/${projectId}/screenplay`)}
-                        className="bg-transparent"
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Create Screenplay
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          // For new projects, we'll create the project first, then redirect
-                          // This will be handled after project creation
-                          toast.info("Please save the project first, then edit the screenplay");
-                        }}
-                        className="bg-transparent"
-                        disabled
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Create Screenplay
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleProjectFileClick}
-                      disabled={isUploadingFile}
-                      className="bg-transparent"
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      {isUploadingFile ? "Uploading..." : "Upload PDF"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* PDF Upload Section - Only show if screenplay exists */}
-            {(formData.screenplayText || formData.screenplay) && (
-              <div className="space-y-3">
-                {/* Display uploaded screenplay PDF */}
-                {formData.screenplay && (
-                  <>
-                    <div className="flex items-center gap-2 px-3 bg-muted/30 rounded-md">
-                      <File className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{formData.screenplay.name}</p>
-                        {formData.screenplay.size && (
-                          <p className="text-xs text-muted-foreground">
-                            {(formData.screenplay.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="pl-8 flex items-center gap-4">
-                      {showRemoveScreenplayConfirm ? (
-                        <div className="flex items-center gap-3 text-xs">
-                          <span className="text-muted-foreground">Remove screenplay?</span>
-                          <button
-                            onClick={removeScreenplay}
-                            type="button"
-                            className="text-destructive hover:text-destructive/80 font-medium"
-                          >
-                            Yes, remove
-                          </button>
-                          <button
-                            onClick={() => setShowRemoveScreenplayConfirm(false)}
-                            type="button"
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              projectFileInputRef.current?.click();
-                            }}
-                            type="button"
-                            className="flex items-center gap-2 text-blue-500 hover:text-blue-600 cursor-pointer text-xs"
-                          >
-                            <Upload className="h-2 w-2" />
-                            Replace
-                          </button>
-                          <button
-                            onClick={() => setShowRemoveScreenplayConfirm(true)}
-                            type="button"
-                            className="flex items-center gap-2 text-destructive hover:text-destructive cursor-pointer text-xs"
-                          >
-                            <X className="h-2 w-2" /> Remove
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleProjectFileClick}
+                disabled={isUploadingFile}
+                className="bg-transparent"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {isUploadingFile ? "Uploading..." : "Upload PDF"}
+              </Button>
             )}
 
             {/* Hidden file input - Always rendered so ref is always available */}
@@ -1924,68 +1827,62 @@ export default function ProjectForm({
           </div>
 
           {/* Characters Section */}
-          <div className="space-y-4 pt-4 border-t border-border">
+          <div className="space-y-3 pt-4 border-t border-border">
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Characters</h3>
             </div>
 
-            <div className="space-y-4">
-              {/* Character Grid - Compact View */}
+            <div className="space-y-2">
+              {/* Character List - Compact One-Liner View */}
               {(formData.characters || []).length > 0 && editingCharacterIndex === null && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                <div className="space-y-1.5">
                   {(formData.characters || []).map((character, index) => (
-                    <div
+                    <button
                       key={`character-compact-${index}`}
-                      className="relative group rounded-lg overflow-hidden border border-border bg-muted/30"
+                      type="button"
+                      className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                      onClick={() => setEditingCharacterIndex(index)}
                     >
-                      {/* Character Image */}
-                      <div className="aspect-square relative">
+                      {/* Character Image - Super Small */}
+                      <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
                         {character.mainImage && formData.username ? (
                           <OptimizedImage
                             type="character"
                             filename={character.mainImage}
                             username={formData.username}
                             alt={character.name || "Character"}
-                            fill
+                            width={32}
+                            height={32}
                             objectFit="cover"
-                            className="w-full h-full"
-                            sizes="(max-width: 768px) 33vw, (max-width: 1024px) 25vw, 12.5vw"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-muted">
-                            <User className="h-8 w-8 text-muted-foreground" />
+                            <User className="h-4 w-4 text-muted-foreground" />
                           </div>
                         )}
-                        {/* Hover overlay with edit button */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setEditingCharacterIndex(index)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => removeCharacter(index)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
                       </div>
+
                       {/* Character Name */}
-                      <div className="p-1.5 text-center">
-                        <p className="text-xs font-medium truncate">
-                          {character.name || "Unnamed"}
-                        </p>
-                      </div>
-                    </div>
+                      <span className="font-medium text-sm shrink-0">
+                        {character.name || "Unnamed"}
+                      </span>
+
+                      {/* Character Appearance - Truncated */}
+                      <span className="text-xs text-muted-foreground truncate flex-1">
+                        {character.appearance || "No appearance description"}
+                      </span>
+
+                      {/* Additional Images Count */}
+                      {(character.images?.length || 0) > 0 && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          +{character.images?.length} img
+                        </span>
+                      )}
+
+                      {/* Edit indicator */}
+                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </button>
                   ))}
                 </div>
               )}
@@ -2365,7 +2262,7 @@ export default function ProjectForm({
                   onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
                   className="text-muted-foreground"
                 >
-                  {isLocationsExpanded ? "Collapse" : "Add Images"}
+                  {isLocationsExpanded ? "Collapse" : "Add Location Images"}
                 </Button>
               )}
             </div>
