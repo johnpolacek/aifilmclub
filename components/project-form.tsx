@@ -231,6 +231,7 @@ export default function ProjectForm({
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [editingCharacterIndex, setEditingCharacterIndex] = useState<number | null>(null);
+  const [isLocationsExpanded, setIsLocationsExpanded] = useState(false);
   const [isEditingProjectInfo, setIsEditingProjectInfo] = useState(!isEditing); // Start expanded for new projects
 
   // Location management state
@@ -938,39 +939,6 @@ export default function ProjectForm({
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.screenplayText, formData.setting?.locations, extractLocationsFromScreenplay]);
-
-  const addLocation = () => {
-    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }];
-    setFormData({
-      ...formData,
-      setting: { ...formData.setting, locations: newLocations },
-    });
-  };
-
-  const removeLocation = (index: number) => {
-    const newLocations = formData.setting?.locations?.filter((_, i) => i !== index) || [];
-    setFormData({
-      ...formData,
-      setting: { ...formData.setting, locations: newLocations },
-    });
-    // Clean up preview images and refs
-    const newPreviews = { ...locationPreviewImages };
-    delete newPreviews[index];
-    setLocationPreviewImages(newPreviews);
-
-    const newAdditionalPreviews = { ...locationAdditionalPreviewImages };
-    delete newAdditionalPreviews[index];
-    setLocationAdditionalPreviewImages(newAdditionalPreviews);
-  };
-
-  const updateLocation = (index: number, field: keyof Location, value: string | string[]) => {
-    const newLocations = [...(formData.setting?.locations || [])];
-    newLocations[index] = { ...newLocations[index], [field]: value };
-    setFormData({
-      ...formData,
-      setting: { ...formData.setting, locations: newLocations },
-    });
-  };
 
   const handleLocationMainImageClick = (index: number) => {
     locationFileInputRefs.current[index]?.click();
@@ -1961,9 +1929,6 @@ export default function ProjectForm({
               <User className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Characters</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Add characters to your project with images, names, and appearance details
-            </p>
 
             <div className="space-y-4">
               {/* Character Grid - Compact View */}
@@ -2382,39 +2347,41 @@ export default function ProjectForm({
             </div>
           </div>
 
-          {/* Locations/Settings Section */}
-          <div className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-2">
-              <Camera className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Settings & Locations</h3>
+          {/* Locations/Settings Section - Compact View */}
+          <div className="pt-4 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Locations</h3>
+                <span className="text-sm text-muted-foreground">
+                  ({(formData.setting?.locations || []).length})
+                </span>
+              </div>
+              {(formData.setting?.locations || []).length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsLocationsExpanded(!isLocationsExpanded)}
+                  className="text-muted-foreground"
+                >
+                  {isLocationsExpanded ? "Collapse" : "Add Images"}
+                </Button>
+              )}
             </div>
 
-            {/* Location List */}
-            <div className="space-y-3">
-              {(formData.setting?.locations || []).length === 0 ? (
-                <div className="p-6 bg-muted/30 rounded-lg border border-border border-dashed text-center">
-                  <Camera className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    {formData.screenplayText
-                      ? "No locations detected yet. They will appear automatically when scene headings (INT./EXT.) are found."
-                      : "Upload a screenplay to auto-extract locations, or add them manually."}
-                  </p>
-                </div>
-              ) : (
-                (formData.setting?.locations || []).map((location, index) => (
+            {/* Expanded Location Editor */}
+            {isLocationsExpanded && (formData.setting?.locations || []).length > 0 && (
+              <div className="mt-3 space-y-2">
+                {(formData.setting?.locations || []).map((location, index) => (
                   <div
                     key={`location-${index}`}
                     className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
                   >
-                    {/* Location Name */}
-                    <div className="flex-1 min-w-0">
-                      <Input
-                        value={location.name}
-                        onChange={(e) => updateLocation(index, "name", e.target.value)}
-                        placeholder="e.g., SCIENCE LAB"
-                        className="bg-background text-sm h-8"
-                      />
-                    </div>
+                    {/* Location Name (read-only display) */}
+                    <span className="flex-1 text-sm font-medium truncate px-2">
+                      {location.name}
+                    </span>
 
                     {/* Images */}
                     <div className="flex items-center gap-1 shrink-0">
@@ -2530,31 +2497,10 @@ export default function ProjectForm({
                         disabled={uploadingLocationAdditionalIndex?.locationIndex === index}
                       />
                     </div>
-
-                    {/* Delete Button */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeLocation(index)}
-                      className="text-destructive hover:text-destructive shrink-0 h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
                   </div>
-                ))
-              )}
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addLocation}
-                className="bg-transparent"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Location
-              </Button>
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Scenes Section */}
