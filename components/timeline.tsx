@@ -487,7 +487,7 @@ export default function Timeline({
         <button
           type="button"
           onClick={onAddAudioTrack}
-          className="w-42 h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-sm hover:border-primary/50 hover:text-foreground transition-colors"
+          className="w-42 h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4" />
           Add Audio Track
