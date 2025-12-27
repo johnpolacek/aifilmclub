@@ -60,7 +60,8 @@ export interface Character {
 export interface Location {
   name: string;
   description: string;
-  image?: string; // filename only
+  image?: string; // Main location image filename
+  images?: string[]; // Additional images for different angles/variations
 }
 
 export interface ProjectFile {
@@ -231,6 +232,19 @@ export default function ProjectForm({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [editingCharacterIndex, setEditingCharacterIndex] = useState<number | null>(null);
   const [isEditingProjectInfo, setIsEditingProjectInfo] = useState(!isEditing); // Start expanded for new projects
+
+  // Location management state
+  const locationFileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const locationAddImageInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [uploadingLocationIndex, setUploadingLocationIndex] = useState<number | null>(null);
+  const [uploadingLocationAdditionalIndex, setUploadingLocationAdditionalIndex] = useState<{
+    locationIndex: number;
+    imageIndex: number;
+  } | null>(null);
+  const [locationPreviewImages, setLocationPreviewImages] = useState<Record<number, string>>({});
+  const [locationAdditionalPreviewImages, setLocationAdditionalPreviewImages] = useState<
+    Record<number, Record<number, string>>
+  >({});
   const [showRemoveScreenplayConfirm, setShowRemoveScreenplayConfirm] = useState(false);
 
   // Auto-save state
@@ -845,6 +859,355 @@ export default function ProjectForm({
     setCharacterAdditionalPreviewImages(newPreviews);
   };
 
+  // ============================================================================
+  // LOCATION HANDLERS
+  // ============================================================================
+
+  /**
+   * Extract unique locations from screenplay text by parsing scene headings (INT./EXT. lines)
+   * Returns just the core location name (no INT/EXT prefix, no DAY/NIGHT suffix)
+   * Preserves order as they appear in the screenplay
+   */
+  const extractLocationsFromScreenplay = (screenplayText: string): string[] => {
+    if (!screenplayText) return [];
+
+    // Split by lines and process each line
+    const lines = screenplayText.split(/\r?\n/);
+    const timeSuffixPattern =
+      /\s*[-–—]\s*(?:DAY|NIGHT|MORNING|EVENING|LATER|CONTINUOUS|SAME|DUSK|DAWN)$/i;
+
+    // Use Map to preserve order and track unique locations (case-insensitive)
+    const locationsMap = new Map<string, string>();
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+
+      // Check if line starts with INT. or EXT. and capture the location name
+      const sceneMatch = trimmedLine.match(/^(?:INT\.|EXT\.|INT\.\/EXT\.|I\/E\.)\s*(.+)$/i);
+      if (!sceneMatch) continue;
+
+      let locationName = sceneMatch[1].trim();
+
+      // Remove time suffix if present
+      locationName = locationName.replace(timeSuffixPattern, "").trim();
+
+      if (!locationName) continue;
+
+      // Normalize key for deduplication (uppercase, just the core name)
+      const normalizedKey = locationName.toUpperCase();
+
+      // Only add if we haven't seen this location before
+      if (!locationsMap.has(normalizedKey)) {
+        // Store with original casing
+        locationsMap.set(normalizedKey, locationName);
+      }
+    }
+
+    // Return in order of appearance (Map preserves insertion order)
+    return Array.from(locationsMap.values());
+  };
+
+  // Auto-sync locations from screenplay when screenplay text changes (non-destructive)
+  useEffect(() => {
+    if (!formData.screenplayText) return;
+
+    const extractedNames = extractLocationsFromScreenplay(formData.screenplayText);
+    if (extractedNames.length === 0) return;
+
+    // Get existing locations
+    const existingLocations = formData.setting?.locations || [];
+    const existingNames = new Set(existingLocations.map((loc) => loc.name.toUpperCase()));
+
+    // Check if there are new locations to add
+    const newLocationNames = extractedNames.filter(
+      (name) => !existingNames.has(name.toUpperCase())
+    );
+
+    // Only update if there are new locations to add
+    if (newLocationNames.length === 0) return;
+
+    // Add new locations while preserving existing ones with images
+    const newLocations: Location[] = [
+      ...existingLocations,
+      ...newLocationNames.map((name) => ({ name, description: "" })),
+    ];
+
+    setFormData((prev) => ({
+      ...prev,
+      setting: { ...prev.setting, locations: newLocations },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.screenplayText, formData.setting?.locations, extractLocationsFromScreenplay]);
+
+  const addLocation = () => {
+    const newLocations = [...(formData.setting?.locations || []), { name: "", description: "" }];
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+  };
+
+  const removeLocation = (index: number) => {
+    const newLocations = formData.setting?.locations?.filter((_, i) => i !== index) || [];
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+    // Clean up preview images and refs
+    const newPreviews = { ...locationPreviewImages };
+    delete newPreviews[index];
+    setLocationPreviewImages(newPreviews);
+
+    const newAdditionalPreviews = { ...locationAdditionalPreviewImages };
+    delete newAdditionalPreviews[index];
+    setLocationAdditionalPreviewImages(newAdditionalPreviews);
+  };
+
+  const updateLocation = (index: number, field: keyof Location, value: string | string[]) => {
+    const newLocations = [...(formData.setting?.locations || [])];
+    newLocations[index] = { ...newLocations[index], [field]: value };
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+  };
+
+  const handleLocationMainImageClick = (index: number) => {
+    locationFileInputRefs.current[index]?.click();
+  };
+
+  const handleLocationMainImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate raw file size (max 20MB - we'll compress it)
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
+    if (file.size > maxRawSize) {
+      toast.error("Image must be less than 20MB");
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLocationPreviewImages({
+        ...locationPreviewImages,
+        [index]: reader.result as string,
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Compress and upload image
+    setUploadingLocationIndex(index);
+    const loadingToast = toast.loading("Compressing image...");
+
+    try {
+      // Compress image client-side
+      const compressedFile = await compressImage(file, 3840, 3840, 0.85);
+
+      // Validate compressed size (max 2MB)
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
+      if (compressedFile.size > maxCompressedSize) {
+        toast.error("Compressed image is still too large. Please try a smaller image.", {
+          id: loadingToast,
+        });
+        const newPreviews = { ...locationPreviewImages };
+        delete newPreviews[index];
+        setLocationPreviewImages(newPreviews);
+        return;
+      }
+
+      toast.loading("Uploading image...", { id: loadingToast });
+
+      const { uploadLocationImage } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
+
+      const result = await uploadLocationImage(uploadFormData);
+
+      if (result.imageFilename) {
+        // Update formData with the uploaded filename
+        const newLocations = [...(formData.setting?.locations || [])];
+        newLocations[index] = { ...newLocations[index], image: result.imageFilename };
+        setFormData({
+          ...formData,
+          setting: { ...formData.setting, locations: newLocations },
+        });
+        // Clear preview since we now have the uploaded image
+        const newPreviews = { ...locationPreviewImages };
+        delete newPreviews[index];
+        setLocationPreviewImages(newPreviews);
+        toast.success("Location image uploaded successfully!", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("Error uploading location image:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload location image";
+      toast.error(errorMessage, { id: loadingToast });
+      // Clear preview on error
+      const newPreviews = { ...locationPreviewImages };
+      delete newPreviews[index];
+      setLocationPreviewImages(newPreviews);
+    } finally {
+      setUploadingLocationIndex(null);
+      // Reset file input
+      const fileInput = locationFileInputRefs.current[index];
+      if (fileInput) {
+        fileInput.value = "";
+      }
+    }
+  };
+
+  const handleAddLocationAdditionalImageClick = (locationIndex: number) => {
+    locationAddImageInputRefs.current[locationIndex]?.click();
+  };
+
+  const handleAddLocationAdditionalImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    locationIndex: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate raw file size (max 20MB - we'll compress it)
+    const maxRawSize = 20 * 1024 * 1024; // 20MB
+    if (file.size > maxRawSize) {
+      toast.error("Image must be less than 20MB");
+      return;
+    }
+
+    // Get the next image index
+    const currentImages = formData.setting?.locations?.[locationIndex]?.images || [];
+    const imageIndex = currentImages.length;
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLocationAdditionalPreviewImages({
+        ...locationAdditionalPreviewImages,
+        [locationIndex]: {
+          ...locationAdditionalPreviewImages[locationIndex],
+          [imageIndex]: reader.result as string,
+        },
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Compress and upload image
+    setUploadingLocationAdditionalIndex({ locationIndex, imageIndex });
+    const loadingToast = toast.loading("Compressing image...");
+
+    try {
+      // Compress image client-side
+      const compressedFile = await compressImage(file, 3840, 3840, 0.85);
+
+      // Validate compressed size (max 2MB)
+      const maxCompressedSize = 2 * 1024 * 1024; // 2MB
+      if (compressedFile.size > maxCompressedSize) {
+        toast.error("Compressed image is still too large. Please try a smaller image.", {
+          id: loadingToast,
+        });
+        const newPreviews = { ...locationAdditionalPreviewImages };
+        if (newPreviews[locationIndex]) {
+          delete newPreviews[locationIndex][imageIndex];
+        }
+        setLocationAdditionalPreviewImages(newPreviews);
+        return;
+      }
+
+      toast.loading("Uploading image...", { id: loadingToast });
+
+      const { uploadLocationImage } = await import("@/lib/actions/projects");
+      const uploadFormData = new FormData();
+      uploadFormData.append("image", compressedFile);
+
+      const result = await uploadLocationImage(uploadFormData);
+
+      if (result.imageFilename) {
+        // Update formData with the uploaded filename
+        const newLocations = [...(formData.setting?.locations || [])];
+        const currentLocationImages = newLocations[locationIndex].images || [];
+        newLocations[locationIndex] = {
+          ...newLocations[locationIndex],
+          images: [...currentLocationImages, result.imageFilename],
+        };
+        setFormData({
+          ...formData,
+          setting: { ...formData.setting, locations: newLocations },
+        });
+        const newPreviews = { ...locationAdditionalPreviewImages };
+        if (newPreviews[locationIndex]) {
+          delete newPreviews[locationIndex][imageIndex];
+        }
+        setLocationAdditionalPreviewImages(newPreviews);
+        toast.success("Location image uploaded successfully!", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error("Error uploading location image:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload location image";
+      toast.error(errorMessage, { id: loadingToast });
+      const newPreviews = { ...locationAdditionalPreviewImages };
+      if (newPreviews[locationIndex]) {
+        delete newPreviews[locationIndex][imageIndex];
+      }
+      setLocationAdditionalPreviewImages(newPreviews);
+    } finally {
+      setUploadingLocationAdditionalIndex(null);
+      // Reset file input
+      const fileInput = locationAddImageInputRefs.current[locationIndex];
+      if (fileInput) {
+        fileInput.value = "";
+      }
+    }
+  };
+
+  const removeLocationAdditionalImage = (locationIndex: number, imageIndex: number) => {
+    const newLocations = [...(formData.setting?.locations || [])];
+    const currentImages = newLocations[locationIndex].images || [];
+    newLocations[locationIndex] = {
+      ...newLocations[locationIndex],
+      images: currentImages.filter((_, i) => i !== imageIndex),
+    };
+    setFormData({
+      ...formData,
+      setting: { ...formData.setting, locations: newLocations },
+    });
+    // Clean up preview
+    const newPreviews = { ...locationAdditionalPreviewImages };
+    if (newPreviews[locationIndex]) {
+      const currentPreviews = { ...newPreviews[locationIndex] };
+      delete currentPreviews[imageIndex];
+      // Reindex remaining previews
+      const reindexed: Record<number, string> = {};
+      Object.keys(currentPreviews).forEach((key) => {
+        const oldIndex = parseInt(key, 10);
+        if (oldIndex < imageIndex) {
+          reindexed[oldIndex] = currentPreviews[oldIndex];
+        } else if (oldIndex > imageIndex) {
+          reindexed[oldIndex - 1] = currentPreviews[oldIndex];
+        }
+      });
+      newPreviews[locationIndex] = reindexed;
+    }
+    setLocationAdditionalPreviewImages(newPreviews);
+  };
+
   const handleProjectFileClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     projectFileInputRef.current?.click();
@@ -890,6 +1253,7 @@ export default function ProjectForm({
       }
 
       // Update form with uploaded file info, extracted text, and parsed elements
+      // Clear locations when extracting from a new screenplay (they'll be re-extracted automatically)
       setFormData((prev) => ({
         ...prev,
         screenplay: {
@@ -900,6 +1264,10 @@ export default function ProjectForm({
         },
         ...(uploadResult.extractedText && { screenplayText: uploadResult.extractedText }),
         ...(screenplayElements && screenplayElements.length > 0 && { screenplayElements }),
+        // Clear locations when extracting from screenplay - they'll be auto-extracted fresh
+        ...(uploadResult.extractedText && {
+          setting: { ...prev.setting, locations: [] },
+        }),
       }));
 
       if (uploadResult.extractedText) {
@@ -940,6 +1308,7 @@ export default function ProjectForm({
       screenplay: undefined,
       screenplayText: undefined,
       screenplayElements: undefined,
+      setting: { ...formData.setting, locations: [] }, // Clear locations when removing screenplay
     });
     setShowRemoveScreenplayConfirm(false);
   };
@@ -1430,7 +1799,6 @@ export default function ProjectForm({
               <div className="p-4 bg-muted/30 rounded-lg border border-border">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium mb-1">Screenplay Text</p>
                     <p className="text-xs text-muted-foreground line-clamp-3">
                       {formData.screenplayText.substring(0, 200)}
                       {formData.screenplayText.length > 200 ? "..." : ""}
@@ -2010,6 +2378,181 @@ export default function ProjectForm({
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Character
+              </Button>
+            </div>
+          </div>
+
+          {/* Locations/Settings Section */}
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Settings & Locations</h3>
+            </div>
+
+            {/* Location List */}
+            <div className="space-y-3">
+              {(formData.setting?.locations || []).length === 0 ? (
+                <div className="p-6 bg-muted/30 rounded-lg border border-border border-dashed text-center">
+                  <Camera className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {formData.screenplayText
+                      ? "No locations detected yet. They will appear automatically when scene headings (INT./EXT.) are found."
+                      : "Upload a screenplay to auto-extract locations, or add them manually."}
+                  </p>
+                </div>
+              ) : (
+                (formData.setting?.locations || []).map((location, index) => (
+                  <div
+                    key={`location-${index}`}
+                    className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border"
+                  >
+                    {/* Location Name */}
+                    <div className="flex-1 min-w-0">
+                      <Input
+                        value={location.name}
+                        onChange={(e) => updateLocation(index, "name", e.target.value)}
+                        placeholder="e.g., SCIENCE LAB"
+                        className="bg-background text-sm h-8"
+                      />
+                    </div>
+
+                    {/* Images */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Main Image */}
+                      {locationPreviewImages[index] ? (
+                        <div className="relative w-12 h-8 rounded overflow-hidden border border-border">
+                          <img
+                            src={locationPreviewImages[index]}
+                            alt={location.name || "Location"}
+                            className="w-full h-full object-cover"
+                          />
+                          {uploadingLocationIndex === index && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <Loader2 className="h-3 w-3 animate-spin text-white" />
+                            </div>
+                          )}
+                        </div>
+                      ) : location.image && formData.username ? (
+                        <div className="relative w-12 h-8 rounded overflow-hidden border border-border group">
+                          <OptimizedImage
+                            type="location"
+                            filename={location.image}
+                            username={formData.username}
+                            alt={location.name || "Location"}
+                            fill
+                            objectFit="cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleLocationMainImageClick(index)}
+                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                          >
+                            <Pencil className="h-2 w-2 text-white" />
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {/* Additional Images */}
+                      {(location.images || []).map((image, imageIndex) => (
+                        <div
+                          key={`${index}-${imageIndex}`}
+                          className="relative w-12 h-8 rounded overflow-hidden border border-border group"
+                        >
+                          {locationAdditionalPreviewImages[index]?.[imageIndex] ? (
+                            <img
+                              src={locationAdditionalPreviewImages[index][imageIndex]}
+                              alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : formData.username ? (
+                            <OptimizedImage
+                              type="location"
+                              filename={image}
+                              username={formData.username}
+                              alt={`${location.name || "Location"} - ${imageIndex + 1}`}
+                              fill
+                              objectFit="cover"
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => removeLocationAdditionalImage(index, imageIndex)}
+                            disabled={
+                              uploadingLocationAdditionalIndex?.locationIndex === index &&
+                              uploadingLocationAdditionalIndex?.imageIndex === imageIndex
+                            }
+                            className="absolute top-0 right-0 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/90 transition-opacity"
+                          >
+                            <X className="h-2 w-2" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Add Image Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!location.image && !locationPreviewImages[index]) {
+                            handleLocationMainImageClick(index);
+                          } else {
+                            handleAddLocationAdditionalImageClick(index);
+                          }
+                        }}
+                        disabled={uploadingLocationIndex === index}
+                        className="w-12 h-8 rounded border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center justify-center transition-colors"
+                      >
+                        {uploadingLocationIndex === index ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Plus className="h-3 w-3 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {/* Hidden file inputs */}
+                      <input
+                        ref={(el) => {
+                          locationFileInputRefs.current[index] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleLocationMainImageChange(e, index)}
+                        className="hidden"
+                        disabled={uploadingLocationIndex === index}
+                      />
+                      <input
+                        ref={(el) => {
+                          locationAddImageInputRefs.current[index] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleAddLocationAdditionalImageChange(e, index)}
+                        className="hidden"
+                        disabled={uploadingLocationAdditionalIndex?.locationIndex === index}
+                      />
+                    </div>
+
+                    {/* Delete Button */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeLocation(index)}
+                      className="text-destructive hover:text-destructive shrink-0 h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLocation}
+                className="bg-transparent"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Location
               </Button>
             </div>
           </div>

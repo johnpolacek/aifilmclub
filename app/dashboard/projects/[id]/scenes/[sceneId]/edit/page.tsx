@@ -45,6 +45,8 @@ export default async function EditScenePage({
       projectId={projectId}
       projectTitle={projectData.title}
       characters={projectData.characters || []}
+      locations={projectData.setting?.locations || []}
+      username={projectData.username || ""}
     />
   );
 }

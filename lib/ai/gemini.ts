@@ -71,6 +71,111 @@ export interface VideoGenerationResult {
   error?: string;
 }
 
+// ============================================================================
+// IMAGE ANALYSIS (for reference-based generation)
+// ============================================================================
+
+/**
+ * Analyze reference images and generate a style/content description
+ * Uses Gemini's vision capabilities to understand the images
+ */
+export async function analyzeReferenceImages(
+  imageUrls: string[]
+): Promise<{ success: boolean; description?: string; error?: string }> {
+  if (!imageUrls || imageUrls.length === 0) {
+    return { success: false, error: "No images provided" };
+  }
+
+  try {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return { success: false, error: "Google API key not configured" };
+    }
+
+    // Prepare images for Gemini
+    const imageParts = await Promise.all(
+      imageUrls.slice(0, 3).map(async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${url}`);
+        }
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString("base64");
+        const mimeType = response.headers.get("content-type") || "image/png";
+        return {
+          inlineData: {
+            mimeType,
+            data: base64,
+          },
+        };
+      })
+    );
+
+    // Call Gemini to analyze the images
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                ...imageParts,
+                {
+                  text: `Analyze these reference images and provide a concise description (2-3 sentences) that captures:
+1. The visual style (lighting, color palette, artistic style)
+2. Key character/subject details (appearance, clothing, features)
+3. The overall mood and atmosphere
+
+Format your response as a brief style guide that could be used to generate a similar image. Start directly with the description, no preamble.`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 200,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        "[analyzeReferenceImages] API error:",
+        JSON.stringify({ error: errorText }, null, 2)
+      );
+      return { success: false, error: "Failed to analyze images" };
+    }
+
+    const data = await response.json();
+    const description = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!description) {
+      return { success: false, error: "No description generated" };
+    }
+
+    console.log(
+      "[analyzeReferenceImages] Generated description:",
+      JSON.stringify({ description: description.substring(0, 100) }, null, 2)
+    );
+
+    return { success: true, description: description.trim() };
+  } catch (error) {
+    console.error(
+      "[analyzeReferenceImages] Error:",
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to analyze images",
+    };
+  }
+}
+
 /**
  * Generate an image using Google Gemini (Imagen 3 / Nano Banana Pro)
  * Uses Vercel AI SDK's experimental_generateImage

@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { generateImage } from "@/lib/ai/gemini";
+import { analyzeReferenceImages, generateImage } from "@/lib/ai/gemini";
 import { uploadImageFromBuffer } from "@/lib/s3";
 
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json();
-    const { prompt, projectId, sceneId, aspectRatio = "16:9" } = body;
+    const { prompt, projectId, sceneId, aspectRatio = "16:9", referenceImages } = body;
 
     if (!prompt) {
       return NextResponse.json(
@@ -32,14 +32,35 @@ export async function POST(request: Request) {
       );
     }
 
+    // Build the enhanced prompt
+    let enhancedPrompt = prompt;
+
+    // If reference images are provided, analyze them and enhance the prompt
+    if (referenceImages && Array.isArray(referenceImages) && referenceImages.length > 0) {
+      console.log(
+        "[generate-image] Analyzing reference images:",
+        JSON.stringify({ count: referenceImages.length }, null, 2)
+      );
+
+      const analysisResult = await analyzeReferenceImages(referenceImages);
+      if (analysisResult.success && analysisResult.description) {
+        // Prepend the style description to the prompt
+        enhancedPrompt = `Style reference: ${analysisResult.description}\n\nGenerate: ${prompt}`;
+        console.log(
+          "[generate-image] Enhanced prompt with reference analysis:",
+          JSON.stringify({ enhancedPrompt: enhancedPrompt.substring(0, 200) }, null, 2)
+        );
+      }
+    }
+
     console.log(
       "[generate-image] Starting image generation:",
-      JSON.stringify({ prompt: prompt.substring(0, 100), projectId, sceneId, aspectRatio }, null, 2)
+      JSON.stringify({ prompt: enhancedPrompt.substring(0, 100), projectId, sceneId, aspectRatio }, null, 2)
     );
 
     // Generate image using Gemini
     const result = await generateImage({
-      prompt,
+      prompt: enhancedPrompt,
       aspectRatio,
       numberOfImages: 1,
     });

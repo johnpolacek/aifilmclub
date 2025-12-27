@@ -15,10 +15,10 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AudioTrackModal } from "@/components/audio-track-modal";
-import type { Character } from "@/components/project-form";
+import type { Character, Location } from "@/components/project-form";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { ShotEditorModal } from "@/components/shot-editor-modal";
 import Timeline from "@/components/timeline";
@@ -35,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getImageUrl } from "@/lib/image-utils";
 import type {
   AudioTrack,
   GenerationMode,
@@ -58,6 +59,8 @@ interface EditSceneViewProps {
   projectId: string;
   projectTitle: string;
   characters: Character[];
+  locations: Location[];
+  username: string;
 }
 
 // ============================================================================
@@ -118,19 +121,53 @@ function getMaxWidth(type: ScreenplayElement["type"]): string {
   }
 }
 
-// ============================================================================
-// IMAGE DROP ZONE COMPONENT
-// ============================================================================
-
-interface ImageDropZoneProps {
+interface LibraryImage {
+  url: string;
   label: string;
-  onImageSelect: (file: File) => void;
-  disabled?: boolean;
+  category: "character" | "location" | "generated";
 }
 
-function ImageDropZone({ label, onImageSelect, disabled }: ImageDropZoneProps) {
+interface ImageInputZoneProps {
+  onImageUrl: (url: string) => void;
+  onUploadFile: (file: File) => Promise<void>;
+  projectId: string;
+  sceneId: string;
+  disabled?: boolean;
+  placeholder?: string;
+  libraryImages?: LibraryImage[];
+}
+
+function ImageInputZone({
+  onImageUrl,
+  onUploadFile,
+  projectId,
+  sceneId,
+  disabled,
+  placeholder = "Describe the image you want to generate...",
+  libraryImages = [],
+}: ImageInputZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"upload" | "generate" | "library">(
+    libraryImages.length > 0 ? "library" : "upload"
+  );
   const [isDragOver, setIsDragOver] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedReferenceImages, setSelectedReferenceImages] = useState<string[]>([]);
+
+  const toggleReferenceImage = useCallback((url: string) => {
+    setSelectedReferenceImages((prev) => {
+      if (prev.includes(url)) {
+        return prev.filter((u) => u !== url);
+      }
+      if (prev.length >= 3) {
+        toast.error("Maximum 3 reference images allowed");
+        return prev;
+      }
+      return [...prev, url];
+    });
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -142,73 +179,296 @@ function ImageDropZone({ label, onImageSelect, disabled }: ImageDropZoneProps) {
   }, []);
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
       const file = e.dataTransfer.files?.[0];
       if (file?.type.startsWith("image/")) {
-        onImageSelect(file);
+        setIsUploading(true);
+        try {
+          await onUploadFile(file);
+        } finally {
+          setIsUploading(false);
+        }
       }
     },
-    [onImageSelect]
+    [onUploadFile]
   );
 
   const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        onImageSelect(file);
+        setIsUploading(true);
+        try {
+          await onUploadFile(file);
+        } finally {
+          setIsUploading(false);
+        }
       }
     },
-    [onImageSelect]
+    [onUploadFile]
   );
 
   const handleClick = useCallback(() => {
-    if (!disabled) {
+    if (!disabled && !isUploading) {
       inputRef.current?.click();
     }
-  }, [disabled]);
+  }, [disabled, isUploading]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.key === "Enter" || e.key === " ") && !disabled) {
+      if ((e.key === "Enter" || e.key === " ") && !disabled && !isUploading) {
         e.preventDefault();
         inputRef.current?.click();
       }
     },
-    [disabled]
+    [disabled, isUploading]
   );
+
+  const handleGenerate = useCallback(async () => {
+    if (!generatePrompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const response = await fetch("/api/ai/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: generatePrompt,
+          projectId,
+          sceneId,
+          aspectRatio: "16:9",
+          referenceImages: selectedReferenceImages.length > 0 ? selectedReferenceImages : undefined,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.image?.imageUrl) {
+        onImageUrl(data.image.imageUrl);
+        setGeneratePrompt("");
+        setSelectedReferenceImages([]);
+        toast.success("Image generated successfully!");
+      } else {
+        toast.error(data.error || "Failed to generate image");
+      }
+    } catch (error) {
+      console.error("[ImageInputZone] Generate error:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to generate image");
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [generatePrompt, isGenerating, projectId, sceneId, onImageUrl, selectedReferenceImages]);
+
+  const isDisabled = disabled || isGenerating || isUploading;
 
   return (
     <div className="space-y-2">
-      {label && <Label className="text-sm">{label}</Label>}
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={cn(
-          "w-full aspect-video rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-transparent",
-          isDragOver
-            ? "border-primary bg-primary/5"
-            : "border-muted-foreground/30 hover:border-primary/50",
-          disabled && "opacity-50 cursor-not-allowed"
+      {/* Mode Toggle */}
+      <div className="flex gap-1 p-0.5 bg-muted rounded-md w-fit">
+        {libraryImages.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMode("library")}
+            className={cn(
+              "px-3 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1",
+              mode === "library"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ImageIcon className="h-3 w-3" />
+            Library
+          </button>
         )}
-      >
-        <ImageIcon className="h-8 w-8 relative top-2 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground p-2">Drop image or click to upload</span>
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-        disabled={disabled}
-      />
+        <button
+          type="button"
+          onClick={() => setMode("upload")}
+          className={cn(
+            "px-3 py-1 text-xs font-medium rounded transition-colors",
+            mode === "upload"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Upload
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("generate")}
+          className={cn(
+            "px-3 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1",
+            mode === "generate"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Sparkles className="h-3 w-3" />
+          Generate
+        </button>
+      </div>
+
+      {/* Upload Mode */}
+      {mode === "upload" && (
+        <>
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "w-full aspect-video rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors bg-transparent",
+              isDragOver
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/30 hover:border-primary/50",
+              isDisabled && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                <span className="text-sm text-muted-foreground">Uploading...</span>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Drop image or click to upload</span>
+              </>
+            )}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+            disabled={isDisabled}
+          />
+        </>
+      )}
+
+      {/* Generate Mode */}
+      {mode === "generate" && (
+        <div className="space-y-3">
+          {/* Reference Images Selection */}
+          {libraryImages.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Optional: Select up to 3 reference images for style/character consistency
+              </p>
+              <div className="flex gap-1.5 flex-wrap">
+                {libraryImages.slice(0, 9).map((img, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => toggleReferenceImage(img.url)}
+                    disabled={isDisabled}
+                    className={cn(
+                      "relative w-12 h-12 rounded overflow-hidden border-2 transition-all",
+                      selectedReferenceImages.includes(img.url)
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "border-transparent hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <Image src={img.url} alt={img.label} fill className="object-cover" />
+                    {selectedReferenceImages.includes(img.url) && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <span className="text-primary font-bold text-xs">
+                          {selectedReferenceImages.indexOf(img.url) + 1}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {selectedReferenceImages.length > 0 && (
+                <p className="text-xs text-primary">
+                  {selectedReferenceImages.length} reference image
+                  {selectedReferenceImages.length !== 1 ? "s" : ""} selected
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Prompt Input */}
+          <div className="flex gap-2">
+            <Input
+              value={generatePrompt}
+              onChange={(e) => setGeneratePrompt(e.target.value)}
+              placeholder={placeholder}
+              disabled={isDisabled}
+              className="flex-1 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleGenerate();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleGenerate}
+              disabled={isDisabled || !generatePrompt.trim()}
+              className="shrink-0"
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          {isGenerating && (
+            <div className="aspect-video rounded-lg border-2 border-dashed border-primary/50 bg-primary/5 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
+              <span className="text-sm text-muted-foreground">Generating image...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Library Mode */}
+      {mode === "library" && libraryImages.length > 0 && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto p-1">
+            {libraryImages.map((img, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => onImageUrl(img.url)}
+                disabled={isDisabled}
+                className="relative aspect-video rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors group"
+              >
+                <Image src={img.url} alt={img.label} fill className="object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                  <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity px-2 text-center">
+                    {img.label}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded font-medium text-white",
+                    img.category === "location" && "bg-emerald-500/80",
+                    img.category === "character" && "bg-blue-500/80",
+                    img.category === "generated" && "bg-purple-500/80"
+                  )}
+                >
+                  {img.category === "location"
+                    ? "Location"
+                    : img.category === "character"
+                      ? "Character"
+                      : "Generated"}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground text-center">Click an image to select it</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -217,7 +477,13 @@ function ImageDropZone({ label, onImageSelect, disabled }: ImageDropZoneProps) {
 // MAIN COMPONENT
 // ============================================================================
 
-export function EditSceneView({ scene: initialScene, projectId, characters }: EditSceneViewProps) {
+export function EditSceneView({
+  scene: initialScene,
+  projectId,
+  characters,
+  locations,
+  username,
+}: EditSceneViewProps) {
   const router = useRouter();
   const [scene, setScene] = useState<Scene>(() => ({
     ...initialScene,
@@ -256,6 +522,94 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
   // Audio track editing state
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
   const [showAudioTrackEditor, setShowAudioTrackEditor] = useState(false);
+
+  // Build library images from characters and generated images
+  const libraryImages = useMemo(() => {
+    const images: LibraryImage[] = [];
+
+    // Add location images (prioritize these for scene context)
+    locations.forEach((location) => {
+      if (location.image) {
+        const url = getImageUrl({
+          type: "location",
+          filename: location.image,
+          username,
+        });
+        if (url) {
+          images.push({
+            url,
+            label: location.name || "Location",
+            category: "location",
+          });
+        }
+      }
+      // Add additional location images
+      location.images?.forEach((imgFilename) => {
+        if (imgFilename) {
+          const url = getImageUrl({
+            type: "location",
+            filename: imgFilename,
+            username,
+          });
+          if (url) {
+            images.push({
+              url,
+              label: location.name || "Location",
+              category: "location",
+            });
+          }
+        }
+      });
+    });
+
+    // Add character images
+    characters.forEach((character) => {
+      if (character.mainImage) {
+        const url = getImageUrl({
+          type: "character",
+          filename: character.mainImage,
+          username,
+        });
+        if (url) {
+          images.push({
+            url,
+            label: character.name || "Character",
+            category: "character",
+          });
+        }
+      }
+      // Add additional character images
+      character.images?.forEach((imgFilename) => {
+        if (imgFilename) {
+          const url = getImageUrl({
+            type: "character",
+            filename: imgFilename,
+            username,
+          });
+          if (url) {
+            images.push({
+              url,
+              label: character.name || "Character",
+              category: "character",
+            });
+          }
+        }
+      });
+    });
+
+    // Add generated images from the scene
+    scene.generatedImages?.forEach((genImg) => {
+      if (genImg.imageUrl) {
+        images.push({
+          url: genImg.imageUrl,
+          label: genImg.prompt?.substring(0, 30) || "Generated",
+          category: "generated",
+        });
+      }
+    });
+
+    return images;
+  }, [locations, characters, scene.generatedImages, username]);
 
   // ============================================================================
   // POLLING FOR SHOT VIDEO COMPLETION
@@ -1264,43 +1618,59 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
 
       {/* Generate Video Dialog */}
       <Dialog open={showGenerateVideoDialog} onOpenChange={setShowGenerateVideoDialog}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle className="sr-only">Generate Video</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            {/* Mode Selection */}
-            <div className="space-y-2">
-              <Label className="sr-only">Mode</Label>
-              <div className="flex gap-2">
-                <Button
+        <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0 pb-4 border-b">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+                <Film className="h-5 w-5 text-primary" />
+                Generate Video
+              </DialogTitle>
+              {/* Mode Selection - Inline with title on larger screens */}
+              <div className="flex gap-1 p-0.5 bg-muted rounded-lg">
+                <button
                   type="button"
-                  variant={generateMode === "start-end-frames" ? "default" : "outline"}
                   onClick={() => setGenerateMode("start-end-frames")}
-                  className="flex-1"
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2",
+                    generateMode === "start-end-frames"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
                 >
-                  <ImageIcon className="h-4 w-4 mr-2" />
+                  <ImageIcon className="h-4 w-4" />
                   Start/End Frames
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  variant={generateMode === "ingredients" ? "default" : "outline"}
                   onClick={() => setGenerateMode("ingredients")}
-                  className="flex-1"
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2",
+                    generateMode === "ingredients"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <Sparkles className="h-4 w-4" />
                   Ingredients
-                </Button>
+                </button>
               </div>
             </div>
+          </DialogHeader>
 
-            {/* Image Uploads - Start/End Frames Mode */}
+          <div className="flex-1 overflow-y-auto py-6">
+            {/* Start/End Frames Mode - Side by side on XL */}
             {generateMode === "start-end-frames" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Frame Image *</Label>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
+                {/* Start Frame */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                      1
+                    </span>
+                    <Label className="text-base font-medium">Start Frame</Label>
+                  </div>
                   {startFrameImage ? (
-                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                    <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-border group shadow-sm">
                       <Image
                         src={startFrameImage}
                         alt="Start frame"
@@ -1310,52 +1680,78 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
                       <button
                         type="button"
                         onClick={() => setStartFrameImage(undefined)}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        className="absolute top-3 right-3 p-1.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
                       >
                         <X className="h-4 w-4" />
                       </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                        <span className="text-white text-sm font-medium">Start Frame</span>
+                      </div>
                     </div>
                   ) : (
-                    <ImageDropZone
-                      label=""
-                      onImageSelect={(file) => handleImageUpload(file, "start")}
+                    <ImageInputZone
+                      onImageUrl={(url) => setStartFrameImage(url)}
+                      onUploadFile={(file) => handleImageUpload(file, "start")}
+                      projectId={projectId}
+                      sceneId={scene.id}
                       disabled={isUploadingImage}
+                      placeholder="Describe the start frame..."
+                      libraryImages={libraryImages}
                     />
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label>End Frame Image *</Label>
+
+                {/* End Frame */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                      2
+                    </span>
+                    <Label className="text-base font-medium">End Frame</Label>
+                  </div>
                   {endFrameImage ? (
-                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                    <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-border group shadow-sm">
                       <Image src={endFrameImage} alt="End frame" fill className="object-cover" />
                       <button
                         type="button"
                         onClick={() => setEndFrameImage(undefined)}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        className="absolute top-3 right-3 p-1.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
                       >
                         <X className="h-4 w-4" />
                       </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                        <span className="text-white text-sm font-medium">End Frame</span>
+                      </div>
                     </div>
                   ) : (
-                    <ImageDropZone
-                      label=""
-                      onImageSelect={(file) => handleImageUpload(file, "end")}
+                    <ImageInputZone
+                      onImageUrl={(url) => setEndFrameImage(url)}
+                      onUploadFile={(file) => handleImageUpload(file, "end")}
+                      projectId={projectId}
+                      sceneId={scene.id}
                       disabled={isUploadingImage}
+                      placeholder="Describe the end frame..."
+                      libraryImages={libraryImages}
                     />
                   )}
                 </div>
               </div>
             )}
 
-            {/* Image Uploads - Ingredients Mode */}
+            {/* Ingredients Mode - Grid layout on XL */}
             {generateMode === "ingredients" && (
-              <div className="space-y-2">
-                <Label>Reference Images (up to 3) *</Label>
-                <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-base font-medium">Reference Images (up to 3)</Label>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    {referenceImages.length}/3 selected
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {referenceImages.map((img, index) => (
                     <div
                       key={index}
-                      className="relative aspect-video rounded-lg overflow-hidden border border-border group"
+                      className="relative aspect-video rounded-xl overflow-hidden border-2 border-border group shadow-sm"
                     >
                       <Image
                         src={img}
@@ -1368,64 +1764,85 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
                         onClick={() =>
                           setReferenceImages(referenceImages.filter((_, i) => i !== index))
                         }
-                        className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        className="absolute top-3 right-3 p-1.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-4 w-4" />
                       </button>
+                      <div className="absolute top-3 left-3">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold shadow-lg">
+                          {index + 1}
+                        </span>
+                      </div>
                     </div>
                   ))}
                   {referenceImages.length < 3 && (
-                    <ImageDropZone
-                      label=""
-                      onImageSelect={(file) => handleImageUpload(file, "reference")}
+                    <ImageInputZone
+                      onImageUrl={(url) => {
+                        if (referenceImages.length < 3) {
+                          setReferenceImages([...referenceImages, url]);
+                        }
+                      }}
+                      onUploadFile={(file) => handleImageUpload(file, "reference")}
+                      projectId={projectId}
+                      sceneId={scene.id}
                       disabled={isUploadingImage}
+                      placeholder="Describe a reference image..."
+                      libraryImages={libraryImages}
                     />
                   )}
                 </div>
               </div>
             )}
-
-            {/* Prompt */}
-            <div className="space-y-2">
-              <Label htmlFor="generate-prompt">Motion Prompt *</Label>
-              <Textarea
-                id="generate-prompt"
-                value={generatePrompt}
-                onChange={(e) => setGeneratePrompt(e.target.value)}
-                placeholder="Describe the motion or action between the frames..."
-                rows={3}
-                className="bg-background resize-none"
-              />
-            </div>
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowGenerateVideoDialog(false)}
-              disabled={isGeneratingVideo}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleGenerateVideoSubmit}
-              disabled={isGeneratingVideo || !generatePrompt.trim()}
-            >
-              {isGeneratingVideo ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Video
-                </>
-              )}
-            </Button>
-          </DialogFooter>
+          {/* Fixed Footer with Prompt */}
+          <div className="shrink-0 border-t pt-4 space-y-4 bg-background">
+            <div className="space-y-2">
+              <Label htmlFor="generate-prompt" className="text-base font-medium">
+                Motion Prompt
+              </Label>
+              <div className="flex gap-3">
+                <Textarea
+                  id="generate-prompt"
+                  value={generatePrompt}
+                  onChange={(e) => setGeneratePrompt(e.target.value)}
+                  placeholder={
+                    generateMode === "start-end-frames"
+                      ? "Describe the motion or transition between the start and end frames..."
+                      : "Describe the video you want to generate using the reference images..."
+                  }
+                  rows={2}
+                  className="bg-background resize-none flex-1"
+                />
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={handleGenerateVideoSubmit}
+                    disabled={isGeneratingVideo || !generatePrompt.trim()}
+                    className="h-full min-w-[140px]"
+                  >
+                    {isGeneratingVideo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {generateMode === "start-end-frames"
+                  ? "Veo 3.1 will animate between your start and end frames based on this prompt."
+                  : "Veo 3.1 will use your reference images to maintain style and character consistency."}
+              </p>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
