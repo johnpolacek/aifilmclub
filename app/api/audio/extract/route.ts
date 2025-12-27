@@ -169,7 +169,7 @@ async function extractAudioWithFfmpeg(
           reject(readError);
         }
       })
-      .on("error", async (err) => {
+      .on("error", async (err: Error) => {
         // Clean up temp files
         await unlink(videoPath).catch(() => {});
         await unlink(audioPath).catch(() => {});
