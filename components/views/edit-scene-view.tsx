@@ -391,8 +391,16 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
   // SHOT HANDLERS
   // ============================================================================
 
-  const handleAddShot = () => {
+  const handleGenerateVideoClick = () => {
     const newShot = createNewShot(scene.shots.length);
+    newShot.sourceType = "generated";
+    setSelectedShot(newShot);
+    setShowShotEditor(true);
+  };
+
+  const handleUploadVideoClick = () => {
+    const newShot = createNewShot(scene.shots.length);
+    newShot.sourceType = "uploaded";
     setSelectedShot(newShot);
     setShowShotEditor(true);
   };
@@ -873,7 +881,8 @@ export function EditSceneView({ scene: initialScene, projectId, characters }: Ed
                 onAudioTrackVolumeChange={handleAudioTrackVolumeChange}
                 onAudioTrackMuteToggle={handleAudioTrackMuteToggle}
                 onAudioTrackDelete={handleAudioTrackDelete}
-                onAddShot={handleAddShot}
+                onGenerateVideo={handleGenerateVideoClick}
+                onUploadVideo={handleUploadVideoClick}
                 onAddAudioTrack={handleAddAudioTrack}
               />
             </div>

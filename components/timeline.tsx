@@ -9,6 +9,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  Upload,
   Video,
   Volume2,
   VolumeX,
@@ -40,7 +41,8 @@ interface TimelineProps {
   onAudioTrackVolumeChange: (trackId: string, volume: number) => void;
   onAudioTrackMuteToggle: (trackId: string) => void;
   onAudioTrackDelete: (trackId: string) => void;
-  onAddShot: () => void;
+  onGenerateVideo: () => void;
+  onUploadVideo: () => void;
   onAddAudioTrack: () => void;
   pixelsPerSecond?: number;
 }
@@ -338,7 +340,8 @@ export default function Timeline({
   onAudioTrackVolumeChange,
   onAudioTrackMuteToggle,
   onAudioTrackDelete,
-  onAddShot,
+  onGenerateVideo,
+  onUploadVideo,
   onAddAudioTrack,
   pixelsPerSecond = 20,
 }: TimelineProps) {
@@ -440,15 +443,27 @@ export default function Timeline({
               )}
             </div>
           ))}
-          {/* Add shot button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onAddShot}
-            className="shrink-0 h-16 w-16 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50"
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
+          {/* Generate Video and Upload Video buttons */}
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onGenerateVideo}
+              className="w-42 px-3 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="text-xs font-medium">Generate Video</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUploadVideo}
+              className="w-42 px-3 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="text-xs font-medium">Upload Video</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -472,7 +487,7 @@ export default function Timeline({
         <button
           type="button"
           onClick={onAddAudioTrack}
-          className="w-full h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+          className="w-42 h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-sm hover:border-primary/50 hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4" />
           Add Audio Track
