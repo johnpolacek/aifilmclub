@@ -139,6 +139,16 @@ function ShotCard({
             );
           }}
         />
+      ) : shot.video?.status === "processing" ? (
+        <div className="w-full h-full bg-muted/50 flex flex-col items-center justify-center gap-1">
+          <Loader2 className="h-5 w-5 text-primary animate-spin" />
+          <span className="text-[10px] text-muted-foreground">Generating...</span>
+        </div>
+      ) : shot.video?.status === "failed" ? (
+        <div className="w-full h-full bg-destructive/10 flex flex-col items-center justify-center gap-1">
+          <Video className="h-5 w-5 text-destructive" />
+          <span className="text-[10px] text-destructive">Failed</span>
+        </div>
       ) : (
         <div className="w-full h-full bg-muted/50 flex items-center justify-center">
           <Video className="h-6 w-6 text-muted-foreground" />

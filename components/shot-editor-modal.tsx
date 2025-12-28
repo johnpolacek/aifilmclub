@@ -4,14 +4,16 @@ import {
   Film,
   Image as ImageIcon,
   Loader2,
+  MapPin,
   Sparkles,
   Trash2,
   Upload,
+  User,
   Video,
   X,
 } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { generateThumbnailFromFile } from "@/lib/video-thumbnail";
 import { Button } from "@/components/ui/button";
@@ -32,8 +34,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GenerationMode, Shot } from "@/lib/scenes-client";
+import { getImageUrl } from "@/lib/image-utils";
+import type { GenerationMode, ReferenceImage, ReferenceImageType, Shot } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
+import type { Character, Location } from "@/components/project-form";
 
 // ============================================================================
 // TYPES
@@ -48,6 +52,12 @@ interface ShotEditorModalProps {
   onGenerateVideo: (shot: Shot) => void;
   projectId: string;
   sceneId: string;
+  characters?: Character[];
+  locations?: Location[];
+  username?: string;
+  // Scene-specific data for filtering
+  sceneCharacters?: string[]; // Character names in this scene
+  sceneLocationId?: string; // Location name for this scene
 }
 
 // ============================================================================
@@ -76,10 +86,6 @@ const GENERATION_MODES: { value: GenerationMode; label: string; description: str
     description: "Use up to 3 images to guide style and content",
   },
 ];
-
-// ============================================================================
-// IMAGE DROP ZONE COMPONENT
-// ============================================================================
 
 interface ImageDropZoneProps {
   label: string;
@@ -182,6 +188,11 @@ export function ShotEditorModal({
   onGenerateVideo,
   projectId,
   sceneId,
+  characters = [],
+  locations = [],
+  username = "",
+  sceneCharacters = [],
+  sceneLocationId,
 }: ShotEditorModalProps) {
   // Local state for editing
   const [prompt, setPrompt] = useState(shot?.prompt || "");
@@ -193,7 +204,9 @@ export function ShotEditorModal({
   );
   const [startFrameImage, setStartFrameImage] = useState<string | undefined>(shot?.startFrameImage);
   const [endFrameImage, setEndFrameImage] = useState<string | undefined>(shot?.endFrameImage);
-  const [referenceImages, setReferenceImages] = useState<string[]>(shot?.referenceImages || []);
+  const [typedReferenceImages, setTypedReferenceImages] = useState<ReferenceImage[]>(
+    shot?.typedReferenceImages || []
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -201,19 +214,29 @@ export function ShotEditorModal({
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset state when shot changes
-  const _resetState = useCallback(() => {
-    setPrompt(shot?.prompt || "");
-    setSourceType(shot?.sourceType || "generated");
-    setGenerationMode(shot?.generationMode || "text-only");
-    setStartFrameImage(shot?.startFrameImage);
-    setEndFrameImage(shot?.endFrameImage);
-    setReferenceImages(shot?.referenceImages || []);
-  }, [shot]);
+  // Reset state when modal opens or shot changes
+  useEffect(() => {
+    if (open && shot) {
+      setPrompt(shot.prompt || "");
+      setSourceType(shot.sourceType || "generated");
+      setGenerationMode(shot.generationMode || "text-only");
+      setStartFrameImage(shot.startFrameImage);
+      setEndFrameImage(shot.endFrameImage);
+      setTypedReferenceImages(shot.typedReferenceImages || []);
+      // Reset generating state when modal opens to prevent stuck state
+      setIsGenerating(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  }, [open, shot]);
 
   // Handle image upload for a specific slot
   // Uses presigned URLs for large images (>5MB), otherwise uses server-side processing for optimization
-  const handleImageUpload = async (file: File, slot: "start" | "end" | "reference") => {
+  const handleImageUpload = async (
+    file: File,
+    slot: "start" | "end" | "reference",
+    refType?: ReferenceImageType
+  ) => {
     setIsUploading(true);
     setUploadProgress(0);
     try {
@@ -229,8 +252,12 @@ export function ShotEditorModal({
           setStartFrameImage(result.url);
         } else if (slot === "end") {
           setEndFrameImage(result.url);
-        } else if (slot === "reference") {
-          setReferenceImages((prev) => [...prev.slice(0, 2), result.url!]);
+        } else if (slot === "reference" && refType) {
+          const newRef: ReferenceImage = {
+            url: result.url,
+            type: refType,
+          };
+          setTypedReferenceImages((prev) => [...prev.slice(0, 2), newRef]);
         }
         toast.success("Image uploaded");
       } else {
@@ -245,102 +272,125 @@ export function ShotEditorModal({
     }
   };
 
+  // Add a reference image from existing project assets
+  const addReferenceImage = (url: string, type: ReferenceImageType, name?: string) => {
+    if (typedReferenceImages.length >= 3) {
+      toast.error("Maximum 3 reference images allowed");
+      return;
+    }
+    // Check if this image is already added
+    if (typedReferenceImages.some((ref) => ref.url === url)) {
+      toast.error("This image is already added");
+      return;
+    }
+    const newRef: ReferenceImage = { url, type, name };
+    setTypedReferenceImages((prev) => [...prev, newRef]);
+  };
+
+  // Remove a typed reference image
+  const removeTypedReferenceImage = (index: number) => {
+    setTypedReferenceImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   // Handle video file upload - uses presigned URLs for large files
-  const processVideoUpload = async (file: File) => {
-    if (!file) return;
+  const processVideoUpload = useCallback(
+    async (file: File) => {
+      if (!file || !shot) return;
 
-    setIsUploading(true);
-    setUploadProgress(0);
+      setIsUploading(true);
+      setUploadProgress(0);
 
-    try {
-      const result = await uploadFile(file, {
-        projectId,
-        sceneId,
-        mediaType: "video",
-        onProgress: setUploadProgress,
-      });
+      try {
+        const result = await uploadFile(file, {
+          projectId,
+          sceneId,
+          mediaType: "video",
+          onProgress: setUploadProgress,
+        });
 
-      if (result.success && shot && result.url) {
-        console.log(
-          "[ShotEditorModal] Video uploaded successfully:",
-          JSON.stringify({ 
-            shotId: shot.id, 
-            videoUrl: result.url,
-            projectId,
-            sceneId 
-          }, null, 2)
-        );
-
-        // Generate thumbnail client-side from the original file
-        let thumbnailUrl: string | undefined;
-        let durationMs = 5000; // Default duration
-        try {
-          console.log("[ShotEditorModal] Generating thumbnail client-side");
-          const thumbnailResult = await generateThumbnailFromFile(file);
-          
-          if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
-            durationMs = thumbnailResult.durationMs || 5000;
-            
-            // Upload thumbnail to S3
-            const thumbnailFile = new File(
-              [thumbnailResult.thumbnailBlob],
-              `thumbnail-${shot.id}.jpg`,
-              { type: "image/jpeg" }
-            );
-            
-            const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+        if (result.success && shot && result.url) {
+          console.log(
+            "[ShotEditorModal] Video uploaded successfully:",
+            JSON.stringify({ 
+              shotId: shot.id, 
+              videoUrl: result.url,
               projectId,
-              sceneId,
-              mediaType: "image",
-            });
+              sceneId 
+            }, null, 2)
+          );
+
+          // Generate thumbnail client-side from the original file
+          let thumbnailUrl: string | undefined;
+          let durationMs = 5000; // Default duration
+          try {
+            console.log("[ShotEditorModal] Generating thumbnail client-side");
+            const thumbnailResult = await generateThumbnailFromFile(file);
             
-            if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
-              thumbnailUrl = thumbnailUploadResult.url;
+            if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+              durationMs = thumbnailResult.durationMs || 5000;
+              
+              // Upload thumbnail to S3
+              const thumbnailFile = new File(
+                [thumbnailResult.thumbnailBlob],
+                `thumbnail-${shot.id}.jpg`,
+                { type: "image/jpeg" }
+              );
+              
+              const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+                projectId,
+                sceneId,
+                mediaType: "image",
+              });
+              
+              if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+                thumbnailUrl = thumbnailUploadResult.url;
+                console.log(
+                  "[ShotEditorModal] Thumbnail uploaded:",
+                  JSON.stringify({ thumbnailUrl, durationMs }, null, 2)
+                );
+              }
+            } else {
               console.log(
-                "[ShotEditorModal] Thumbnail uploaded:",
-                JSON.stringify({ thumbnailUrl, durationMs }, null, 2)
+                "[ShotEditorModal] Thumbnail generation failed:",
+                JSON.stringify({ error: thumbnailResult.error }, null, 2)
               );
             }
-          } else {
-            console.log(
-              "[ShotEditorModal] Thumbnail generation failed:",
-              JSON.stringify({ error: thumbnailResult.error }, null, 2)
+          } catch (thumbnailError) {
+            console.error(
+              "[ShotEditorModal] Error generating thumbnail:",
+              JSON.stringify({ error: thumbnailError }, null, 2)
             );
+            // Continue without thumbnail - video will still work
           }
-        } catch (thumbnailError) {
-          console.error(
-            "[ShotEditorModal] Error generating thumbnail:",
-            JSON.stringify({ error: thumbnailError }, null, 2)
-          );
-          // Continue without thumbnail - video will still work
-        }
 
-        const updatedShot: Shot = {
-          ...shot,
-          prompt,
-          sourceType: "uploaded",
-          video: {
-            url: result.url,
-            status: "completed",
-            thumbnailUrl, // Include thumbnail if generated
-            durationMs, // Use actual duration from video
-          },
-          updatedAt: new Date().toISOString(),
-        };
-        onSave(updatedShot);
-        toast.success("Video uploaded");
-        onOpenChange(false);
-      } else {
-        toast.error(result.error || "Failed to upload video");
+          const updatedShot: Shot = {
+            ...shot,
+            prompt,
+            sourceType: "uploaded",
+            video: {
+              url: result.url,
+              status: "completed",
+              thumbnailUrl, // Include thumbnail if generated
+              durationMs, // Use actual duration from video
+            },
+            updatedAt: new Date().toISOString(),
+          };
+          onSave(updatedShot);
+          toast.success("Video uploaded");
+          onOpenChange(false);
+        } else {
+          toast.error(result.error || "Failed to upload video");
+        }
+      } catch (error) {
+        console.error("[ShotEditorModal] Video upload error:", JSON.stringify({ error }, null, 2));
+        toast.error("Failed to upload video");
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(0);
       }
-    } catch (error) {
-      console.error("[ShotEditorModal] Video upload error:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to upload video");
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
-  };
+    },
+    [shot, projectId, sceneId, prompt, onSave, onOpenChange]
+  );
 
   // Handle video upload from file input
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,16 +413,19 @@ export function ShotEditorModal({
     setIsVideoDragOver(false);
   }, []);
 
-  const handleVideoDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsVideoDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file?.type.startsWith("video/")) {
-      await processVideoUpload(file);
-    } else {
-      toast.error("Please drop a video file");
-    }
-  };
+  const handleVideoDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsVideoDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file?.type.startsWith("video/")) {
+        await processVideoUpload(file);
+      } else {
+        toast.error("Please drop a video file");
+      }
+    },
+    [processVideoUpload]
+  );
 
   // Handle save
   const handleSave = () => {
@@ -385,7 +438,11 @@ export function ShotEditorModal({
       generationMode,
       startFrameImage,
       endFrameImage,
-      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      typedReferenceImages: typedReferenceImages.length > 0 ? typedReferenceImages : undefined,
+      // Also keep referenceImages for backwards compatibility
+      referenceImages: typedReferenceImages.length > 0 
+        ? typedReferenceImages.map((ref) => ref.url) 
+        : undefined,
       updatedAt: new Date().toISOString(),
     };
 
@@ -413,8 +470,8 @@ export function ShotEditorModal({
       return;
     }
 
-    if (generationMode === "reference-images" && referenceImages.length === 0) {
-      toast.error("Please upload at least one reference image");
+    if (generationMode === "reference-images" && typedReferenceImages.length === 0) {
+      toast.error("Please add at least one reference image");
       return;
     }
 
@@ -425,7 +482,11 @@ export function ShotEditorModal({
       generationMode,
       startFrameImage,
       endFrameImage,
-      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      typedReferenceImages: typedReferenceImages.length > 0 ? typedReferenceImages : undefined,
+      // Also keep referenceImages for backwards compatibility
+      referenceImages: typedReferenceImages.length > 0 
+        ? typedReferenceImages.map((ref) => ref.url) 
+        : undefined,
       video: {
         url: "",
         status: "processing",
@@ -435,6 +496,9 @@ export function ShotEditorModal({
 
     setIsGenerating(true);
     onGenerateVideo(updatedShot);
+    // Close modal immediately - generation status is tracked via shot.video.status
+    // This prevents the UI from getting stuck in "Generating..." state if API fails
+    onOpenChange(false);
   };
 
   // Handle delete
@@ -442,11 +506,6 @@ export function ShotEditorModal({
     if (!shot || !onDelete) return;
     onDelete(shot.id);
     onOpenChange(false);
-  };
-
-  // Remove reference image
-  const removeReferenceImage = (index: number) => {
-    setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   if (!shot) return null;
@@ -569,39 +628,196 @@ export function ShotEditorModal({
               )}
 
               {generationMode === "reference-images" && (
-                <div className="space-y-2">
-                  <Label>Reference Images (up to 3)</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {referenceImages.map((img, index) => (
-                      <div
-                        key={index}
-                        className="relative aspect-video rounded-lg overflow-hidden border border-border group"
-                      >
-                        <Image
-                          src={img}
-                          alt={`Reference ${index + 1}`}
-                          fill
-                          className="object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeReferenceImage(index)}
-                          className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                <div className="space-y-4">
+                  {/* Selected Reference Images */}
+                  <div className="space-y-2">
+                    <Label>Selected Reference Images ({typedReferenceImages.length}/3)</Label>
+                    {typedReferenceImages.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {typedReferenceImages.map((ref, index) => (
+                          <div
+                            key={index}
+                            className="relative aspect-video rounded-lg overflow-hidden border border-border group"
+                          >
+                            <Image
+                              src={ref.url}
+                              alt={ref.name || `Reference ${index + 1}`}
+                              fill
+                              className="object-cover"
+                            />
+                            {/* Type badge */}
+                            <div
+                              className={`absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 ${
+                                ref.type === "location"
+                                  ? "bg-blue-500/90 text-white"
+                                  : "bg-purple-500/90 text-white"
+                              }`}
+                            >
+                              {ref.type === "location" ? (
+                                <MapPin className="h-2.5 w-2.5" />
+                              ) : (
+                                <User className="h-2.5 w-2.5" />
+                              )}
+                              {ref.name || ref.type}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeTypedReferenceImage(index)}
+                              className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    {referenceImages.length < 3 && (
-                      <ImageDropZone
-                        label=""
-                        imageUrl={undefined}
-                        onImageSelect={(file) => handleImageUpload(file, "reference")}
-                        onImageRemove={() => {}}
-                        disabled={isUploading}
-                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Select location or character images below to add as references
+                      </p>
                     )}
                   </div>
+
+                  {/* Scene Location and Character Images */}
+                  {typedReferenceImages.length < 3 && (
+                    <div className="space-y-4">
+                      {/* Scene Location Images */}
+                      {(() => {
+                        const sceneLocation = sceneLocationId
+                          ? locations.find((loc) => loc.name === sceneLocationId && (loc.image || (loc.images && loc.images.length > 0)))
+                          : null;
+                        
+                        if (!sceneLocation) return null;
+
+                        // Collect all location images (main + additional)
+                        const allLocationImages: string[] = [];
+                        if (sceneLocation.image) {
+                          allLocationImages.push(sceneLocation.image);
+                        }
+                        if (sceneLocation.images) {
+                          allLocationImages.push(...sceneLocation.images.filter(Boolean));
+                        }
+
+                        if (allLocationImages.length === 0) return null;
+
+                        return (
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                              <MapPin className="h-3 w-3 text-blue-500" />
+                              Location: {sceneLocation.name}
+                            </Label>
+                            <div className="flex flex-wrap gap-2">
+                              {allLocationImages.map((filename, index) => {
+                                const imageUrl = getImageUrl({
+                                  type: "location",
+                                  filename,
+                                  username,
+                                });
+                                const isSelected = typedReferenceImages.some((ref) => ref.url === imageUrl);
+                                return (
+                                  <button
+                                    key={`${sceneLocation.name}-${index}`}
+                                    type="button"
+                                    onClick={() =>
+                                      addReferenceImage(imageUrl, "location", sceneLocation.name)
+                                    }
+                                    disabled={isSelected || isUploading}
+                                    className={`relative w-28 aspect-video rounded-lg overflow-hidden border-2 transition-all ${
+                                      isSelected
+                                        ? "border-blue-500 opacity-50 cursor-not-allowed"
+                                        : "border-blue-500/50 hover:border-blue-500 cursor-pointer"
+                                    }`}
+                                  >
+                                    <Image
+                                      src={imageUrl}
+                                      alt={`${sceneLocation.name} ${index + 1}`}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                    {isSelected && (
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                        <span className="text-white text-xs font-medium">Added</span>
+                                      </div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Scene Characters Images */}
+                      {(() => {
+                        const sceneChars = characters.filter(
+                          (char) => sceneCharacters.includes(char.name) && (char.mainImage || (char.images && char.images.length > 0))
+                        );
+                        
+                        if (sceneChars.length === 0) return null;
+
+                        return (
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                              <User className="h-3 w-3 text-purple-500" />
+                              Characters
+                            </Label>
+                            <div className="flex flex-wrap gap-2">
+                              {sceneChars.flatMap((character) => {
+                                // Collect all character images (main + additional)
+                                const allCharImages: string[] = [];
+                                if (character.mainImage) {
+                                  allCharImages.push(character.mainImage);
+                                }
+                                if (character.images) {
+                                  allCharImages.push(...character.images.filter(Boolean));
+                                }
+
+                                return allCharImages.map((filename, index) => {
+                                  const imageUrl = getImageUrl({
+                                    type: "character",
+                                    filename,
+                                    username,
+                                  });
+                                  const isSelected = typedReferenceImages.some((ref) => ref.url === imageUrl);
+                                  return (
+                                    <button
+                                      key={`${character.name}-${index}`}
+                                      type="button"
+                                      onClick={() =>
+                                        addReferenceImage(imageUrl, "character", character.name)
+                                      }
+                                      disabled={isSelected || isUploading}
+                                      className={`relative w-28 aspect-video rounded-lg overflow-hidden border-2 transition-all ${
+                                        isSelected
+                                          ? "border-purple-500 opacity-50 cursor-not-allowed"
+                                          : "border-purple-500/50 hover:border-purple-500 cursor-pointer"
+                                      }`}
+                                    >
+                                      <Image
+                                        src={imageUrl}
+                                        alt={`${character.name} ${index + 1}`}
+                                        fill
+                                        className="object-cover"
+                                      />
+                                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1">
+                                        <span className="text-[10px] text-white truncate block">
+                                          {character.name}
+                                        </span>
+                                      </div>
+                                      {isSelected && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                          <span className="text-white text-xs font-medium">Added</span>
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                });
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
 

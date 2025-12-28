@@ -180,8 +180,16 @@ export async function GET(request: Request) {
           JSON.stringify({ videoUrl: result.videoUrl.substring(0, 100) }, null, 2)
         );
 
+        // Get API key for authenticated download
+        const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+        
         // Download video and upload to S3 for permanent storage
-        const videoResponse = await fetch(result.videoUrl);
+        // The Google API video URL requires API key authentication
+        const downloadUrl = result.videoUrl.includes("?") 
+          ? `${result.videoUrl}&key=${apiKey}`
+          : `${result.videoUrl}?key=${apiKey}`;
+        
+        const videoResponse = await fetch(downloadUrl);
         console.log(
           "[video-status] Video download response:",
           JSON.stringify({ 
@@ -245,23 +253,41 @@ export async function GET(request: Request) {
             );
           }
         } else {
+          // Video download failed - the Google URL requires API key so it won't work for the client
+          const errorBody = await videoResponse.text().catch(() => "");
           console.error(
             "[video-status] Video download failed:",
             JSON.stringify({ 
               status: videoResponse.status, 
-              statusText: videoResponse.statusText 
+              statusText: videoResponse.statusText,
+              errorBody: errorBody.substring(0, 500)
             }, null, 2)
           );
+          
+          // Return as failed since the client can't access the video
+          return NextResponse.json({
+            success: false,
+            status: "failed",
+            error: `Failed to download video from Google (${videoResponse.status}). Please try generating again.`,
+            operationId,
+          }, { status: 500 });
         }
       } catch (uploadError) {
-        // Log but don't fail - we still have the original URL
+        // Failed to process video - return error
         console.error(
-          "[video-status] Failed to upload video to S3:",
+          "[video-status] Failed to process video:",
           JSON.stringify({ 
             error: uploadError instanceof Error ? uploadError.message : String(uploadError),
             stack: uploadError instanceof Error ? uploadError.stack : undefined
           }, null, 2)
         );
+        
+        return NextResponse.json({
+          success: false,
+          status: "failed",
+          error: "Failed to process video. Please try generating again.",
+          operationId,
+        }, { status: 500 });
       }
     } else {
       console.log(

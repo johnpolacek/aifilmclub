@@ -58,6 +58,20 @@ export interface ShotVideo {
 }
 
 /**
+ * Reference image type for video generation
+ */
+export type ReferenceImageType = "location" | "character";
+
+/**
+ * Reference image with type and URL
+ */
+export interface ReferenceImage {
+  url: string;
+  type: ReferenceImageType;
+  name?: string; // Optional name for display (e.g., character or location name)
+}
+
+/**
  * Shot interface - represents a single shot/clip in a scene's timeline
  */
 export interface Shot {
@@ -72,7 +86,8 @@ export interface Shot {
   // Images for generation
   startFrameImage?: string; // URL for start frame
   endFrameImage?: string; // URL for end frame
-  referenceImages?: string[]; // Up to 3 reference/ingredient images
+  referenceImages?: string[]; // Up to 3 reference/ingredient images (legacy - URL only)
+  typedReferenceImages?: ReferenceImage[]; // Up to 3 typed reference images (location/character)
 
   // Final video
   video?: ShotVideo;

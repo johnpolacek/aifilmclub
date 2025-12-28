@@ -645,6 +645,7 @@ export function EditSceneView({
             "[EditSceneView] Video status response:",
             JSON.stringify({ 
               shotId, 
+              responseStatus: response.status,
               success: data.success,
               status: data.status,
               hasVideoUrl: !!data.videoUrl,
@@ -652,9 +653,41 @@ export function EditSceneView({
               hasThumbnailUrl: !!data.thumbnailUrl,
               thumbnailUrl: data.thumbnailUrl?.substring(0, 100),
               durationMs: data.durationMs,
+              error: data.error,
               fullResponse: data
             }, null, 2)
           );
+
+          // Handle API errors (500 responses) as failed status
+          if (!response.ok || !data.success) {
+            console.error(
+              "[EditSceneView] Video status API error:",
+              JSON.stringify({ shotId, error: data.error, status: response.status }, null, 2)
+            );
+            setScene((prev) => ({
+              ...prev,
+              shots: prev.shots.map((s) =>
+                s.id === shotId
+                  ? {
+                      ...s,
+                      video: {
+                        url: s.video?.url || "",
+                        status: "failed" as const,
+                        operationId: s.video?.operationId,
+                        error: data.error || `API Error: ${response.status}`,
+                      } as ShotVideo,
+                    }
+                  : s
+              ),
+            }));
+            setPendingShots((prev) => {
+              const next = new Map(prev);
+              next.delete(shotId);
+              return next;
+            });
+            toast.error(data.error || "Video generation failed");
+            continue; // Skip to next pending shot
+          }
 
           if (data.success) {
             if (data.status === "completed" && data.videoUrl) {
@@ -715,7 +748,36 @@ export function EditSceneView({
                 }
               }
 
+              console.log(
+                "[EditSceneView] About to update scene state with completed video:",
+                JSON.stringify({ 
+                  shotId,
+                  videoUrl: data.videoUrl,
+                  thumbnailUrl
+                }, null, 2)
+              );
+
               setScene((prev) => {
+                // Check if shot exists in current state
+                const existingShot = prev.shots.find(s => s.id === shotId);
+                console.log(
+                  "[EditSceneView] Looking for shot in state:",
+                  JSON.stringify({ 
+                    shotId,
+                    foundShot: !!existingShot,
+                    totalShots: prev.shots.length,
+                    shotIds: prev.shots.map(s => s.id)
+                  }, null, 2)
+                );
+
+                if (!existingShot) {
+                  console.error(
+                    "[EditSceneView] Shot not found in state! Cannot update.",
+                    JSON.stringify({ shotId, availableShots: prev.shots.map(s => s.id) }, null, 2)
+                  );
+                  return prev; // Don't update if shot not found
+                }
+
                 const updatedShots = prev.shots.map((s) =>
                   s.id === shotId
                     ? {
@@ -734,7 +796,7 @@ export function EditSceneView({
 
                 const updatedShot = updatedShots.find(s => s.id === shotId);
                 console.log(
-                  "[EditSceneView] Scene state updated:",
+                  "[EditSceneView] Scene state updated successfully:",
                   JSON.stringify({ 
                     shotId,
                     updatedShot: updatedShot ? {
@@ -751,11 +813,18 @@ export function EditSceneView({
                   shots: updatedShots,
                 };
               });
+              
               setPendingShots((prev) => {
                 const next = new Map(prev);
                 next.delete(shotId);
+                console.log(
+                  "[EditSceneView] Removed from pendingShots:",
+                  JSON.stringify({ shotId, remainingPending: Array.from(next.keys()) }, null, 2)
+                );
                 return next;
               });
+              
+              console.log("[EditSceneView] Showing success toast for completed video");
               toast.success("Video generation completed!");
             } else if (data.status === "failed") {
               setScene((prev) => ({
@@ -1301,6 +1370,28 @@ export function EditSceneView({
   const handleGenerateVideo = async (shot: Shot) => {
     const loadingToast = toast.loading("Starting video generation...");
 
+    // First, save the shot configuration (without processing status) so changes aren't lost if API fails
+    const shotWithoutProcessing: Shot = {
+      ...shot,
+      video: shot.video?.url ? shot.video : undefined, // Preserve existing video if any
+    };
+    setScene((prev) => {
+      const existingIndex = prev.shots.findIndex((s) => s.id === shot.id);
+      if (existingIndex >= 0) {
+        // Update existing shot
+        const newShots = [...prev.shots];
+        newShots[existingIndex] = shotWithoutProcessing;
+        return { ...prev, shots: newShots };
+      } else {
+        // Add new shot (this happens when user clicks Generate on a new shot)
+        console.log(
+          "[handleGenerateVideo] Adding new shot to scene:",
+          JSON.stringify({ shotId: shot.id }, null, 2)
+        );
+        return { ...prev, shots: [...prev.shots, shotWithoutProcessing] };
+      }
+    });
+
     try {
       const response = await fetch("/api/ai/generate-video", {
         method: "POST",
@@ -1323,21 +1414,26 @@ export function EditSceneView({
 
       if (data.success && data.video) {
         // Update the shot with the pending video info
-        setScene((prev) => ({
-          ...prev,
-          shots: prev.shots.map((s) =>
-            s.id === shot.id
-              ? {
-                  ...shot,
-                  video: {
-                    url: "",
-                    status: "processing" as const,
-                    operationId: data.video.operationId,
-                  },
-                }
-              : s
-          ),
-        }));
+        const shotWithProcessing: Shot = {
+          ...shot,
+          video: {
+            url: "",
+            status: "processing" as const,
+            operationId: data.video.operationId,
+          },
+        };
+        setScene((prev) => {
+          const existingIndex = prev.shots.findIndex((s) => s.id === shot.id);
+          if (existingIndex >= 0) {
+            // Update existing shot
+            const newShots = [...prev.shots];
+            newShots[existingIndex] = shotWithProcessing;
+            return { ...prev, shots: newShots };
+          } else {
+            // Add new shot (shouldn't happen here but just in case)
+            return { ...prev, shots: [...prev.shots, shotWithProcessing] };
+          }
+        });
 
         // Add to pending shots for polling
         setPendingShots((prev) => {
@@ -1748,6 +1844,65 @@ export function EditSceneView({
               <ScenePlayer shots={scene.shots} audioTracks={scene.audioTracks} />
             </div>
 
+            {/* Video Generation Status */}
+            {(pendingShots.size > 0 || scene.shots.some(s => s.video?.status === "failed")) && (
+              <div className="space-y-2">
+                {/* Processing indicator */}
+                {pendingShots.size > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-primary/10 border border-primary/20 rounded-lg">
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-primary">
+                        Generating {pendingShots.size} video{pendingShots.size > 1 ? "s" : ""}...
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        This may take 1-2 minutes. You can continue editing while videos generate.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Failed shots */}
+                {scene.shots.filter(s => s.video?.status === "failed").map((shot) => {
+                  const errorMessage = shot.video?.error || "Unknown error occurred";
+                  const isAudioError = errorMessage.toLowerCase().includes("audio");
+                  
+                  return (
+                    <div 
+                      key={shot.id}
+                      className="flex items-start gap-3 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                    >
+                      <X className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-destructive">
+                          Video generation failed
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {errorMessage}
+                        </p>
+                        {isAudioError && (
+                          <p className="text-xs text-muted-foreground mt-2 italic">
+                            💡 Tip: Audio errors often occur when the prompt doesn&apos;t provide enough content for the video duration. Try adding more action or dialogue.
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedShot(shot);
+                          setShowShotEditor(true);
+                        }}
+                        className="shrink-0 text-xs"
+                      >
+                        Edit & Retry
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Timeline Component */}
             <div className="overflow-hidden">
               <Timeline
@@ -1803,6 +1958,11 @@ export function EditSceneView({
         onGenerateVideo={handleGenerateVideo}
         projectId={projectId}
         sceneId={scene.id}
+        characters={characters}
+        locations={locations}
+        username={username}
+        sceneCharacters={scene.characters}
+        sceneLocationId={scene.locationId}
       />
 
       {/* Audio Track Modal */}

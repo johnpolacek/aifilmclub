@@ -322,11 +322,12 @@ export async function generateVideo(
     const modelId = "veo-3.1-generate-preview";
 
     // Build instance object based on generation mode
+    // Note: referenceImages is not included because Veo 3.1 API doesn't support it yet
+    // Instead, we analyze reference images and incorporate style into the prompt
     interface VeoInstance {
       prompt: string;
       image?: { bytesBase64Encoded: string; mimeType: string };
       lastFrame?: { bytesBase64Encoded: string; mimeType: string };
-      referenceImages?: Array<{ bytesBase64Encoded: string; mimeType: string }>;
     }
 
     const instance: VeoInstance = { prompt };
@@ -362,19 +363,30 @@ export async function generateVideo(
       referenceImages &&
       referenceImages.length > 0
     ) {
-      // Up to 3 reference images
-      const preparedRefs: Array<{ bytesBase64Encoded: string; mimeType: string }> = [];
-      for (const refImage of referenceImages.slice(0, 3)) {
-        const prepared = await prepareImageForVeo(refImage);
-        if (prepared) {
-          preparedRefs.push({
-            bytesBase64Encoded: prepared.data,
-            mimeType: prepared.mimeType,
-          });
-        }
-      }
-      if (preparedRefs.length > 0) {
-        instance.referenceImages = preparedRefs;
+      // Reference images are not fully supported by Veo 3.1 API yet
+      // Instead, analyze the reference images and incorporate style into the prompt
+      console.log(
+        "[generateVideo] Reference images mode - analyzing images for style description:",
+        JSON.stringify({ referenceCount: referenceImages.length }, null, 2)
+      );
+      
+      const analysisResult = await analyzeReferenceImages(referenceImages);
+      if (analysisResult.success && analysisResult.description) {
+        // Prepend style description to the prompt
+        instance.prompt = `${analysisResult.description}\n\n${prompt}`;
+        console.log(
+          "[generateVideo] Enhanced prompt with style description:",
+          JSON.stringify({ 
+            styleDescription: analysisResult.description.substring(0, 100),
+            originalPromptLength: prompt.length,
+            enhancedPromptLength: instance.prompt.length
+          }, null, 2)
+        );
+      } else {
+        console.warn(
+          "[generateVideo] Could not analyze reference images, using original prompt:",
+          JSON.stringify({ error: analysisResult.error }, null, 2)
+        );
       }
     }
 
@@ -383,10 +395,9 @@ export async function generateVideo(
       JSON.stringify(
         {
           mode: generationMode,
-          promptLength: prompt.length,
+          promptLength: instance.prompt.length,
           hasStartFrame: !!instance.image,
           hasEndFrame: !!instance.lastFrame,
-          referenceCount: instance.referenceImages?.length || 0,
         },
         null,
         2
@@ -406,8 +417,8 @@ export async function generateVideo(
           parameters: {
             aspectRatio,
             durationSeconds,
-            personGeneration: "allow_adult",
-            generateAudio: true, // Veo 3.1 supports native audio
+            // Note: personGeneration "allow_adult" and generateAudio are not supported
+            // on the Gemini API endpoint - these may be available on Vertex AI
           },
         }),
       }
@@ -504,7 +515,16 @@ export async function checkVideoStatus(videoId: string): Promise<VideoGeneration
 
     // Check if operation is done
     if (data.done) {
+      console.log(
+        "[checkVideoStatus] Operation completed, full response:",
+        JSON.stringify(data, null, 2)
+      );
+
       if (data.error) {
+        console.error(
+          "[checkVideoStatus] Operation failed with error:",
+          JSON.stringify(data.error, null, 2)
+        );
         return {
           success: false,
           videoId,
@@ -513,16 +533,72 @@ export async function checkVideoStatus(videoId: string): Promise<VideoGeneration
         };
       }
 
-      // Extract video URL and metadata from response
-      const generatedSample = data.response?.generatedSamples?.[0];
-      const videoUrl = generatedSample?.video?.uri;
-
-      if (!videoUrl) {
+      // Check for RAI (Responsible AI) filtering - video was blocked by safety filters
+      const generateVideoResponse = data.response?.generateVideoResponse;
+      if (generateVideoResponse?.raiMediaFilteredCount > 0) {
+        const filterReasons = generateVideoResponse.raiMediaFilteredReasons || [];
+        const errorMessage = filterReasons[0] || "Video was blocked by safety filters. Please modify your prompt and try again.";
+        console.error(
+          "[checkVideoStatus] Video blocked by safety filters:",
+          JSON.stringify({ raiMediaFilteredCount: generateVideoResponse.raiMediaFilteredCount, reasons: filterReasons }, null, 2)
+        );
         return {
           success: false,
           videoId,
           status: "failed",
-          error: "No video URL in response",
+          error: errorMessage,
+        };
+      }
+
+      // Extract video URL and metadata from response
+      // Try multiple possible response formats
+      const generatedSample = data.response?.generatedSamples?.[0];
+      let videoUrl = generatedSample?.video?.uri;
+      
+      // Alternative format: check for video directly in response
+      if (!videoUrl && data.response?.video?.uri) {
+        videoUrl = data.response.video.uri;
+      }
+      
+      // Alternative format: check for videos array
+      if (!videoUrl && data.response?.videos?.[0]?.uri) {
+        videoUrl = data.response.videos[0].uri;
+      }
+      
+      // Alternative format: Gemini API may return in different structure
+      if (!videoUrl && data.result?.video?.uri) {
+        videoUrl = data.result.video.uri;
+      }
+
+      // Alternative format: check in generateVideoResponse
+      if (!videoUrl && generateVideoResponse?.generatedSamples?.[0]?.video?.uri) {
+        videoUrl = generateVideoResponse.generatedSamples[0].video.uri;
+      }
+
+      console.log(
+        "[checkVideoStatus] Extracted video URL:",
+        JSON.stringify({ 
+          videoUrl: videoUrl?.substring(0, 100),
+          hasGeneratedSamples: !!data.response?.generatedSamples,
+          responseKeys: Object.keys(data.response || {})
+        }, null, 2)
+      );
+
+      if (!videoUrl) {
+        console.error(
+          "[checkVideoStatus] No video URL found in response structure:",
+          JSON.stringify({
+            responseKeys: Object.keys(data.response || {}),
+            generatedSamplesLength: data.response?.generatedSamples?.length,
+            firstSampleKeys: generatedSample ? Object.keys(generatedSample) : [],
+            generateVideoResponseKeys: generateVideoResponse ? Object.keys(generateVideoResponse) : []
+          }, null, 2)
+        );
+        return {
+          success: false,
+          videoId,
+          status: "failed",
+          error: "No video URL in response. The video may have been blocked or failed to generate.",
         };
       }
 
