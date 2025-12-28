@@ -325,27 +325,8 @@ export default function Timeline({
   }
 
   return (
-    <div className="border-t border-border bg-card/50 backdrop-blur">
-      {/* Timeline header with time markers */}
-      <div className="flex items-center border-b border-border px-2 py-1">
-        <div className="flex-shrink-0 w-32 text-xs text-muted-foreground font-medium">Timeline</div>
-        <div
-          className="flex-1 overflow-x-auto"
-          style={{ minWidth: `${totalSeconds * pixelsPerSecond}px` }}
-        >
-          <div className="flex">
-            {timeMarkers.map((sec) => (
-              <div
-                key={sec}
-                className="text-[10px] text-muted-foreground"
-                style={{ width: `${5 * pixelsPerSecond}px` }}
-              >
-                {Math.floor(sec / 60)}:{(sec % 60).toString().padStart(2, "0")}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className="bg-card/50 backdrop-blur">
+      
 
       {/* Video track */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">

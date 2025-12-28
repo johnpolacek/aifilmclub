@@ -48,6 +48,7 @@ import { createNewShot } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
+import { uploadFile } from "@/lib/upload-utils";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -877,31 +878,24 @@ export function EditSceneView({
   const handleImageUpload = async (file: File, type: "start" | "end" | "reference") => {
     setIsUploadingImage(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", scene.id);
-      formData.append("mediaType", "image");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId,
+        sceneId: scene.id,
+        mediaType: "image",
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success && result.url) {
         if (type === "start") {
-          setStartFrameImage(data.url);
+          setStartFrameImage(result.url);
         } else if (type === "end") {
-          setEndFrameImage(data.url);
+          setEndFrameImage(result.url);
         } else if (type === "reference") {
           if (referenceImages.length < 3) {
-            setReferenceImages([...referenceImages, data.url]);
+            setReferenceImages([...referenceImages, result.url]);
           }
         }
       } else {
-        toast.error(data.error || "Failed to upload image");
+        toast.error(result.error || "Failed to upload image");
       }
     } catch (error) {
       console.error("[EditSceneView] Image upload error:", JSON.stringify({ error }, null, 2));
@@ -1023,20 +1017,19 @@ export function EditSceneView({
     const loadingToast = toast.loading("Uploading video...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", scene.id);
-      formData.append("mediaType", "video");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId,
+        sceneId: scene.id,
+        mediaType: "video",
+        onProgress: (percent) => {
+          // Update toast with progress for large files
+          if (file.size > 5 * 1024 * 1024) {
+            toast.loading(`Uploading video... ${percent}%`, { id: loadingToast });
+          }
+        },
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success && result.url) {
         // Get video duration (default to 5 seconds if not available)
         let durationMs = 5000;
         try {
@@ -1063,7 +1056,7 @@ export function EditSceneView({
         const newShot = createNewShot(scene.shots.length);
         newShot.sourceType = "uploaded";
         newShot.video = {
-          url: data.url,
+          url: result.url,
           status: "completed",
           durationMs,
         };
@@ -1076,7 +1069,7 @@ export function EditSceneView({
         setHasChanges(true);
         toast.success("Video uploaded successfully!", { id: loadingToast });
       } else {
-        toast.error(data.error || "Failed to upload video", { id: loadingToast });
+        toast.error(result.error || "Failed to upload video", { id: loadingToast });
       }
     } catch (error) {
       console.error("[EditSceneView] Video upload error:", JSON.stringify({ error }, null, 2));

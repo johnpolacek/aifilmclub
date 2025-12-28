@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GenerationMode, Shot } from "@/lib/scenes-client";
+import { uploadFile } from "@/lib/upload-utils";
 
 // ============================================================================
 // TYPES
@@ -193,6 +194,7 @@ export function ShotEditorModal({
   const [endFrameImage, setEndFrameImage] = useState<string | undefined>(shot?.endFrameImage);
   const [referenceImages, setReferenceImages] = useState<string[]>(shot?.referenceImages || []);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -208,71 +210,64 @@ export function ShotEditorModal({
   }, [shot]);
 
   // Handle image upload for a specific slot
+  // Uses presigned URLs for large images (>5MB), otherwise uses server-side processing for optimization
   const handleImageUpload = async (file: File, slot: "start" | "end" | "reference") => {
     setIsUploading(true);
+    setUploadProgress(0);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", sceneId);
-      formData.append("mediaType", "image");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId,
+        sceneId,
+        mediaType: "image",
+        onProgress: setUploadProgress,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success && result.url) {
         if (slot === "start") {
-          setStartFrameImage(data.url);
+          setStartFrameImage(result.url);
         } else if (slot === "end") {
-          setEndFrameImage(data.url);
+          setEndFrameImage(result.url);
         } else if (slot === "reference") {
-          setReferenceImages((prev) => [...prev.slice(0, 2), data.url]);
+          setReferenceImages((prev) => [...prev.slice(0, 2), result.url!]);
         }
         toast.success("Image uploaded");
       } else {
-        toast.error(data.error || "Failed to upload image");
+        toast.error(result.error || "Failed to upload image");
       }
     } catch (error) {
       console.error("[ShotEditorModal] Upload error:", JSON.stringify({ error }, null, 2));
       toast.error("Failed to upload image");
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
-  // Handle video upload
+  // Handle video upload - uses presigned URLs for large files
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", sceneId);
-      formData.append("mediaType", "video");
+    setUploadProgress(0);
 
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+    try {
+      const result = await uploadFile(file, {
+        projectId,
+        sceneId,
+        mediaType: "video",
+        onProgress: setUploadProgress,
       });
 
-      const data = await response.json();
-
-      if (data.success && shot) {
+      if (result.success && shot && result.url) {
         const updatedShot: Shot = {
           ...shot,
           prompt,
           sourceType: "uploaded",
           video: {
-            url: data.url,
+            url: result.url,
             status: "completed",
-            durationMs: data.durationMs || 5000,
+            durationMs: 5000, // Default duration, would need video metadata to get actual
           },
           updatedAt: new Date().toISOString(),
         };
@@ -280,13 +275,14 @@ export function ShotEditorModal({
         toast.success("Video uploaded");
         onOpenChange(false);
       } else {
-        toast.error(data.error || "Failed to upload video");
+        toast.error(result.error || "Failed to upload video");
       }
     } catch (error) {
       console.error("[ShotEditorModal] Video upload error:", JSON.stringify({ error }, null, 2));
       toast.error("Failed to upload video");
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       if (e.target) {
         e.target.value = "";
       }
@@ -554,14 +550,27 @@ export function ShotEditorModal({
                   type="button"
                   onClick={() => videoInputRef.current?.click()}
                   disabled={isUploading}
-                  className="w-full aspect-video rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors"
+                  className="w-full aspect-video rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors relative overflow-hidden"
                 >
                   {isUploading ? (
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <>
+                      {/* Progress bar background */}
+                      <div
+                        className="absolute inset-0 bg-primary/10 transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                      <div className="relative z-10 flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-sm font-medium text-primary">
+                          Uploading... {uploadProgress}%
+                        </span>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <Video className="h-8 w-8 text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">Click to upload video</span>
+                      <span className="text-xs text-muted-foreground">Supports files up to 500MB</span>
                     </>
                   )}
                 </button>

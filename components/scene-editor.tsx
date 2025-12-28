@@ -28,6 +28,7 @@ import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes-client"
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
+import { uploadFile } from "@/lib/upload-utils";
 
 interface SceneEditorProps {
   scene: Scene;
@@ -419,24 +420,17 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
     const loadingToast = toast.loading("Uploading image...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", editedScene.projectId);
-      formData.append("sceneId", editedScene.id);
-      formData.append("mediaType", "image");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId: editedScene.projectId,
+        sceneId: editedScene.id,
+        mediaType: "image",
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success && result.url) {
         const newImage: GeneratedImage = {
-          id: data.id,
+          id: result.mediaId || `uploaded-${Date.now()}`,
           prompt: `Uploaded: ${file.name}`,
-          imageUrl: data.url,
+          imageUrl: result.url,
           model: "other",
           createdAt: new Date().toISOString(),
         };
@@ -446,7 +440,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         }));
         toast.success("Image uploaded successfully!", { id: loadingToast });
       } else {
-        toast.error(data.error || "Failed to upload image", { id: loadingToast });
+        toast.error(result.error || "Failed to upload image", { id: loadingToast });
       }
     } catch (error) {
       console.error("[SceneEditor] Error uploading image:", JSON.stringify({ error }, null, 2));
@@ -467,24 +461,23 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
     const loadingToast = toast.loading("Uploading video...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", editedScene.projectId);
-      formData.append("sceneId", editedScene.id);
-      formData.append("mediaType", "video");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId: editedScene.projectId,
+        sceneId: editedScene.id,
+        mediaType: "video",
+        onProgress: (percent) => {
+          // Update toast with progress for large files
+          if (file.size > 5 * 1024 * 1024) {
+            toast.loading(`Uploading video... ${percent}%`, { id: loadingToast });
+          }
+        },
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (result.success && result.url) {
         const newVideo: GeneratedVideo = {
-          id: data.id,
+          id: result.mediaId || `uploaded-${Date.now()}`,
           prompt: `Uploaded: ${file.name}`,
-          videoUrl: data.url,
+          videoUrl: result.url,
           model: "other",
           status: "completed",
           createdAt: new Date().toISOString(),
@@ -495,7 +488,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
         }));
         toast.success("Video uploaded successfully!", { id: loadingToast });
       } else {
-        toast.error(data.error || "Failed to upload video", { id: loadingToast });
+        toast.error(result.error || "Failed to upload video", { id: loadingToast });
       }
     } catch (error) {
       console.error("[SceneEditor] Error uploading video:", JSON.stringify({ error }, null, 2));

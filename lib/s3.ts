@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { optimizeAvatar, optimizeImage, optimizeThumbnail } from "./image-optimization";
 
 // Initialize S3 Client
@@ -307,4 +308,28 @@ export async function uploadFileFromBuffer(
     console.error("Error uploading file:", error);
     throw error;
   }
+}
+
+/**
+ * Generate a presigned URL for direct browser-to-S3 uploads
+ * This allows uploading large files without going through the server
+ */
+export async function generatePresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds = 3600 // 1 hour default
+): Promise<{ uploadUrl: string; publicUrl: string; key: string }> {
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, {
+    expiresIn: expiresInSeconds,
+  });
+
+  const publicUrl = getPublicUrlServer(key);
+
+  return { uploadUrl, publicUrl, key };
 }

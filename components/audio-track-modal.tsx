@@ -31,6 +31,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import type { AudioTrack, AudioSourceType, Shot } from "@/lib/scenes-client";
 import { createNewAudioTrack } from "@/lib/scenes-client";
+import { uploadFile } from "@/lib/upload-utils";
 
 // ============================================================================
 // TYPES
@@ -75,32 +76,29 @@ export function AudioTrackModal({
 
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle audio file upload
+  // Handle audio file upload - uses presigned URLs for large audio files
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("sceneId", sceneId);
-      formData.append("mediaType", "audio");
-
-      const response = await fetch("/api/scenes/upload-media", {
-        method: "POST",
-        body: formData,
+      const result = await uploadFile(file, {
+        projectId,
+        sceneId,
+        mediaType: "audio",
+        onProgress: (percent) => {
+          // Could add progress state here if needed
+          console.log(`[AudioTrackModal] Upload progress: ${percent}%`);
+        },
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setSourceUrl(data.url);
+      if (result.success && result.url) {
+        setSourceUrl(result.url);
         setName(name || file.name.replace(/\.[^/.]+$/, ""));
         toast.success("Audio uploaded");
       } else {
-        toast.error(data.error || "Failed to upload audio");
+        toast.error(result.error || "Failed to upload audio");
       }
     } catch (error) {
       console.error("[AudioTrackModal] Upload error:", JSON.stringify({ error }, null, 2));
