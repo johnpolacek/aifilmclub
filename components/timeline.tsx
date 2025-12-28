@@ -95,23 +95,7 @@ function ShotCard({
           alt={`Shot ${shot.order + 1}`}
           className="w-full h-full object-cover"
           style={{ maxWidth: '100%', height: '100%', objectFit: 'cover' }}
-          onLoad={() => {
-            console.log(
-              "[ShotCard] Thumbnail loaded successfully:",
-              JSON.stringify({ thumbnailUrl, shotId: shot.id }, null, 2)
-            );
-          }}
           onError={(e) => {
-            // Fallback to video if thumbnail fails to load
-            console.error(
-              "[ShotCard] Thumbnail failed to load, falling back to video:",
-              JSON.stringify({ 
-                thumbnailUrl, 
-                videoUrl, 
-                shotId: shot.id,
-                error: e.currentTarget.src
-              }, null, 2)
-            );
             if (videoUrl && e.currentTarget.parentElement) {
               const videoEl = document.createElement("video");
               videoEl.src = videoUrl;
@@ -132,12 +116,6 @@ function ShotCard({
           style={{ maxWidth: '100%', height: '100%', objectFit: 'cover' }}
           muted 
           playsInline
-          onLoadStart={() => {
-            console.log(
-              "[ShotCard] Video element loading:",
-              JSON.stringify({ videoUrl, shotId: shot.id }, null, 2)
-            );
-          }}
         />
       ) : shot.video?.status === "processing" ? (
         <div className="w-full h-full bg-muted/50 flex flex-col items-center justify-center gap-1">

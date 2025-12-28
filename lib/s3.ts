@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -339,4 +340,61 @@ export async function generatePresignedUploadUrl(
   }, null, 2));
 
   return { uploadUrl, publicUrl, key };
+}
+
+/**
+ * Delete an object from S3
+ */
+export async function deleteObjectFromS3(key: string): Promise<void> {
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+
+    await s3Client.send(command);
+    console.log(
+      "[s3] Deleted object:",
+      JSON.stringify({ key }, null, 2)
+    );
+  } catch (error) {
+    console.error(
+      "[s3] Error deleting object:",
+      JSON.stringify({ key, error: error instanceof Error ? error.message : String(error) }, null, 2)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Extract S3 key from a public URL (CloudFront or S3)
+ */
+export function extractS3KeyFromUrl(url: string): string | null {
+  try {
+    // Handle CloudFront URLs: https://domain.com/key
+    if (CLOUDFRONT_DOMAIN && url.includes(CLOUDFRONT_DOMAIN)) {
+      const urlObj = new URL(url);
+      return urlObj.pathname.substring(1); // Remove leading slash
+    }
+
+    // Handle S3 URLs: https://bucket.s3.amazonaws.com/key or https://bucket.s3.region.amazonaws.com/key
+    if (url.includes(".s3.") && url.includes("amazonaws.com")) {
+      const urlObj = new URL(url);
+      return urlObj.pathname.substring(1); // Remove leading slash
+    }
+
+    // If URL doesn't match known patterns, try to extract path
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname.substring(1);
+    } catch {
+      return null;
+    }
+  } catch (error) {
+    console.error(
+      "[s3] Error extracting S3 key from URL:",
+      JSON.stringify({ url, error: error instanceof Error ? error.message : String(error) }, null, 2)
+    );
+    return null;
+  }
 }

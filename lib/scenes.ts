@@ -57,6 +57,7 @@ function ensureSceneFields(scene: Scene): Scene {
     transitionOut: scene.transitionOut || { type: "none", durationMs: 0 },
     generatedImages: scene.generatedImages || [],
     generatedVideos: scene.generatedVideos || [],
+    removedShots: scene.removedShots || [],
   };
 }
 

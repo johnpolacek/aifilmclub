@@ -245,8 +245,9 @@ export async function GET(request: Request) {
 
         if (videoBuffer) {
           // Add timestamp to video key to bust CloudFront cache when replacing shots
+          // S3 Path Convention: projects/{projectId}/scenes/{sceneId}/videos/{filename}
           const timestamp = Date.now();
-          const videoKey = `generated/videos/${projectId}/${sceneId}/${videoId || operationId}-${timestamp}.mp4`;
+          const videoKey = `projects/${projectId}/scenes/${sceneId}/videos/${videoId || operationId}-${timestamp}.mp4`;
           
           console.log(
             "[video-status] Video buffer received:",
@@ -266,7 +267,7 @@ export async function GET(request: Request) {
             JSON.stringify({ 
               videoKey, 
               finalVideoUrl,
-              s3Path: `s3://aifilmcamp/${videoKey}` 
+              s3Path: `s3://aifilmcamp-public/${videoKey}` 
             }, null, 2)
           );
 
@@ -281,7 +282,8 @@ export async function GET(request: Request) {
           
           if (thumbnailBuffer) {
             // Use the predictable thumbnailPath if provided, otherwise generate one
-            const thumbnailKey = thumbnailPath || `generated/thumbnails/${projectId}/${sceneId}/${videoId || operationId}-${timestamp}.jpg`;
+            // S3 Path Convention: projects/{projectId}/scenes/{sceneId}/thumbnails/{filename}
+            const thumbnailKey = thumbnailPath || `projects/${projectId}/scenes/${sceneId}/thumbnails/${videoId || operationId}-${timestamp}.jpg`;
             console.log(
               "[video-status] Uploading thumbnail to S3:",
               JSON.stringify({ thumbnailKey, thumbnailBufferSize: thumbnailBuffer.length, usingPredictablePath: !!thumbnailPath }, null, 2)

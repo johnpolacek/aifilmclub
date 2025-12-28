@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getImageUrl } from "@/lib/image-utils";
+import { getImageUrl, getPublicUrl } from "@/lib/image-utils";
 import type { AudioTrack, GenerationMode, Scene, Shot, ShotVideo } from "@/lib/scenes-client";
 import { createNewShot } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
@@ -492,13 +492,34 @@ export function EditSceneView({
   username,
 }: EditSceneViewProps) {
   const router = useRouter();
-  const [scene, setScene] = useState<Scene>(() => ({
-    ...initialScene,
-    shots: initialScene.shots || [],
-    audioTracks: initialScene.audioTracks || [],
-    generatedImages: initialScene.generatedImages || [],
-    transitionOut: initialScene.transitionOut || { type: "none", durationMs: 0 },
-  }));
+  const [scene, setScene] = useState<Scene>(() => {
+    const initializedScene = {
+      ...initialScene,
+      shots: initialScene.shots || [],
+      audioTracks: initialScene.audioTracks || [],
+      generatedImages: initialScene.generatedImages || [],
+      removedShots: initialScene.removedShots || [],
+      transitionOut: initialScene.transitionOut || { type: "none", durationMs: 0 },
+    };
+    
+    console.log(
+      "[EditSceneView] Initializing scene state:",
+      JSON.stringify({
+        sceneId: initialScene.id,
+        initialRemovedShotsCount: initialScene.removedShots?.length || 0,
+        initialRemovedShots: initialScene.removedShots?.map(s => ({
+          id: s.id,
+          prompt: s.prompt?.substring(0, 50),
+          hasVideo: !!s.video,
+          videoStatus: s.video?.status,
+          videoUrl: s.video?.url?.substring(0, 100),
+        })) || [],
+        initializedRemovedShotsCount: initializedScene.removedShots?.length || 0,
+      }, null, 2)
+    );
+    
+    return initializedScene;
+  });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -516,8 +537,31 @@ export function EditSceneView({
   const [showShotEditor, setShowShotEditor] = useState(false);
   // shotId -> { operationId, thumbnailUrl, thumbnailPath } for polling
   const [pendingShots, setPendingShots] = useState<Map<string, { operationId: string; thumbnailUrl?: string; thumbnailPath?: string }>>(new Map());
-  const [removedShots, setRemovedShots] = useState<Shot[]>([]); // Shots that were deleted but have videos
+  
+  // Use removedShots from scene state instead of separate state
+  const removedShots = scene.removedShots || [];
+  
+  // Log removedShots whenever it changes
+  useEffect(() => {
+    console.log(
+      "[EditSceneView] removedShots state:",
+      JSON.stringify({
+        count: removedShots.length,
+        shots: removedShots.map(s => ({
+          id: s.id,
+          prompt: s.prompt?.substring(0, 50),
+          hasVideo: !!s.video,
+          videoStatus: s.video?.status,
+          videoUrl: s.video?.url?.substring(0, 100),
+          thumbnailUrl: s.video?.thumbnailUrl?.substring(0, 100),
+        })),
+        sceneRemovedShotsCount: scene.removedShots?.length || 0,
+      }, null, 2)
+    );
+  }, [removedShots, scene.removedShots]);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null); // Track which video is playing in Media Library
+  const [shotToDelete, setShotToDelete] = useState<Shot | null>(null); // Shot pending deletion confirmation
 
   // Generate video dialog state
   const [showGenerateVideoDialog, setShowGenerateVideoDialog] = useState(false);
@@ -625,6 +669,58 @@ export function EditSceneView({
 
     return images;
   }, [locations, characters, scene.generatedImages, username]);
+
+  // ============================================================================
+  // RESTORE PENDING SHOTS ON PAGE LOAD
+  // ============================================================================
+
+  // Restore pending shots from scene data when component mounts
+  // This handles the case where user refreshes the page during video generation
+  useEffect(() => {
+    const processingShots = initialScene.shots.filter(
+      (shot) => shot.video?.status === "processing" && shot.video?.operationId
+    );
+
+    if (processingShots.length > 0) {
+      console.log(
+        "[EditSceneView] Restoring pending shots after page load:",
+        JSON.stringify(
+          {
+            count: processingShots.length,
+            shotIds: processingShots.map((s) => s.id),
+            operationIds: processingShots.map((s) => s.video?.operationId),
+          },
+          null,
+          2
+        )
+      );
+
+      setPendingShots((prev) => {
+        const next = new Map(prev);
+        // Only add shots that aren't already in pendingShots
+        for (const shot of processingShots) {
+          if (shot.video?.operationId && !next.has(shot.id)) {
+            // Reconstruct thumbnail path if possible (optional - polling will work without it)
+            // S3 Path Convention: projects/{projectId}/scenes/{sceneId}/thumbnails/{filename}
+            const thumbnailPath = shot.video?.operationId
+              ? `projects/${projectId}/scenes/${initialScene.id}/thumbnails/${shot.id}.jpg`
+              : undefined;
+            
+            // Try to construct thumbnail URL using getPublicUrl utility
+            const thumbnailUrl = thumbnailPath ? getPublicUrl(thumbnailPath) : undefined;
+
+            next.set(shot.id, {
+              operationId: shot.video.operationId,
+              thumbnailUrl,
+              thumbnailPath,
+            });
+          }
+        }
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // ============================================================================
   // POLLING FOR SHOT VIDEO COMPLETION
@@ -1376,22 +1472,60 @@ export function EditSceneView({
   const handleShotDelete = (shotId: string) => {
     const shotToDelete = scene.shots.find((s) => s.id === shotId);
     
-    if (shotToDelete && shotToDelete.video?.url && shotToDelete.video.status === "completed") {
-      // Shot has a completed video - move to removed shots instead of deleting
-      setRemovedShots((prev) => [...prev, shotToDelete]);
-      toast.success("Shot moved to Media Library");
-    }
+    console.log(
+      "[EditSceneView] handleShotDelete called:",
+      JSON.stringify({
+        shotId,
+        shotFound: !!shotToDelete,
+        shotHasVideo: !!shotToDelete?.video,
+        videoStatus: shotToDelete?.video?.status,
+        videoUrl: shotToDelete?.video?.url?.substring(0, 100),
+        currentRemovedShotsCount: scene.removedShots?.length || 0,
+      }, null, 2)
+    );
     
-    setScene((prev) => ({
-      ...prev,
-      shots: prev.shots.filter((s) => s.id !== shotId).map((s, i) => ({ ...s, order: i })),
-    }));
+    setScene((prev) => {
+      const updatedShots = prev.shots.filter((s) => s.id !== shotId).map((s, i) => ({ ...s, order: i }));
+      const updatedRemovedShots = [...(prev.removedShots || [])];
+      
+      if (shotToDelete && shotToDelete.video?.url && shotToDelete.video.status === "completed") {
+        // Shot has a completed video - move to removed shots instead of deleting
+        updatedRemovedShots.push(shotToDelete);
+        console.log(
+          "[EditSceneView] Adding shot to removedShots:",
+          JSON.stringify({
+            shotId: shotToDelete.id,
+            prompt: shotToDelete.prompt?.substring(0, 50),
+            videoUrl: shotToDelete.video.url.substring(0, 100),
+            newRemovedShotsCount: updatedRemovedShots.length,
+          }, null, 2)
+        );
+        toast.success("Shot moved to Media Library");
+      }
+      
+      return {
+        ...prev,
+        shots: updatedShots,
+        removedShots: updatedRemovedShots,
+      };
+    });
     setShowShotEditor(false);
     setSelectedShot(null);
   };
 
   // Save old video to media library when replacing a shot (without removing the shot from scene)
   const handleSaveVideoToMediaLibrary = (shot: Shot) => {
+    console.log(
+      "[EditSceneView] handleSaveVideoToMediaLibrary called:",
+      JSON.stringify({
+        shotId: shot.id,
+        hasVideo: !!shot.video,
+        videoStatus: shot.video?.status,
+        videoUrl: shot.video?.url?.substring(0, 100),
+        currentRemovedShotsCount: scene.removedShots?.length || 0,
+      }, null, 2)
+    );
+    
     if (shot.video?.url && shot.video.status === "completed") {
       // Create a copy with a new unique ID to avoid duplicate key conflicts
       const mediaLibraryShot: Shot = {
@@ -1403,19 +1537,118 @@ export function EditSceneView({
         JSON.stringify({ 
           originalShotId: shot.id,
           newMediaLibraryId: mediaLibraryShot.id,
-          videoUrl: shot.video.url,
-          thumbnailUrl: shot.video.thumbnailUrl 
+          videoUrl: shot.video.url.substring(0, 100),
+          thumbnailUrl: shot.video.thumbnailUrl?.substring(0, 100),
+          currentRemovedShotsCount: scene.removedShots?.length || 0,
         }, null, 2)
       );
-      setRemovedShots((prev) => [...prev, mediaLibraryShot]);
+      setScene((prev) => {
+        const newRemovedShots = [...(prev.removedShots || []), mediaLibraryShot];
+        console.log(
+          "[EditSceneView] Updated removedShots in scene state:",
+          JSON.stringify({
+            previousCount: prev.removedShots?.length || 0,
+            newCount: newRemovedShots.length,
+            addedShotId: mediaLibraryShot.id,
+          }, null, 2)
+        );
+        return {
+          ...prev,
+          removedShots: newRemovedShots,
+        };
+      });
       toast.success("Old video saved to Media Library");
+    } else {
+      console.log(
+        "[EditSceneView] Skipping save to media library - video not completed:",
+        JSON.stringify({
+          shotId: shot.id,
+          hasVideo: !!shot.video,
+          videoStatus: shot.video?.status,
+        }, null, 2)
+      );
     }
   };
 
-  // Permanently remove a shot from the media library
-  const handleRemoveFromLibrary = (shotId: string) => {
-    setRemovedShots((prev) => prev.filter((s) => s.id !== shotId));
-    toast.success("Shot permanently removed");
+  // Show confirmation dialog before deleting
+  const handleRemoveFromLibraryClick = (shotId: string) => {
+    const shot = removedShots.find((s) => s.id === shotId);
+    if (shot) {
+      setShotToDelete(shot);
+    }
+  };
+
+  // Permanently remove a shot from the media library and delete video from S3
+  const handleRemoveFromLibrary = async () => {
+    if (!shotToDelete) return;
+
+    const shotId = shotToDelete.id;
+
+    // If video is playing, pause it first
+    if (playingVideoId === shotId) {
+      const videoElement = document.querySelector(`video[data-shot-id="${shotId}"]`) as HTMLVideoElement;
+      videoElement?.pause();
+      setPlayingVideoId(null);
+    }
+
+    // Delete video from S3 if it exists
+    if (shotToDelete.video?.url) {
+      try {
+        const response = await fetch("/api/scenes/delete-video", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            videoUrl: shotToDelete.video.url,
+            thumbnailUrl: shotToDelete.video.thumbnailUrl,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error(
+            "[EditSceneView] Failed to delete video from S3:",
+            JSON.stringify({ shotId, error: errorData.error || "Unknown error" }, null, 2)
+          );
+          toast.error("Failed to delete video. It may have already been deleted.");
+          setShotToDelete(null);
+          return;
+        } else {
+          console.log(
+            "[EditSceneView] Video deleted from S3:",
+            JSON.stringify({ shotId, videoUrl: shotToDelete.video.url.substring(0, 100) }, null, 2)
+          );
+        }
+      } catch (error) {
+        console.error(
+          "[EditSceneView] Error deleting video:",
+          JSON.stringify({ shotId, error: error instanceof Error ? error.message : String(error) }, null, 2)
+        );
+        toast.error("Failed to delete video. Please try again.");
+        setShotToDelete(null);
+        return; // Don't remove from UI if deletion failed
+      }
+    }
+
+    // Remove from scene state
+    setScene((prev) => {
+      const newRemovedShots = (prev.removedShots || []).filter((s) => s.id !== shotId);
+      console.log(
+        "[EditSceneView] Removing shot from removedShots:",
+        JSON.stringify({
+          shotId,
+          previousCount: prev.removedShots?.length || 0,
+          newCount: newRemovedShots.length,
+        }, null, 2)
+      );
+      return {
+        ...prev,
+        removedShots: newRemovedShots,
+      };
+    });
+    setShotToDelete(null);
+    toast.success("Video permanently deleted");
   };
 
   // Add a shot from media library to the scene as a new shot
@@ -1609,6 +1842,22 @@ export function EditSceneView({
       return; // No changes to save
     }
 
+    console.log(
+      "[EditSceneView] Saving scene:",
+      JSON.stringify({
+        sceneId: scene.id,
+        removedShotsCount: scene.removedShots?.length || 0,
+        removedShots: scene.removedShots?.map(s => ({
+          id: s.id,
+          prompt: s.prompt?.substring(0, 50),
+          hasVideo: !!s.video,
+          videoStatus: s.video?.status,
+          videoUrl: s.video?.url?.substring(0, 100),
+        })) || [],
+        shotsCount: scene.shots.length,
+      }, null, 2)
+    );
+
     setSaveStatus("saving");
 
     try {
@@ -1616,6 +1865,15 @@ export function EditSceneView({
         ...scene,
         updatedAt: new Date().toISOString(),
       };
+
+      console.log(
+        "[EditSceneView] Sending scene to API:",
+        JSON.stringify({
+          sceneId: updatedScene.id,
+          removedShotsCount: updatedScene.removedShots?.length || 0,
+          removedShotsIds: updatedScene.removedShots?.map(s => s.id) || [],
+        }, null, 2)
+      );
 
       const response = await fetch(`/api/scenes/${scene.id}`, {
         method: "PUT",
@@ -1627,6 +1885,15 @@ export function EditSceneView({
       });
 
       const data = await response.json();
+
+      console.log(
+        "[EditSceneView] Scene save response:",
+        JSON.stringify({
+          success: data.success,
+          error: data.error,
+          sceneId: scene.id,
+        }, null, 2)
+      );
 
       if (data.success) {
         lastSavedSceneRef.current = currentSceneJson;
@@ -1887,7 +2154,7 @@ export function EditSceneView({
                       return (
                         <div
                           key={character.name}
-                          className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground"
+                          className="px-2 py-1 rounded-sm text-xs font-medium bg-foreground/20 text-foreground/90"
                         >
                           {character.name}
                         </div>
@@ -2019,6 +2286,23 @@ export function EditSceneView({
         </div>
 
         {/* Media Library - Full Width */}
+        {(() => {
+          console.log(
+            "[EditSceneView] Rendering Media Library section:",
+            JSON.stringify({
+              removedShotsLength: removedShots.length,
+              sceneRemovedShotsLength: scene.removedShots?.length || 0,
+              shouldShow: removedShots.length > 0,
+              removedShots: removedShots.map(s => ({
+                id: s.id,
+                prompt: s.prompt?.substring(0, 50),
+                hasVideo: !!s.video,
+                videoStatus: s.video?.status,
+              })),
+            }, null, 2)
+          );
+          return null;
+        })()}
         {removedShots.length > 0 && (
           <div className="mt-8 pt-6 border-t border-border">
             <Card>
@@ -2134,7 +2418,18 @@ export function EditSceneView({
       />
 
       {/* Media Library Dialog */}
-      <Dialog open={showMediaLibrary} onOpenChange={setShowMediaLibrary}>
+      <Dialog 
+        open={showMediaLibrary} 
+        onOpenChange={(open) => {
+          if (!open && playingVideoId) {
+            // Pause any playing video when dialog closes
+            const videoElement = document.querySelector(`video[data-shot-id="${playingVideoId}"]`) as HTMLVideoElement;
+            videoElement?.pause();
+            setPlayingVideoId(null);
+          }
+          setShowMediaLibrary(open);
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2147,6 +2442,24 @@ export function EditSceneView({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {(() => {
+              console.log(
+                "[EditSceneView] Media Library Dialog rendering:",
+                JSON.stringify({
+                  removedShotsLength: removedShots.length,
+                  sceneRemovedShotsLength: scene.removedShots?.length || 0,
+                  removedShots: removedShots.map(s => ({
+                    id: s.id,
+                    prompt: s.prompt?.substring(0, 50),
+                    hasVideo: !!s.video,
+                    videoStatus: s.video?.status,
+                    videoUrl: s.video?.url?.substring(0, 100),
+                    thumbnailUrl: s.video?.thumbnailUrl?.substring(0, 100),
+                  })),
+                }, null, 2)
+              );
+              return null;
+            })()}
             {removedShots.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Video className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -2154,23 +2467,74 @@ export function EditSceneView({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {removedShots.map((shot) => (
+                {removedShots.map((shot) => {
+                  const isPlaying = playingVideoId === shot.id;
+                  
+                  const handleVideoClick = () => {
+                    if (!shot.video?.url) return;
+                    
+                    const videoElement = document.querySelector(`video[data-shot-id="${shot.id}"]`) as HTMLVideoElement;
+                    
+                    if (isPlaying && videoElement) {
+                      // Pause this video
+                      videoElement.pause();
+                      setPlayingVideoId(null);
+                    } else {
+                      // Pause any other playing video
+                      if (playingVideoId) {
+                        const otherVideo = document.querySelector(`video[data-shot-id="${playingVideoId}"]`) as HTMLVideoElement;
+                        otherVideo?.pause();
+                      }
+                      // Play this video
+                      setPlayingVideoId(shot.id);
+                      setTimeout(() => {
+                        videoElement?.play();
+                      }, 0);
+                    }
+                  };
+
+                  const handleVideoEnded = () => {
+                    setPlayingVideoId(null);
+                  };
+
+                  return (
                   <Card key={shot.id} className="overflow-hidden">
-                    <div className="relative aspect-video bg-muted/30">
-                      {shot.video?.thumbnailUrl ? (
+                      <div 
+                        className="relative aspect-video bg-muted/30 cursor-pointer group"
+                        onClick={handleVideoClick}
+                      >
+                        {shot.video?.thumbnailUrl && !isPlaying ? (
+                          <>
                         <Image
                           src={shot.video.thumbnailUrl}
                           alt={shot.prompt}
                           fill
                           className="object-cover"
                         />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <PlayCircle className="h-16 w-16 text-white/90" />
+                            </div>
+                          </>
                       ) : shot.video?.url ? (
+                          <>
                         <video
+                              data-shot-id={shot.id}
                           src={shot.video.url}
                           className="w-full h-full object-cover"
                           muted
                           playsInline
-                        />
+                              onEnded={handleVideoEnded}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVideoClick();
+                              }}
+                            />
+                            {!isPlaying && (
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                                <PlayCircle className="h-16 w-16 text-white/90" />
+                              </div>
+                            )}
+                          </>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Video className="h-12 w-12 text-muted-foreground opacity-50" />
@@ -2201,16 +2565,17 @@ export function EditSceneView({
                           type="button"
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleRemoveFromLibrary(shot.id)}
+                          onClick={() => handleRemoveFromLibraryClick(shot.id)}
                           className="flex-1"
                         >
                           <Trash2 className="h-4 w-4 mr-1" />
-                          Remove
+                          Delete
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2218,6 +2583,35 @@ export function EditSceneView({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowMediaLibrary(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Video Confirmation Dialog */}
+      <Dialog open={!!shotToDelete} onOpenChange={(open) => !open && setShotToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Video</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this video? This action cannot be undone. The video file will be removed from storage.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShotToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRemoveFromLibrary}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Permanently
             </Button>
           </DialogFooter>
         </DialogContent>

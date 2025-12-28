@@ -179,6 +179,7 @@ export interface Scene {
   // Timeline content (new shot-based architecture)
   shots: Shot[]; // Ordered video timeline
   audioTracks: AudioTrack[]; // Multiple audio layers
+  removedShots?: Shot[]; // Shots removed from timeline but kept in Media Library
 
   // Transition to next scene
   transitionOut: Transition;

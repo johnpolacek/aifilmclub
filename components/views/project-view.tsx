@@ -237,7 +237,7 @@ export function ProjectView({
                   {project.characters.map((character, index) => (
                     <Card
                       key={`character-${character.name}-${index}`}
-                      className="bg-muted/30 border-border"
+                      className="bg-foreground/10"
                     >
                       <CardContent className="p-4">
                         <div className="space-y-3">

@@ -189,7 +189,8 @@ export async function POST(request: Request) {
     }
 
     // Upload thumbnail to S3
-    const thumbnailKey = `generated/thumbnails/${projectId}/${sceneId}/${videoId || `video-${Date.now()}`}.jpg`;
+    // S3 Path Convention: projects/{projectId}/scenes/{sceneId}/thumbnails/{filename}
+    const thumbnailKey = `projects/${projectId}/scenes/${sceneId}/thumbnails/${videoId || `video-${Date.now()}`}.jpg`;
     console.log(
       "[generate-thumbnail] Uploading thumbnail to S3:",
       JSON.stringify({ thumbnailKey, thumbnailBufferSize: thumbnailBuffer.length }, null, 2)

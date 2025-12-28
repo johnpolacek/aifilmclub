@@ -119,11 +119,12 @@ export async function POST(request: Request) {
     const videoId = `vid-${timestamp}-${randomSuffix}`;
     
     // Generate predictable thumbnail ID upfront - this is what frontend will poll for
+    // S3 Path Convention: projects/{projectId}/scenes/{sceneId}/thumbnails/{filename}
     const thumbnailId = `thumb-${timestamp}-${randomSuffix}`;
-    const thumbnailPath = `generated/thumbnails/${projectId}/${sceneId}/${thumbnailId}.jpg`;
+    const thumbnailPath = `projects/${projectId}/scenes/${sceneId}/thumbnails/${thumbnailId}.jpg`;
     
     // Build the full thumbnail URL that frontend will check
-    const s3Bucket = process.env.AWS_S3_BUCKET || "aifilmcamp";
+    const s3Bucket = process.env.AWS_S3_BUCKET || "aifilmcamp-public";
     const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN;
     const thumbnailUrl = cloudfrontDomain 
       ? `https://${cloudfrontDomain}/${thumbnailPath}`
