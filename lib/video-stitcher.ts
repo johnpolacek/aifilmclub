@@ -27,7 +27,7 @@ export function getCompletedVideos(scenes: Scene[]): GeneratedVideo[] {
   return scenes
     .sort((a, b) => a.sceneNumber - b.sceneNumber)
     .flatMap((scene) => 
-      scene.generatedVideos.filter((v) => v.status === "completed" && v.videoUrl)
+      (scene.generatedVideos || []).filter((v) => v.status === "completed" && v.videoUrl)
     );
 }
 
@@ -126,7 +126,7 @@ export function createVideoPlaylist(scenes: Scene[]): {
   
   const videos = sortedScenes
     .map((scene) => {
-      const completedVideo = scene.generatedVideos.find(
+      const completedVideo = scene.generatedVideos?.find(
         (v) => v.status === "completed" && v.videoUrl
       );
       

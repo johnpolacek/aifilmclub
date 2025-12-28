@@ -58,8 +58,8 @@ ${s.screenplay ? `\`\`\`
 ${s.screenplay.substring(0, 500)}${s.screenplay.length > 500 ? "..." : ""}
 \`\`\`` : "No screenplay content"}
 
-${s.generatedImages.length > 0 ? `- ${s.generatedImages.length} generated image(s)` : ""}
-${s.generatedVideos.length > 0 ? `- ${s.generatedVideos.length} generated video(s)` : ""}
+${s.generatedImages && s.generatedImages.length > 0 ? `- ${s.generatedImages.length} generated image(s)` : ""}
+${s.generatedVideos && s.generatedVideos.length > 0 ? `- ${s.generatedVideos.length} generated video(s)` : ""}
 `).join("\n")}` : ""}
 
 ## Tools Used

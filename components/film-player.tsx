@@ -31,7 +31,7 @@ export function FilmPlayer({ scenes, title, autoPlay = false }: FilmPlayerProps)
     
     const videos = sortedScenes
       .map((scene) => {
-        const completedVideo = scene.generatedVideos.find(
+        const completedVideo = scene.generatedVideos?.find(
           (v) => v.status === "completed" && v.videoUrl
         );
         

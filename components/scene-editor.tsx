@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { GeneratedImage, GeneratedVideo, Scene } from "@/lib/scenes-client";
+import { getDefaultTransition } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
@@ -1006,6 +1007,9 @@ export function SceneList({
       title: "New Scene",
       screenplay: "",
       characters: [],
+      shots: [],
+      audioTracks: [],
+      transitionOut: getDefaultTransition(),
       generatedImages: [],
       generatedVideos: [],
       createdAt: now,
@@ -1063,10 +1067,10 @@ export function SceneList({
                     </div>
                   )}
                   <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
-                    {scene.generatedImages.length > 0 && (
+                    {scene.generatedImages && scene.generatedImages.length > 0 && (
                       <span>{scene.generatedImages.length} images</span>
                     )}
-                    {scene.generatedVideos.length > 0 && (
+                    {scene.generatedVideos && scene.generatedVideos.length > 0 && (
                       <span>{scene.generatedVideos.length} videos</span>
                     )}
                   </div>
