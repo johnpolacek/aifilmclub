@@ -486,8 +486,15 @@ export function ShotEditorModal({
 
           const updatedShot: Shot = {
             ...shot,
-            prompt,
+            // Clear generation-related fields when uploading a video
+            prompt: "", // Clear prompt since this is uploaded, not generated
             sourceType: "uploaded",
+            generationMode: undefined,
+            startFrameImage: undefined,
+            endFrameImage: undefined,
+            typedReferenceImages: undefined,
+            referenceImages: undefined,
+            durationSeconds: undefined,
             video: {
               url: result.url,
               status: "completed",
@@ -1425,7 +1432,8 @@ export function ShotEditorModal({
                 onChange={handleVideoUpload}
                 className="hidden"
               />
-              {shot.video?.url ? (
+              {/* Show existing video only if not in replace mode */}
+              {shot.video?.url && !isReplaceMode ? (
                 <div className="relative aspect-video rounded-lg overflow-hidden border border-border">
                   <video src={shot.video.url} controls className="w-full h-full object-cover" />
                 </div>
