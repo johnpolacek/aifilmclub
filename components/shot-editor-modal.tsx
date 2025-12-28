@@ -212,6 +212,18 @@ export function ShotEditorModal({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isVideoDragOver, setIsVideoDragOver] = useState(false);
 
+  // Start frame generation state
+  const [startFrameInputMode, setStartFrameInputMode] = useState<"upload" | "generate">("upload");
+  const [startFramePrompt, setStartFramePrompt] = useState("");
+  const [startFrameReferenceImages, setStartFrameReferenceImages] = useState<ReferenceImage[]>([]);
+  const [isGeneratingStartFrame, setIsGeneratingStartFrame] = useState(false);
+
+  // End frame generation state  
+  const [endFrameInputMode, setEndFrameInputMode] = useState<"upload" | "generate">("upload");
+  const [endFramePrompt, setEndFramePrompt] = useState("");
+  const [endFrameReferenceImages, setEndFrameReferenceImages] = useState<ReferenceImage[]>([]);
+  const [isGeneratingEndFrame, setIsGeneratingEndFrame] = useState(false);
+
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal opens or shot changes
@@ -227,6 +239,15 @@ export function ShotEditorModal({
       setIsGenerating(false);
       setIsUploading(false);
       setUploadProgress(0);
+      // Reset frame generation state
+      setStartFrameInputMode("upload");
+      setStartFramePrompt("");
+      setStartFrameReferenceImages([]);
+      setIsGeneratingStartFrame(false);
+      setEndFrameInputMode("upload");
+      setEndFramePrompt("");
+      setEndFrameReferenceImages([]);
+      setIsGeneratingEndFrame(false);
     }
   }, [open, shot]);
 
@@ -290,6 +311,87 @@ export function ShotEditorModal({
   // Remove a typed reference image
   const removeTypedReferenceImage = (index: number) => {
     setTypedReferenceImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Generate a frame image using AI
+  const handleGenerateFrameImage = async (frameType: "start" | "end") => {
+    const framePrompt = frameType === "start" ? startFramePrompt : endFramePrompt;
+    const frameReferenceImages = frameType === "start" ? startFrameReferenceImages : endFrameReferenceImages;
+    const setIsGeneratingFrame = frameType === "start" ? setIsGeneratingStartFrame : setIsGeneratingEndFrame;
+    const setFrameImage = frameType === "start" ? setStartFrameImage : setEndFrameImage;
+
+    if (!framePrompt.trim()) {
+      toast.error("Please enter a prompt for the image");
+      return;
+    }
+
+    setIsGeneratingFrame(true);
+
+    try {
+      const response = await fetch("/api/ai/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: framePrompt,
+          projectId,
+          sceneId,
+          aspectRatio: "16:9",
+          referenceImages: frameReferenceImages.length > 0 
+            ? frameReferenceImages.map((ref) => ref.url) 
+            : undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.image?.imageUrl) {
+        setFrameImage(data.image.imageUrl);
+        toast.success(`${frameType === "start" ? "Start" : "End"} frame generated!`);
+      } else {
+        toast.error(data.error || "Failed to generate image");
+      }
+    } catch (error) {
+      console.error(
+        "[ShotEditorModal] Generate frame error:",
+        JSON.stringify({ error, frameType }, null, 2)
+      );
+      toast.error("Failed to generate image");
+    } finally {
+      setIsGeneratingFrame(false);
+    }
+  };
+
+  // Add a reference image for frame generation
+  const addFrameReferenceImage = (
+    frameType: "start" | "end",
+    url: string,
+    type: ReferenceImageType,
+    name?: string
+  ) => {
+    const setFrameReferenceImages = frameType === "start" 
+      ? setStartFrameReferenceImages 
+      : setEndFrameReferenceImages;
+    const currentRefs = frameType === "start" 
+      ? startFrameReferenceImages 
+      : endFrameReferenceImages;
+
+    if (currentRefs.length >= 3) {
+      toast.error("Maximum 3 reference images allowed");
+      return;
+    }
+    if (currentRefs.some((ref) => ref.url === url)) {
+      toast.error("This image is already added");
+      return;
+    }
+    setFrameReferenceImages((prev) => [...prev, { url, type, name }]);
+  };
+
+  // Remove a reference image for frame generation
+  const removeFrameReferenceImage = (frameType: "start" | "end", index: number) => {
+    const setFrameReferenceImages = frameType === "start" 
+      ? setStartFrameReferenceImages 
+      : setEndFrameReferenceImages;
+    setFrameReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Handle video file upload - uses presigned URLs for large files
@@ -512,9 +614,12 @@ export function ShotEditorModal({
 
   const isNew = !shot.video?.url;
 
+  // Determine if we need a wider dialog
+  const needsWiderDialog = generationMode === "start-frame" || generationMode === "start-end-frame";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`max-h-[90vh] overflow-y-auto ${needsWiderDialog ? "max-w-4xl" : "max-w-2xl"}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Film className="h-5 w-5 text-primary" />
@@ -598,32 +703,328 @@ export function ShotEditorModal({
               </div>
 
               {/* Image inputs based on mode */}
+              {/* Start Frame Mode */}
               {generationMode === "start-frame" && (
-                <ImageDropZone
-                  label="Start Frame Image"
-                  imageUrl={startFrameImage}
-                  onImageSelect={(file) => handleImageUpload(file, "start")}
-                  onImageRemove={() => setStartFrameImage(undefined)}
-                  disabled={isUploading}
-                />
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Start Frame Image</Label>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant={startFrameInputMode === "upload" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setStartFrameInputMode("upload")}
+                        className="text-xs"
+                      >
+                        <Upload className="h-3 w-3 mr-1" />
+                        Upload
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={startFrameInputMode === "generate" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setStartFrameInputMode("generate")}
+                        className="text-xs"
+                      >
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Generate AI
+                      </Button>
+                    </div>
+                  </div>
+
+                  {startFrameInputMode === "upload" ? (
+                    <ImageDropZone
+                      label=""
+                      imageUrl={startFrameImage}
+                      onImageSelect={(file) => handleImageUpload(file, "start")}
+                      onImageRemove={() => setStartFrameImage(undefined)}
+                      disabled={isUploading}
+                    />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Left: Generation Controls */}
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Describe the image</Label>
+                          <Textarea
+                            value={startFramePrompt}
+                            onChange={(e) => setStartFramePrompt(e.target.value)}
+                            placeholder="A futuristic office with holographic displays, a man in a suit standing at his desk..."
+                            rows={3}
+                            className="text-sm"
+                          />
+                        </div>
+
+                        {/* Reference Images for Generation */}
+                        <div className="space-y-2">
+                          <Label className="text-xs">Reference Images (optional, {startFrameReferenceImages.length}/3)</Label>
+                          {startFrameReferenceImages.length > 0 && (
+                            <div className="flex gap-1 flex-wrap">
+                              {startFrameReferenceImages.map((ref, idx) => (
+                                <div key={idx} className="relative w-12 h-12 rounded overflow-hidden group">
+                                  <Image src={ref.url} alt={ref.name || ""} fill className="object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFrameReferenceImage("start", idx)}
+                                    className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <X className="h-3 w-3 text-white" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Quick add from project assets */}
+                          {startFrameReferenceImages.length < 3 && (
+                            <div className="flex flex-wrap gap-1">
+                              {/* Scene Location */}
+                              {sceneLocationId && locations.find(l => l.name === sceneLocationId)?.image && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const loc = locations.find(l => l.name === sceneLocationId);
+                                    if (loc?.image) {
+                                      addFrameReferenceImage("start", getImageUrl({ type: "location", filename: loc.image, username }), "location", loc.name);
+                                    }
+                                  }}
+                                  disabled={startFrameReferenceImages.some(r => r.name === sceneLocationId)}
+                                  className="text-[10px] px-2 py-1 rounded bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  <MapPin className="h-2.5 w-2.5" />
+                                  {sceneLocationId}
+                                </button>
+                              )}
+                              {/* Scene Characters */}
+                              {sceneCharacters.map((charName) => {
+                                const char = characters.find(c => c.name === charName);
+                                if (!char?.mainImage) return null;
+                                return (
+                                  <button
+                                    key={charName}
+                                    type="button"
+                                    onClick={() => {
+                                      addFrameReferenceImage("start", getImageUrl({ type: "character", filename: char.mainImage!, username }), "character", charName);
+                                    }}
+                                    disabled={startFrameReferenceImages.some(r => r.name === charName)}
+                                    className="text-[10px] px-2 py-1 rounded bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 disabled:opacity-50 flex items-center gap-1"
+                                  >
+                                    <User className="h-2.5 w-2.5" />
+                                    {charName}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          onClick={() => handleGenerateFrameImage("start")}
+                          disabled={isGeneratingStartFrame || !startFramePrompt.trim()}
+                          className="w-full"
+                          size="sm"
+                        >
+                          {isGeneratingStartFrame ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Generate Start Frame
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Right: Preview */}
+                      <div className="space-y-2">
+                        <Label className="text-xs">Preview</Label>
+                        {startFrameImage ? (
+                          <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                            <Image src={startFrameImage} alt="Start frame" fill className="object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setStartFrameImage(undefined)}
+                              className="absolute top-2 right-2 p-1 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="aspect-video rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                            <div className="text-center text-muted-foreground">
+                              <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p className="text-xs">Generated image will appear here</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
+              {/* Start + End Frame Mode */}
               {generationMode === "start-end-frame" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <ImageDropZone
-                    label="Start Frame"
-                    imageUrl={startFrameImage}
-                    onImageSelect={(file) => handleImageUpload(file, "start")}
-                    onImageRemove={() => setStartFrameImage(undefined)}
-                    disabled={isUploading}
-                  />
-                  <ImageDropZone
-                    label="End Frame"
-                    imageUrl={endFrameImage}
-                    onImageSelect={(file) => handleImageUpload(file, "end")}
-                    onImageRemove={() => setEndFrameImage(undefined)}
-                    disabled={isUploading}
-                  />
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Start Frame */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Start Frame</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant={startFrameInputMode === "upload" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setStartFrameInputMode("upload")}
+                          className="text-[10px] h-6 px-2"
+                        >
+                          <Upload className="h-2.5 w-2.5 mr-1" />
+                          Upload
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={startFrameInputMode === "generate" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setStartFrameInputMode("generate")}
+                          className="text-[10px] h-6 px-2"
+                        >
+                          <Sparkles className="h-2.5 w-2.5 mr-1" />
+                          AI
+                        </Button>
+                      </div>
+                    </div>
+
+                    {startFrameInputMode === "upload" ? (
+                      <ImageDropZone
+                        label=""
+                        imageUrl={startFrameImage}
+                        onImageSelect={(file) => handleImageUpload(file, "start")}
+                        onImageRemove={() => setStartFrameImage(undefined)}
+                        disabled={isUploading}
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={startFramePrompt}
+                          onChange={(e) => setStartFramePrompt(e.target.value)}
+                          placeholder="Describe the starting image..."
+                          rows={2}
+                          className="text-xs"
+                        />
+                        {startFrameImage ? (
+                          <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                            <Image src={startFrameImage} alt="Start frame" fill className="object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setStartFrameImage(undefined)}
+                              className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={() => handleGenerateFrameImage("start")}
+                            disabled={isGeneratingStartFrame || !startFramePrompt.trim()}
+                            className="w-full"
+                            size="sm"
+                          >
+                            {isGeneratingStartFrame ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Generate
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* End Frame */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">End Frame</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant={endFrameInputMode === "upload" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setEndFrameInputMode("upload")}
+                          className="text-[10px] h-6 px-2"
+                        >
+                          <Upload className="h-2.5 w-2.5 mr-1" />
+                          Upload
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={endFrameInputMode === "generate" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setEndFrameInputMode("generate")}
+                          className="text-[10px] h-6 px-2"
+                        >
+                          <Sparkles className="h-2.5 w-2.5 mr-1" />
+                          AI
+                        </Button>
+                      </div>
+                    </div>
+
+                    {endFrameInputMode === "upload" ? (
+                      <ImageDropZone
+                        label=""
+                        imageUrl={endFrameImage}
+                        onImageSelect={(file) => handleImageUpload(file, "end")}
+                        onImageRemove={() => setEndFrameImage(undefined)}
+                        disabled={isUploading}
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={endFramePrompt}
+                          onChange={(e) => setEndFramePrompt(e.target.value)}
+                          placeholder="Describe the ending image..."
+                          rows={2}
+                          className="text-xs"
+                        />
+                        {endFrameImage ? (
+                          <div className="relative aspect-video rounded-lg overflow-hidden border border-border group">
+                            <Image src={endFrameImage} alt="End frame" fill className="object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setEndFrameImage(undefined)}
+                              className="absolute top-1 right-1 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            onClick={() => handleGenerateFrameImage("end")}
+                            disabled={isGeneratingEndFrame || !endFramePrompt.trim()}
+                            className="w-full"
+                            size="sm"
+                          >
+                            {isGeneratingEndFrame ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Generate
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -13,6 +13,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -514,6 +515,8 @@ export function EditSceneView({
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [showShotEditor, setShowShotEditor] = useState(false);
   const [pendingShots, setPendingShots] = useState<Map<string, string>>(new Map()); // shotId -> operationId
+  const [removedShots, setRemovedShots] = useState<Shot[]>([]); // Shots that were deleted but have videos
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // Generate video dialog state
   const [showGenerateVideoDialog, setShowGenerateVideoDialog] = useState(false);
@@ -1343,12 +1346,37 @@ export function EditSceneView({
   };
 
   const handleShotDelete = (shotId: string) => {
+    const shotToDelete = scene.shots.find((s) => s.id === shotId);
+    
+    if (shotToDelete && shotToDelete.video?.url && shotToDelete.video.status === "completed") {
+      // Shot has a completed video - move to removed shots instead of deleting
+      setRemovedShots((prev) => [...prev, shotToDelete]);
+      toast.success("Shot moved to Media Library");
+    }
+    
     setScene((prev) => ({
       ...prev,
       shots: prev.shots.filter((s) => s.id !== shotId).map((s, i) => ({ ...s, order: i })),
     }));
     setShowShotEditor(false);
     setSelectedShot(null);
+  };
+
+  // Permanently remove a shot from the media library
+  const handleRemoveFromLibrary = (shotId: string) => {
+    setRemovedShots((prev) => prev.filter((s) => s.id !== shotId));
+    toast.success("Shot permanently removed");
+  };
+
+  // Restore a shot from media library back to the scene
+  const handleRestoreShot = (shot: Shot) => {
+    setScene((prev) => ({
+      ...prev,
+      shots: [...prev.shots, { ...shot, order: prev.shots.length }],
+    }));
+    setRemovedShots((prev) => prev.filter((s) => s.id !== shot.id));
+    setShowMediaLibrary(false);
+    toast.success("Shot restored to timeline");
   };
 
   const handleShotReorder = (shotIds: string[]) => {
@@ -1836,6 +1864,32 @@ export function EditSceneView({
                 </CardContent>
               </Card>
             )}
+
+            {/* Media Library */}
+            <Card>
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Video className="h-4 w-4 text-primary" />
+                  Media Library
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Shots with generated videos that have been removed from the timeline
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMediaLibrary(true)}
+                  disabled={removedShots.length === 0}
+                  className="w-full"
+                >
+                  <Video className="h-4 w-4 mr-2" />
+                  View {removedShots.length} removed shot{removedShots.length !== 1 ? "s" : ""}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Main Area - Player & Timeline */}
@@ -1964,6 +2018,95 @@ export function EditSceneView({
         sceneCharacters={scene.characters}
         sceneLocationId={scene.locationId}
       />
+
+      {/* Media Library Dialog */}
+      <Dialog open={showMediaLibrary} onOpenChange={setShowMediaLibrary}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              Media Library
+            </DialogTitle>
+            <DialogDescription>
+              Shots with generated videos that have been removed from the timeline. You can restore them or permanently remove them.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {removedShots.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Video className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">No removed shots in the media library</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {removedShots.map((shot) => (
+                  <Card key={shot.id} className="overflow-hidden">
+                    <div className="relative aspect-video bg-muted/30">
+                      {shot.video?.thumbnailUrl ? (
+                        <Image
+                          src={shot.video.thumbnailUrl}
+                          alt={shot.prompt}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : shot.video?.url ? (
+                        <video
+                          src={shot.video.url}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Video className="h-12 w-12 text-muted-foreground opacity-50" />
+                        </div>
+                      )}
+                    </div>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium line-clamp-2">{shot.prompt}</p>
+                        {shot.video?.durationMs && (
+                          <p className="text-xs text-muted-foreground">
+                            Duration: {(shot.video.durationMs / 1000).toFixed(1)}s
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestoreShot(shot)}
+                          className="flex-1"
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleRemoveFromLibrary(shot.id)}
+                          className="flex-1"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowMediaLibrary(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Audio Track Modal */}
       <AudioTrackModal
