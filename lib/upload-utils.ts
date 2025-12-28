@@ -86,9 +86,11 @@ async function uploadToS3WithProgress(
 
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        console.log("[uploadFile] S3 upload completed successfully:", JSON.stringify({ publicUrl, mediaId }, null, 2));
         resolve({ success: true, url: publicUrl, mediaId });
       } else {
-        resolve({ success: false, error: `Upload failed with status ${xhr.status}` });
+        console.error("[uploadFile] S3 upload failed:", JSON.stringify({ status: xhr.status, statusText: xhr.statusText, response: xhr.responseText }, null, 2));
+        resolve({ success: false, error: `Upload failed with status ${xhr.status}: ${xhr.statusText}` });
       }
     });
 

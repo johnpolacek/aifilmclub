@@ -579,8 +579,6 @@ export function parseScreenplayToElements(text: string): ScreenplayElement[] {
 
   const lines = text.split("\n");
   const linesToLog = lines.slice(0, 40);
-  console.log("[parseScreenplayToElements] First 40 lines:", JSON.stringify(linesToLog, null, 2));
-
   const elements: ScreenplayElement[] = [];
 
   let i = 0;
@@ -754,10 +752,6 @@ export function parseScreenplayToElements(text: string): ScreenplayElement[] {
   }
 
   const elementsToLog = elements.slice(0, 40);
-  console.log(
-    "[parseScreenplayToElements] First 40 elements:",
-    JSON.stringify(elementsToLog, null, 2)
-  );
   return elements;
 }
 

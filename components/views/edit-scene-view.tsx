@@ -2,12 +2,15 @@
 
 import {
   ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronUp,
   Edit,
   Film,
   Image as ImageIcon,
   Loader2,
+  PlayCircle,
   Plus,
-  Save,
   Sparkles,
   Trash2,
   X,
@@ -19,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AudioTrackModal } from "@/components/audio-track-modal";
 import type { Character, Location } from "@/components/project-form";
+import { ScenePlayer } from "@/components/scene-player";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { ShotEditorModal } from "@/components/shot-editor-modal";
 import Timeline from "@/components/timeline";
@@ -493,9 +497,10 @@ export function EditSceneView({
     generatedImages: initialScene.generatedImages || [],
     transitionOut: initialScene.transitionOut || { type: "none", durationMs: 0 },
   }));
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedSceneRef = useRef<string>(JSON.stringify(initialScene));
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Screenplay editing state
@@ -524,6 +529,9 @@ export function EditSceneView({
   // Audio track editing state
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack | null>(null);
   const [showAudioTrackEditor, setShowAudioTrackEditor] = useState(false);
+
+  // Scene player state
+  const [showPlayer, setShowPlayer] = useState(false);
 
   // Build library images from characters and generated images
   const libraryImages = useMemo(() => {
@@ -653,7 +661,6 @@ export function EditSceneView({
                 return next;
               });
               toast.success("Video generation completed!");
-              setHasChanges(true);
             } else if (data.status === "failed") {
               setScene((prev) => ({
                 ...prev,
@@ -708,7 +715,6 @@ export function EditSceneView({
     const plainText = elementsToText(screenplayElements);
     setScene({ ...scene, screenplay: plainText });
     setIsEditingScreenplay(false);
-    setHasChanges(true);
   };
 
   const handleScreenplayCancel = () => {
@@ -988,7 +994,6 @@ export function EditSceneView({
           return next;
         });
 
-        setHasChanges(true);
         toast.success("Video generation started!", { id: loadingToast });
         setShowGenerateVideoDialog(false);
         // Reset form
@@ -1029,6 +1034,8 @@ export function EditSceneView({
         },
       });
 
+      console.log("[EditSceneView] Upload result:", JSON.stringify(result, null, 2));
+      
       if (result.success && result.url) {
         // Get video duration (default to 5 seconds if not available)
         let durationMs = 5000;
@@ -1061,12 +1068,17 @@ export function EditSceneView({
           durationMs,
         };
         newShot.updatedAt = new Date().toISOString();
+        
+        console.log("[EditSceneView] Creating shot with video:", JSON.stringify({
+          shotId: newShot.id,
+          videoUrl: newShot.video.url,
+          durationMs: newShot.video.durationMs
+        }, null, 2));
 
         setScene((prev) => ({
           ...prev,
           shots: [...prev.shots, newShot],
         }));
-        setHasChanges(true);
         toast.success("Video uploaded successfully!", { id: loadingToast });
       } else {
         toast.error(result.error || "Failed to upload video", { id: loadingToast });
@@ -1105,7 +1117,6 @@ export function EditSceneView({
         return { ...prev, shots: [...prev.shots, updatedShot] };
       }
     });
-    setHasChanges(true);
     setShowShotEditor(false);
     setSelectedShot(null);
   };
@@ -1115,7 +1126,6 @@ export function EditSceneView({
       ...prev,
       shots: prev.shots.filter((s) => s.id !== shotId).map((s, i) => ({ ...s, order: i })),
     }));
-    setHasChanges(true);
     setShowShotEditor(false);
     setSelectedShot(null);
   };
@@ -1134,7 +1144,6 @@ export function EditSceneView({
         .filter((s): s is Shot => s !== null);
       return { ...prev, shots: reorderedShots };
     });
-    setHasChanges(true);
   };
 
   const handleGenerateVideo = async (shot: Shot) => {
@@ -1185,7 +1194,6 @@ export function EditSceneView({
           return next;
         });
 
-        setHasChanges(true);
         toast.success("Video generation started!", { id: loadingToast });
         setShowShotEditor(false);
         setSelectedShot(null);
@@ -1223,7 +1231,6 @@ export function EditSceneView({
         return { ...prev, audioTracks: [...prev.audioTracks, track] };
       }
     });
-    setHasChanges(true);
     setShowAudioTrackEditor(false);
     setSelectedAudioTrack(null);
   };
@@ -1233,7 +1240,6 @@ export function EditSceneView({
       ...prev,
       audioTracks: prev.audioTracks.filter((t) => t.id !== trackId),
     }));
-    setHasChanges(true);
     setShowAudioTrackEditor(false);
     setSelectedAudioTrack(null);
   };
@@ -1243,7 +1249,6 @@ export function EditSceneView({
       ...prev,
       audioTracks: prev.audioTracks.map((t) => (t.id === trackId ? { ...t, volume } : t)),
     }));
-    setHasChanges(true);
   };
 
   const handleAudioTrackMuteToggle = (trackId: string) => {
@@ -1251,21 +1256,23 @@ export function EditSceneView({
       ...prev,
       audioTracks: prev.audioTracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t)),
     }));
-    setHasChanges(true);
   };
 
   // ============================================================================
-  // SAVE / DELETE SCENE
+  // AUTO-SAVE LOGIC
   // ============================================================================
 
-  const handleSave = async () => {
+  const saveScene = useCallback(async () => {
     if (!scene.title.trim()) {
-      toast.error("Scene title is required");
       return;
     }
 
-    setIsSaving(true);
-    const loadingToast = toast.loading("Saving scene...");
+    const currentSceneJson = JSON.stringify(scene);
+    if (currentSceneJson === lastSavedSceneRef.current) {
+      return; // No changes to save
+    }
+
+    setSaveStatus("saving");
 
     try {
       const updatedScene = {
@@ -1285,18 +1292,58 @@ export function EditSceneView({
       const data = await response.json();
 
       if (data.success) {
-        setHasChanges(false);
-        toast.success("Scene saved successfully!", { id: loadingToast });
+        lastSavedSceneRef.current = currentSceneJson;
+        setSaveStatus("saved");
+        // Reset to idle after showing "saved" briefly
+        setTimeout(() => setSaveStatus("idle"), 2000);
       } else {
-        toast.error(data.error || "Failed to save scene", { id: loadingToast });
+        setSaveStatus("error");
+        toast.error(data.error || "Failed to save scene");
       }
     } catch (error) {
       console.error("[EditSceneView] Error saving scene:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to save scene", { id: loadingToast });
-    } finally {
-      setIsSaving(false);
+      setSaveStatus("error");
+      toast.error("Failed to save scene");
     }
-  };
+  }, [scene, projectId]);
+
+  // Auto-save effect with debounce
+  useEffect(() => {
+    const currentSceneJson = JSON.stringify(scene);
+    if (currentSceneJson === lastSavedSceneRef.current) {
+      return; // No changes
+    }
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Set new timeout for auto-save (1.5 second debounce)
+    saveTimeoutRef.current = setTimeout(() => {
+      saveScene();
+    }, 1500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [scene, saveScene]);
+
+  // Save on unmount if there are pending changes
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      // Trigger immediate save on unmount
+      const currentSceneJson = JSON.stringify(scene);
+      if (currentSceneJson !== lastSavedSceneRef.current) {
+        saveScene();
+      }
+    };
+  }, [scene, saveScene]);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -1336,7 +1383,6 @@ export function EditSceneView({
         ? currentCharacters.filter((c) => c !== characterName)
         : [...currentCharacters, characterName],
     });
-    setHasChanges(true);
   };
 
   return (
@@ -1361,20 +1407,25 @@ export function EditSceneView({
                 </h1>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button type="button" onClick={handleSave} disabled={isSaving || !hasChanges}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save
-                  </>
-                )}
-              </Button>
+            {/* Auto-save status indicator */}
+            <div className="flex items-center gap-2 text-sm">
+              {saveStatus === "saving" && (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Saving...
+                </span>
+              )}
+              {saveStatus === "saved" && (
+                <span className="flex items-center gap-1.5 text-green-600">
+                  <Check className="h-3.5 w-3.5" />
+                  Saved
+                </span>
+              )}
+              {saveStatus === "error" && (
+                <span className="flex items-center gap-1.5 text-destructive">
+                  Failed to save
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1394,7 +1445,6 @@ export function EditSceneView({
                 value={scene.title}
                 onChange={(e) => {
                   setScene({ ...scene, title: e.target.value });
-                  setHasChanges(true);
                 }}
                 className="bg-background"
               />
@@ -1408,7 +1458,6 @@ export function EditSceneView({
                   value={scene.locationId || "none"}
                   onValueChange={(value) => {
                     setScene({ ...scene, locationId: value === "none" ? undefined : value });
-                    setHasChanges(true);
                   }}
                 >
                   <SelectTrigger className="bg-background">
@@ -1541,8 +1590,10 @@ export function EditSceneView({
             )}
           </div>
 
-          {/* Main Area - Timeline */}
+          {/* Main Area - Player & Timeline */}
           <div className="lg:col-span-3 space-y-4">
+            <ScenePlayer shots={scene.shots} audioTracks={scene.audioTracks} />
+
             {/* Timeline Component */}
             <div className="overflow-hidden">
               <Timeline
@@ -1583,12 +1634,6 @@ export function EditSceneView({
         </div>
       </div>
 
-      {/* Unsaved changes indicator */}
-      {hasChanges && (
-        <div className="fixed bottom-4 right-4 bg-yellow-500/20 text-yellow-500 px-3 py-1.5 rounded-full text-sm font-medium">
-          Unsaved changes
-        </div>
-      )}
 
       {/* Shot Editor Modal */}
       <ShotEditorModal

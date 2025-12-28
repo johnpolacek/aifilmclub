@@ -326,8 +326,6 @@ export default function Timeline({
 
   return (
     <div className="bg-card/50 backdrop-blur">
-      
-
       {/* Video track */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
         <div ref={timelineRef} className="flex-1 flex items-center gap-1 overflow-x-auto py-1">

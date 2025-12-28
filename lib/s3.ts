@@ -16,8 +16,8 @@ export const s3Client = new S3Client({
   },
 });
 
-export const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME!;
-export const CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN!;
+export const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.NEXT_PUBLIC_AWS_S3_BUCKET_NAME!;
+export const CLOUDFRONT_DOMAIN = process.env.AWS_CLOUDFRONT_DOMAIN || process.env.NEXT_PUBLIC_AWS_CLOUDFRONT_DOMAIN;
 
 /**
  * Get the public URL for an S3 object (using CloudFront if available, otherwise S3)
@@ -330,6 +330,13 @@ export async function generatePresignedUploadUrl(
   });
 
   const publicUrl = getPublicUrlServer(key);
+  
+  console.log("[s3] Generated presigned URL:", JSON.stringify({
+    key,
+    publicUrl,
+    cloudfrontDomain: CLOUDFRONT_DOMAIN,
+    bucketName: BUCKET_NAME
+  }, null, 2));
 
   return { uploadUrl, publicUrl, key };
 }
