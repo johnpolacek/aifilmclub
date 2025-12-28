@@ -3,6 +3,8 @@ declare module "fluent-ffmpeg" {
     noVideo(): FfmpegCommand;
     audioCodec(codec: string): FfmpegCommand;
     audioBitrate(bitrate: number): FfmpegCommand;
+    seekInput(time: number): FfmpegCommand;
+    frames(count: number): FfmpegCommand;
     output(outputPath: string): FfmpegCommand;
     on(event: "end", callback: () => void): FfmpegCommand;
     on(event: "error", callback: (err: Error) => void): FfmpegCommand;
