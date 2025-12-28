@@ -13,6 +13,7 @@ import {
 import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { generateThumbnailFromFile } from "@/lib/video-thumbnail";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -260,6 +261,60 @@ export function ShotEditorModal({
       });
 
       if (result.success && shot && result.url) {
+        console.log(
+          "[ShotEditorModal] Video uploaded successfully:",
+          JSON.stringify({ 
+            shotId: shot.id, 
+            videoUrl: result.url,
+            projectId,
+            sceneId 
+          }, null, 2)
+        );
+
+        // Generate thumbnail client-side from the original file
+        let thumbnailUrl: string | undefined;
+        let durationMs = 5000; // Default duration
+        try {
+          console.log("[ShotEditorModal] Generating thumbnail client-side");
+          const thumbnailResult = await generateThumbnailFromFile(file);
+          
+          if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+            durationMs = thumbnailResult.durationMs || 5000;
+            
+            // Upload thumbnail to S3
+            const thumbnailFile = new File(
+              [thumbnailResult.thumbnailBlob],
+              `thumbnail-${shot.id}.jpg`,
+              { type: "image/jpeg" }
+            );
+            
+            const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+              projectId,
+              sceneId,
+              mediaType: "image",
+            });
+            
+            if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+              thumbnailUrl = thumbnailUploadResult.url;
+              console.log(
+                "[ShotEditorModal] Thumbnail uploaded:",
+                JSON.stringify({ thumbnailUrl, durationMs }, null, 2)
+              );
+            }
+          } else {
+            console.log(
+              "[ShotEditorModal] Thumbnail generation failed:",
+              JSON.stringify({ error: thumbnailResult.error }, null, 2)
+            );
+          }
+        } catch (thumbnailError) {
+          console.error(
+            "[ShotEditorModal] Error generating thumbnail:",
+            JSON.stringify({ error: thumbnailError }, null, 2)
+          );
+          // Continue without thumbnail - video will still work
+        }
+
         const updatedShot: Shot = {
           ...shot,
           prompt,
@@ -267,7 +322,8 @@ export function ShotEditorModal({
           video: {
             url: result.url,
             status: "completed",
-            durationMs: 5000, // Default duration, would need video metadata to get actual
+            thumbnailUrl, // Include thumbnail if generated
+            durationMs, // Use actual duration from video
           },
           updatedAt: new Date().toISOString(),
         };
@@ -398,7 +454,15 @@ export function ShotEditorModal({
               <Button
                 type="button"
                 variant={sourceType === "uploaded" ? "default" : "outline"}
-                onClick={() => setSourceType("uploaded")}
+                onClick={() => {
+                  // If no video exists, directly open file selector
+                  if (!shot.video?.url) {
+                    setSourceType("uploaded");
+                    videoInputRef.current?.click();
+                  } else {
+                    setSourceType("uploaded");
+                  }
+                }}
                 className="flex-1"
               >
                 <Upload className="h-4 w-4 mr-2" />

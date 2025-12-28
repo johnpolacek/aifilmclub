@@ -2347,53 +2347,86 @@ export default function ProjectForm({
                         return (
                           <>
                             {charactersToShow.map((character, index) => (
-                              <button
-                                key={`character-compact-${index}`}
-                                type="button"
-                                className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                                onClick={() => setEditingCharacterIndex(index)}
-                              >
-                                {/* Edit indicator */}
-                                <div className="pt-0.5 shrink-0">
-                                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                                </div>
+                              <div key={`character-compact-${index}`} className="relative">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                  onClick={() => setEditingCharacterIndex(index)}
+                                >
+                                  {/* Edit indicator */}
+                                  <div className="pt-0.5 shrink-0">
+                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                  </div>
 
-                                {/* Character Image - Super Small */}
-                                <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                                  {character.mainImage && formData.username ? (
-                                    <OptimizedImage
-                                      type="character"
-                                      filename={character.mainImage}
-                                      username={formData.username}
-                                      alt={character.name || "Character"}
-                                      width={32}
-                                      height={32}
-                                      objectFit="cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                                      <User className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                </div>
+                                  {/* Character Image - Super Small - Clickable for upload */}
+                                  <div
+                                    className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0 group/img cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCharacterMainImageClick(index);
+                                    }}
+                                    title={
+                                      character.mainImage
+                                        ? "Click to replace image"
+                                        : "Click to add image"
+                                    }
+                                  >
+                                    {uploadingCharacterIndex === index ? (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                                      </div>
+                                    ) : character.mainImage && formData.username ? (
+                                      <>
+                                        <OptimizedImage
+                                          type="character"
+                                          filename={character.mainImage}
+                                          username={formData.username}
+                                          alt={character.name || "Character"}
+                                          fill
+                                          objectFit="cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                          <Camera className="h-3 w-3 text-white" />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted group-hover/img:bg-primary/10 transition-colors">
+                                        <Camera className="h-4 w-4 text-muted-foreground group-hover/img:text-primary transition-colors" />
+                                      </div>
+                                    )}
+                                  </div>
 
-                                {/* Character Name */}
-                                <span className="font-medium text-sm shrink-0">
-                                  {character.name || "Unnamed"}
-                                </span>
-
-                                {/* Character Appearance - Truncated */}
-                                <span className="text-xs text-muted-foreground truncate flex-1">
-                                  {character.appearance || "No appearance description"}
-                                </span>
-
-                                {/* Additional Images Count */}
-                                {(character.images?.length || 0) > 0 && (
-                                  <span className="text-xs text-muted-foreground shrink-0">
-                                    +{character.images?.length} img
+                                  {/* Character Name */}
+                                  <span className="font-medium text-sm shrink-0">
+                                    {character.name || "Unnamed"}
                                   </span>
-                                )}
-                              </button>
+
+                                  {/* Character Appearance - Truncated */}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">
+                                    {character.appearance || "No appearance description"}
+                                  </span>
+
+                                  {/* Additional Images Count */}
+                                  {(character.images?.length || 0) > 0 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      +{character.images?.length} img
+                                    </span>
+                                  )}
+                                </button>
+                                {/* Hidden file input for compact view upload */}
+                                <input
+                                  ref={(el) => {
+                                    characterFileInputRefs.current[index] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    handleCharacterMainImageChange(e, index)
+                                  }
+                                  className="hidden"
+                                  disabled={uploadingCharacterIndex === index}
+                                />
+                              </div>
                             ))}
                           </>
                         );
@@ -3866,53 +3899,86 @@ export default function ProjectForm({
                         return (
                           <>
                             {charactersToShow.map((character, index) => (
-                              <button
-                                key={`character-compact-${index}`}
-                                type="button"
-                                className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
-                                onClick={() => setEditingCharacterIndex(index)}
-                              >
-                                {/* Edit indicator */}
-                                <div className="pt-0.5 shrink-0">
-                                  <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                                </div>
+                              <div key={`character-compact-${index}`} className="relative">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg border border-border group hover:bg-muted/50 cursor-pointer transition-colors w-full text-left"
+                                  onClick={() => setEditingCharacterIndex(index)}
+                                >
+                                  {/* Edit indicator */}
+                                  <div className="pt-0.5 shrink-0">
+                                    <Edit className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                                  </div>
 
-                                {/* Character Image - Super Small */}
-                                <div className="w-8 h-8 rounded overflow-hidden border border-border shrink-0">
-                                  {character.mainImage && formData.username ? (
-                                    <OptimizedImage
-                                      type="character"
-                                      filename={character.mainImage}
-                                      username={formData.username}
-                                      alt={character.name || "Character"}
-                                      width={32}
-                                      height={32}
-                                      objectFit="cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                                      <User className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                </div>
+                                  {/* Character Image - Super Small - Clickable for upload */}
+                                  <div
+                                    className="relative w-8 h-8 rounded overflow-hidden border border-border shrink-0 group/img cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCharacterMainImageClick(index);
+                                    }}
+                                    title={
+                                      character.mainImage
+                                        ? "Click to replace image"
+                                        : "Click to add image"
+                                    }
+                                  >
+                                    {uploadingCharacterIndex === index ? (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                                      </div>
+                                    ) : character.mainImage && formData.username ? (
+                                      <>
+                                        <OptimizedImage
+                                          type="character"
+                                          filename={character.mainImage}
+                                          username={formData.username}
+                                          alt={character.name || "Character"}
+                                          fill
+                                          objectFit="cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                          <Camera className="h-3 w-3 text-white" />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted group-hover/img:bg-primary/10 transition-colors">
+                                        <Camera className="h-4 w-4 text-muted-foreground group-hover/img:text-primary transition-colors" />
+                                      </div>
+                                    )}
+                                  </div>
 
-                                {/* Character Name */}
-                                <span className="font-medium text-sm shrink-0">
-                                  {character.name || "Unnamed"}
-                                </span>
-
-                                {/* Character Appearance - Truncated */}
-                                <span className="text-xs text-muted-foreground truncate flex-1">
-                                  {character.appearance || "No appearance description"}
-                                </span>
-
-                                {/* Additional Images Count */}
-                                {(character.images?.length || 0) > 0 && (
-                                  <span className="text-xs text-muted-foreground shrink-0">
-                                    +{character.images?.length} img
+                                  {/* Character Name */}
+                                  <span className="font-medium text-sm shrink-0">
+                                    {character.name || "Unnamed"}
                                   </span>
-                                )}
-                              </button>
+
+                                  {/* Character Appearance - Truncated */}
+                                  <span className="text-xs text-muted-foreground truncate flex-1">
+                                    {character.appearance || "No appearance description"}
+                                  </span>
+
+                                  {/* Additional Images Count */}
+                                  {(character.images?.length || 0) > 0 && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      +{character.images?.length} img
+                                    </span>
+                                  )}
+                                </button>
+                                {/* Hidden file input for compact view upload */}
+                                <input
+                                  ref={(el) => {
+                                    characterFileInputRefs.current[index] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    handleCharacterMainImageChange(e, index)
+                                  }
+                                  className="hidden"
+                                  disabled={uploadingCharacterIndex === index}
+                                />
+                              </div>
                             ))}
                           </>
                         );

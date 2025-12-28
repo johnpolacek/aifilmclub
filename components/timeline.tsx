@@ -68,41 +68,11 @@ function ShotCard({
   const durationMs = shot.video?.durationMs || 5000;
   const width = Math.max(80, (durationMs / 1000) * pixelsPerSecond);
 
-  // Get thumbnail or placeholder
-  const thumbnail = shot.startFrameImage || shot.video?.url;
-
-  // Get status indicator
-  const getStatusIcon = () => {
-    if (!shot.video) {
-      return <ImageIcon className="h-4 w-4 text-muted-foreground" />;
-    }
-    switch (shot.video.status) {
-      case "pending":
-        return <Sparkles className="h-4 w-4 text-muted-foreground" />;
-      case "processing":
-        return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
-      case "completed":
-        return <Video className="h-4 w-4 text-green-500" />;
-      case "failed":
-        return <span className="text-red-500 text-xs">!</span>;
-      default:
-        return null;
-    }
-  };
-
-  // Generation mode indicator
-  const getModeIndicator = () => {
-    switch (shot.generationMode) {
-      case "start-frame":
-        return "SF";
-      case "start-end-frame":
-        return "SE";
-      case "reference-images":
-        return "RF";
-      default:
-        return "T";
-    }
-  };
+  // Get thumbnail URL - prioritize video thumbnail, then start frame image, then video URL
+  const thumbnailUrl = shot.video?.thumbnailUrl && shot.video.thumbnailUrl.trim() 
+    ? shot.video.thumbnailUrl 
+    : shot.startFrameImage || null;
+  const videoUrl = shot.video?.url || null;
 
   return (
     <div
@@ -112,47 +82,68 @@ function ShotCard({
       onDrop={onDrop}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      style={{ width: `${width}px` }}
       className={`
-        flex-shrink-0 h-16 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden
+        shrink-0 w-28 h-16 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden
         ${isSelected ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border hover:border-primary/50"}
         ${isDragging ? "opacity-50 scale-95" : ""}
       `}
     >
       {/* Thumbnail or placeholder */}
-      {thumbnail ? (
-        shot.video?.url ? (
-          <video src={shot.video.url} className="w-full h-full object-cover" muted playsInline />
-        ) : (
-          <img
-            src={thumbnail}
-            alt={`Shot ${shot.order + 1}`}
-            className="w-full h-full object-cover"
-          />
-        )
+      {thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt={`Shot ${shot.order + 1}`}
+          className="w-full h-full object-cover"
+          style={{ maxWidth: '100%', height: '100%', objectFit: 'cover' }}
+          onLoad={() => {
+            console.log(
+              "[ShotCard] Thumbnail loaded successfully:",
+              JSON.stringify({ thumbnailUrl, shotId: shot.id }, null, 2)
+            );
+          }}
+          onError={(e) => {
+            // Fallback to video if thumbnail fails to load
+            console.error(
+              "[ShotCard] Thumbnail failed to load, falling back to video:",
+              JSON.stringify({ 
+                thumbnailUrl, 
+                videoUrl, 
+                shotId: shot.id,
+                error: e.currentTarget.src
+              }, null, 2)
+            );
+            if (videoUrl && e.currentTarget.parentElement) {
+              const videoEl = document.createElement("video");
+              videoEl.src = videoUrl;
+              videoEl.className = "w-full h-full object-cover";
+              videoEl.style.maxWidth = '100%';
+              videoEl.style.height = '100%';
+              videoEl.style.objectFit = 'cover';
+              videoEl.muted = true;
+              videoEl.playsInline = true;
+              e.currentTarget.parentElement.replaceChild(videoEl, e.currentTarget);
+            }
+          }}
+        />
+      ) : videoUrl ? (
+        <video 
+          src={videoUrl} 
+          className="w-full h-full object-cover" 
+          style={{ maxWidth: '100%', height: '100%', objectFit: 'cover' }}
+          muted 
+          playsInline
+          onLoadStart={() => {
+            console.log(
+              "[ShotCard] Video element loading:",
+              JSON.stringify({ videoUrl, shotId: shot.id }, null, 2)
+            );
+          }}
+        />
       ) : (
         <div className="w-full h-full bg-muted/50 flex items-center justify-center">
           <Video className="h-6 w-6 text-muted-foreground" />
         </div>
       )}
-
-      {/* Overlay with info */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
-
-      {/* Top-left: Drag handle */}
-      <div className="absolute top-1 left-1 p-0.5 rounded bg-black/40 cursor-grab active:cursor-grabbing">
-        <GripVertical className="h-3 w-3 text-white/70" />
-      </div>
-
-      {/* Top-right: Status */}
-      <div className="absolute top-1 right-1 p-0.5 rounded bg-black/40">{getStatusIcon()}</div>
-
-      {/* Bottom: Mode indicator */}
-      <div className="absolute bottom-0 left-0 right-0 p-1 flex items-center justify-end">
-        <span className="text-[8px] bg-primary/80 text-primary-foreground px-1 rounded">
-          {getModeIndicator()}
-        </span>
-      </div>
     </div>
   );
 }

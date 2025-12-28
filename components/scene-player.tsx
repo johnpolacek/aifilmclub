@@ -32,12 +32,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       .filter((shot) => shot.video?.status === "completed" && shot.video?.url)
       .sort((a, b) => a.order - b.order);
     
-    console.log("[ScenePlayer] Playable shots:", JSON.stringify({
-      total: shots.length,
-      playable: filtered.length,
-      shots: filtered.map(s => ({ id: s.id, url: s.video?.url, status: s.video?.status }))
-    }, null, 2));
-    
     return filtered;
   }, [shots]);
 
@@ -279,9 +273,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           className
         )}
       >
-        <p className="text-muted-foreground text-sm text-center px-4">
-          No completed videos yet.
-          <br />
+        <p className="text-muted-foreground text-sm text-center px-4 italic">
           Add shots and generate videos to preview the scene.
         </p>
       </div>
@@ -296,9 +288,10 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           <video
             ref={videoRef}
             src={currentShot.video.url}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain cursor-pointer"
             onEnded={handleVideoEnded}
             onTimeUpdate={handleTimeUpdate}
+            onClick={togglePlay}
             onPlay={() => {
               setIsPlaying(true);
               setVideoError(null);
@@ -317,7 +310,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
               setVideoError(`Failed to load video: ${errorMessage}`);
             }}
             onLoadedData={() => {
-              console.log("[ScenePlayer] Video loaded:", currentShot.video?.url);
               setVideoError(null);
             }}
             onLoadedMetadata={(e) => {
@@ -327,11 +319,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
                 // Only update if different from stored/default duration
                 const storedDuration = currentShot.video?.durationMs || 5000;
                 if (Math.abs(durationMs - storedDuration) > 100) {
-                  console.log("[ScenePlayer] Updating actual duration:", JSON.stringify({
-                    shotId: currentShot.id,
-                    storedDuration,
-                    actualDuration: durationMs
-                  }, null, 2));
                   setActualDurations(prev => {
                     const next = new Map(prev);
                     next.set(currentShot.id, durationMs);

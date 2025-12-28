@@ -53,6 +53,7 @@ export interface ShotVideo {
   status: "pending" | "processing" | "completed" | "failed";
   operationId?: string; // For polling Veo status
   durationMs?: number; // Video duration for timeline
+  thumbnailUrl?: string; // Thumbnail extracted from middle of video
   error?: string;
 }
 

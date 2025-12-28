@@ -53,6 +53,7 @@ import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-pars
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
 import { uploadFile } from "@/lib/upload-utils";
+import { generateThumbnailFromFile, generateThumbnailFromUrl } from "@/lib/video-thumbnail";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -631,30 +632,125 @@ export function EditSceneView({
     const pollInterval = setInterval(async () => {
       for (const [shotId, operationId] of pendingShots.entries()) {
         try {
-          const response = await fetch(
-            `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${shotId}`
+          const statusUrl = `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${shotId}`;
+          console.log(
+            "[EditSceneView] Polling video status:",
+            JSON.stringify({ shotId, operationId, statusUrl }, null, 2)
           );
+
+          const response = await fetch(statusUrl);
           const data = await response.json();
+
+          console.log(
+            "[EditSceneView] Video status response:",
+            JSON.stringify({ 
+              shotId, 
+              success: data.success,
+              status: data.status,
+              hasVideoUrl: !!data.videoUrl,
+              videoUrl: data.videoUrl?.substring(0, 100),
+              hasThumbnailUrl: !!data.thumbnailUrl,
+              thumbnailUrl: data.thumbnailUrl?.substring(0, 100),
+              durationMs: data.durationMs,
+              fullResponse: data
+            }, null, 2)
+          );
 
           if (data.success) {
             if (data.status === "completed" && data.videoUrl) {
-              setScene((prev) => ({
-                ...prev,
-                shots: prev.shots.map((s) =>
+              console.log(
+                "[EditSceneView] Video completed - checking for thumbnail:",
+                JSON.stringify({ 
+                  shotId, 
+                  videoUrl: data.videoUrl, 
+                  thumbnailUrl: data.thumbnailUrl,
+                  durationMs: data.durationMs,
+                }, null, 2)
+              );
+
+              // If server didn't generate thumbnail, generate client-side
+              let thumbnailUrl = data.thumbnailUrl;
+              if (!thumbnailUrl) {
+                console.log(
+                  "[EditSceneView] No server thumbnail, generating client-side:",
+                  JSON.stringify({ videoUrl: data.videoUrl }, null, 2)
+                );
+                
+                try {
+                  const thumbnailResult = await generateThumbnailFromUrl(data.videoUrl);
+                  
+                  if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+                    // Upload thumbnail to S3
+                    const thumbnailFile = new File(
+                      [thumbnailResult.thumbnailBlob],
+                      `thumbnail-${shotId}.jpg`,
+                      { type: "image/jpeg" }
+                    );
+                    
+                    const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+                      projectId,
+                      sceneId: scene.id,
+                      mediaType: "image",
+                    });
+                    
+                    if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+                      thumbnailUrl = thumbnailUploadResult.url;
+                      console.log(
+                        "[EditSceneView] Client-side thumbnail uploaded:",
+                        JSON.stringify({ thumbnailUrl }, null, 2)
+                      );
+                    }
+                  } else {
+                    console.log(
+                      "[EditSceneView] Client-side thumbnail generation failed:",
+                      JSON.stringify({ error: thumbnailResult.error }, null, 2)
+                    );
+                  }
+                } catch (thumbnailError) {
+                  console.error(
+                    "[EditSceneView] Error generating client-side thumbnail:",
+                    JSON.stringify({ error: thumbnailError }, null, 2)
+                  );
+                  // Continue without thumbnail - video will still work
+                }
+              }
+
+              setScene((prev) => {
+                const updatedShots = prev.shots.map((s) =>
                   s.id === shotId
                     ? {
                         ...s,
                         video: {
                           ...s.video,
                           url: data.videoUrl,
+                          thumbnailUrl, // Store thumbnail URL (server or client-generated)
                           status: "completed" as const,
                           durationMs: data.durationMs || 5000,
                         },
                         updatedAt: new Date().toISOString(),
                       }
                     : s
-                ),
-              }));
+                );
+
+                const updatedShot = updatedShots.find(s => s.id === shotId);
+                console.log(
+                  "[EditSceneView] Scene state updated:",
+                  JSON.stringify({ 
+                    shotId,
+                    updatedShot: updatedShot ? {
+                      id: updatedShot.id,
+                      videoUrl: updatedShot.video?.url,
+                      videoThumbnailUrl: updatedShot.video?.thumbnailUrl,
+                      videoStatus: updatedShot.video?.status
+                    } : null
+                  }, null, 2)
+                );
+
+                return {
+                  ...prev,
+                  shots: updatedShots,
+                };
+              });
               setPendingShots((prev) => {
                 const next = new Map(prev);
                 next.delete(shotId);
@@ -1059,12 +1155,67 @@ export function EditSceneView({
           // Use default duration
         }
 
+        // Generate thumbnail client-side from the original file
+        let thumbnailUrl: string | undefined;
+        try {
+          console.log(
+            "[EditSceneView] Generating thumbnail client-side:",
+            JSON.stringify({ 
+              fileName: file.name,
+              fileSize: file.size,
+              durationMs 
+            }, null, 2)
+          );
+
+          const thumbnailResult = await generateThumbnailFromFile(file);
+          
+          if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+            // Update duration from video metadata
+            if (thumbnailResult.durationMs) {
+              durationMs = thumbnailResult.durationMs;
+            }
+            
+            // Upload thumbnail to S3
+            const thumbnailFile = new File(
+              [thumbnailResult.thumbnailBlob],
+              `thumbnail-${Date.now()}.jpg`,
+              { type: "image/jpeg" }
+            );
+            
+            const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+              projectId,
+              sceneId: scene.id,
+              mediaType: "image",
+            });
+            
+            if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+              thumbnailUrl = thumbnailUploadResult.url;
+              console.log(
+                "[EditSceneView] Thumbnail uploaded:",
+                JSON.stringify({ thumbnailUrl, durationMs }, null, 2)
+              );
+            }
+          } else {
+            console.log(
+              "[EditSceneView] Thumbnail generation failed:",
+              JSON.stringify({ error: thumbnailResult.error }, null, 2)
+            );
+          }
+        } catch (thumbnailError) {
+          console.error(
+            "[EditSceneView] Error generating thumbnail:",
+            JSON.stringify({ error: thumbnailError }, null, 2)
+          );
+          // Continue without thumbnail - video will still work
+        }
+
         // Create a new shot with the uploaded video
         const newShot = createNewShot(scene.shots.length);
         newShot.sourceType = "uploaded";
         newShot.video = {
           url: result.url,
           status: "completed",
+          thumbnailUrl, // Include thumbnail if generated
           durationMs,
         };
         newShot.updatedAt = new Date().toISOString();
@@ -1072,6 +1223,7 @@ export function EditSceneView({
         console.log("[EditSceneView] Creating shot with video:", JSON.stringify({
           shotId: newShot.id,
           videoUrl: newShot.video.url,
+          videoThumbnailUrl: newShot.video.thumbnailUrl,
           durationMs: newShot.video.durationMs
         }, null, 2));
 

@@ -30,6 +30,7 @@ import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-pars
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
 import { uploadFile } from "@/lib/upload-utils";
+import { generateThumbnailFromFile, generateThumbnailFromUrl } from "@/lib/video-thumbnail";
 
 interface SceneEditorProps {
   scene: Scene;
@@ -261,6 +262,48 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
 
           if (data.success) {
             if (data.status === "completed" && data.videoUrl) {
+              // If server didn't generate thumbnail, generate client-side
+              let thumbnailUrl = data.thumbnailUrl;
+              if (!thumbnailUrl) {
+                console.log(
+                  "[SceneEditor] No server thumbnail, generating client-side:",
+                  JSON.stringify({ videoUrl: data.videoUrl }, null, 2)
+                );
+                
+                try {
+                  const thumbnailResult = await generateThumbnailFromUrl(data.videoUrl);
+                  
+                  if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+                    // Upload thumbnail to S3
+                    const thumbnailFile = new File(
+                      [thumbnailResult.thumbnailBlob],
+                      `thumbnail-${videoId}.jpg`,
+                      { type: "image/jpeg" }
+                    );
+                    
+                    const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+                      projectId: editedScene.projectId,
+                      sceneId: editedScene.id,
+                      mediaType: "image",
+                    });
+                    
+                    if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+                      thumbnailUrl = thumbnailUploadResult.url;
+                      console.log(
+                        "[SceneEditor] Client-side thumbnail uploaded:",
+                        JSON.stringify({ thumbnailUrl }, null, 2)
+                      );
+                    }
+                  }
+                } catch (thumbnailError) {
+                  console.error(
+                    "[SceneEditor] Error generating client-side thumbnail:",
+                    JSON.stringify({ error: thumbnailError }, null, 2)
+                  );
+                  // Continue without thumbnail - video will still work
+                }
+              }
+
               // Update the video in the scene
               setEditedScene((prev) => ({
                 ...prev,
@@ -270,6 +313,7 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
                         ...v,
                         status: "completed" as const,
                         videoUrl: data.videoUrl,
+                        thumbnailUrl, // Store thumbnail URL (server or client-generated)
                         completedAt: new Date().toISOString(),
                       }
                     : v
@@ -475,10 +519,47 @@ export function SceneEditor({ scene, characters, onSave, onCancel, onDelete }: S
       });
 
       if (result.success && result.url) {
+        // Generate thumbnail client-side from the original file
+        let thumbnailUrl: string | undefined;
+        try {
+          console.log("[SceneEditor] Generating thumbnail client-side");
+          const thumbnailResult = await generateThumbnailFromFile(file);
+          
+          if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
+            // Upload thumbnail to S3
+            const thumbnailFile = new File(
+              [thumbnailResult.thumbnailBlob],
+              `thumbnail-${Date.now()}.jpg`,
+              { type: "image/jpeg" }
+            );
+            
+            const thumbnailUploadResult = await uploadFile(thumbnailFile, {
+              projectId: editedScene.projectId,
+              sceneId: editedScene.id,
+              mediaType: "image",
+            });
+            
+            if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
+              thumbnailUrl = thumbnailUploadResult.url;
+              console.log(
+                "[SceneEditor] Thumbnail uploaded:",
+                JSON.stringify({ thumbnailUrl }, null, 2)
+              );
+            }
+          }
+        } catch (thumbnailError) {
+          console.error(
+            "[SceneEditor] Error generating thumbnail:",
+            JSON.stringify({ error: thumbnailError }, null, 2)
+          );
+          // Continue without thumbnail - video will still work
+        }
+
         const newVideo: GeneratedVideo = {
           id: result.mediaId || `uploaded-${Date.now()}`,
           prompt: `Uploaded: ${file.name}`,
           videoUrl: result.url,
+          thumbnailUrl, // Include thumbnail if generated
           model: "other",
           status: "completed",
           createdAt: new Date().toISOString(),
