@@ -23,6 +23,9 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
   const [volume, setVolume] = useState(1);
   const [videoError, setVideoError] = useState<string | null>(null);
 
+  // Track actual video durations as they load
+  const [actualDurations, setActualDurations] = useState<Map<string, number>>(new Map());
+
   // Filter to only completed shots with videos that have a URL
   const playableShots = useMemo(() => {
     const filtered = shots
@@ -38,12 +41,13 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     return filtered;
   }, [shots]);
 
-  // Calculate timeline positions for shots
+  // Calculate timeline positions for shots (using actual durations if available)
   const shotTimeline = useMemo(() => {
     let currentTimeMs = 0;
     return playableShots.map((shot) => {
       const startTime = currentTimeMs;
-      const duration = shot.video?.durationMs || 5000;
+      // Use actual measured duration if available, otherwise stored duration or default
+      const duration = actualDurations.get(shot.id) || shot.video?.durationMs || 5000;
       currentTimeMs += duration;
       return {
         shot,
@@ -52,12 +56,15 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         durationMs: duration,
       };
     });
-  }, [playableShots]);
+  }, [playableShots, actualDurations]);
 
-  // Total duration of all shots
+  // Total duration of all shots (using actual durations if available)
   const totalDurationMs = useMemo(() => {
-    return shotTimeline.reduce((acc, item) => acc + item.durationMs, 0);
-  }, [shotTimeline]);
+    return shotTimeline.reduce((acc, item) => {
+      const actualDuration = actualDurations.get(item.shot.id);
+      return acc + (actualDuration || item.durationMs);
+    }, 0);
+  }, [shotTimeline, actualDurations]);
 
   const currentShot = playableShots[currentShotIndex];
   const hasVideos = playableShots.length > 0;
@@ -313,6 +320,26 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
               console.log("[ScenePlayer] Video loaded:", currentShot.video?.url);
               setVideoError(null);
             }}
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget;
+              if (video.duration && isFinite(video.duration) && currentShot) {
+                const durationMs = Math.round(video.duration * 1000);
+                // Only update if different from stored/default duration
+                const storedDuration = currentShot.video?.durationMs || 5000;
+                if (Math.abs(durationMs - storedDuration) > 100) {
+                  console.log("[ScenePlayer] Updating actual duration:", JSON.stringify({
+                    shotId: currentShot.id,
+                    storedDuration,
+                    actualDuration: durationMs
+                  }, null, 2));
+                  setActualDurations(prev => {
+                    const next = new Map(prev);
+                    next.set(currentShot.id, durationMs);
+                    return next;
+                  });
+                }
+              }
+            }}
             muted={isMuted}
             playsInline
           >
@@ -356,7 +383,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           onValueChange={handleSeek}
           className="cursor-pointer"
         />
-        <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="flex justify-between text-xs text-muted-foreground pt-2">
           <span>{formatTime(globalTimeMs)}</span>
           <span>{formatTime(totalDurationMs)}</span>
         </div>

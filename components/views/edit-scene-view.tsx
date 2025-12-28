@@ -1592,7 +1592,9 @@ export function EditSceneView({
 
           {/* Main Area - Player & Timeline */}
           <div className="lg:col-span-3 space-y-4">
-            <ScenePlayer shots={scene.shots} audioTracks={scene.audioTracks} />
+            <div className="max-w-[720px] mx-auto">
+              <ScenePlayer shots={scene.shots} audioTracks={scene.audioTracks} />
+            </div>
 
             {/* Timeline Component */}
             <div className="overflow-hidden">
