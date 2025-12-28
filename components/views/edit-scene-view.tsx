@@ -1368,15 +1368,22 @@ export function EditSceneView({
     toast.success("Shot permanently removed");
   };
 
-  // Restore a shot from media library back to the scene
-  const handleRestoreShot = (shot: Shot) => {
+  // Add a shot from media library to the scene as a new shot
+  const handleAddShotFromLibrary = (shot: Shot) => {
+    // Create a new shot with a new ID but keep the video and other properties
+    const newShot: Shot = {
+      ...shot,
+      id: `shot-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      order: scene.shots.length,
+      updatedAt: new Date().toISOString(),
+    };
+    
     setScene((prev) => ({
       ...prev,
-      shots: [...prev.shots, { ...shot, order: prev.shots.length }],
+      shots: [...prev.shots, newShot],
     }));
-    setRemovedShots((prev) => prev.filter((s) => s.id !== shot.id));
     setShowMediaLibrary(false);
-    toast.success("Shot restored to timeline");
+    toast.success("Shot added to timeline");
   };
 
   const handleShotReorder = (shotIds: string[]) => {
@@ -1865,31 +1872,6 @@ export function EditSceneView({
               </Card>
             )}
 
-            {/* Media Library */}
-            <Card>
-              <CardHeader className="py-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Video className="h-4 w-4 text-primary" />
-                  Media Library
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-xs text-muted-foreground mb-3">
-                  Shots with generated videos that have been removed from the timeline
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowMediaLibrary(true)}
-                  disabled={removedShots.length === 0}
-                  className="w-full"
-                >
-                  <Video className="h-4 w-4 mr-2" />
-                  View {removedShots.length} removed shot{removedShots.length !== 1 ? "s" : ""}
-                </Button>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Main Area - Player & Timeline */}
@@ -1982,6 +1964,83 @@ export function EditSceneView({
           </div>
         </div>
 
+        {/* Media Library - Full Width */}
+        {removedShots.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-border">
+            <Card>
+              <CardHeader className="py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Video className="h-5 w-5 text-primary" />
+                      Media Library
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {removedShots.length} shot{removedShots.length !== 1 ? "s" : ""} with generated videos that have been removed from the timeline
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowMediaLibrary(true)}
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    View All
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {removedShots.slice(0, 8).map((shot) => (
+                    <div
+                      key={shot.id}
+                      className="group relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30 cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => setShowMediaLibrary(true)}
+                    >
+                      {shot.video?.thumbnailUrl ? (
+                        <Image
+                          src={shot.video.thumbnailUrl}
+                          alt={shot.prompt}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : shot.video?.url ? (
+                        <video
+                          src={shot.video.url}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Video className="h-8 w-8 text-muted-foreground opacity-50" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <p className="text-white text-xs font-medium px-2 text-center line-clamp-2">
+                          {shot.prompt}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {removedShots.length > 8 && (
+                  <div className="mt-4 text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMediaLibrary(true)}
+                    >
+                      View {removedShots.length - 8} more shot{removedShots.length - 8 !== 1 ? "s" : ""}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Delete Scene Button */}
         <div className="flex justify-end mt-8 pt-6 border-t border-border">
           <Button
@@ -2028,7 +2087,7 @@ export function EditSceneView({
               Media Library
             </DialogTitle>
             <DialogDescription>
-              Shots with generated videos that have been removed from the timeline. You can restore them or permanently remove them.
+              Shots with generated videos that have been removed from the timeline. You can add them back to the scene as new shots or permanently remove them.
             </DialogDescription>
           </DialogHeader>
 
@@ -2075,12 +2134,13 @@ export function EditSceneView({
                       <div className="flex gap-2">
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="default"
                           size="sm"
-                          onClick={() => handleRestoreShot(shot)}
+                          onClick={() => handleAddShotFromLibrary(shot)}
                           className="flex-1"
                         >
-                          Restore
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add to Scene
                         </Button>
                         <Button
                           type="button"

@@ -613,6 +613,7 @@ export function ShotEditorModal({
   if (!shot) return null;
 
   const isNew = !shot.video?.url;
+  const hasCompletedVideo = shot.video?.url && shot.video?.status === "completed";
 
   // Determine if we need a wider dialog
   const needsWiderDialog = generationMode === "start-frame" || generationMode === "start-end-frame";
@@ -626,11 +627,108 @@ export function ShotEditorModal({
             {isNew ? "Add Shot" : "Edit Shot"}
           </DialogTitle>
           <DialogDescription>
-            Configure how this shot will be generated or upload a video directly.
+            {hasCompletedVideo 
+              ? "View and manage this shot."
+              : "Configure how this shot will be generated or upload a video directly."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        {/* Simplified view for completed shots */}
+        {hasCompletedVideo && shot.video ? (
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label>Video</Label>
+              <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                <video
+                  src={shot.video.url}
+                  controls
+                  className="w-full h-full object-cover"
+                  poster={shot.video.thumbnailUrl}
+                />
+              </div>
+            </div>
+
+            {shot.prompt && (
+              <div className="space-y-2">
+                <Label>Prompt</Label>
+                <p className="text-sm text-muted-foreground">{shot.prompt}</p>
+              </div>
+            )}
+
+            {/* Reference Images */}
+            {(shot.typedReferenceImages && shot.typedReferenceImages.length > 0) ||
+            (shot.referenceImages && shot.referenceImages.length > 0) ||
+            shot.startFrameImage ||
+            shot.endFrameImage ? (
+              <div className="space-y-2">
+                <Label>Reference Images</Label>
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                  {/* Typed reference images */}
+                  {shot.typedReferenceImages?.map((ref, idx) => (
+                    <div
+                      key={`ref-${idx}`}
+                      className="relative aspect-video rounded-lg overflow-hidden border border-border group h-20"
+                    >
+                      <Image src={ref.url} alt={ref.name || `Reference ${idx + 1}`} fill className="object-cover" />
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                        <div className="flex items-center gap-1 text-[9px] text-white">
+                          {ref.type === "location" ? (
+                            <MapPin className="h-2 w-2" />
+                          ) : (
+                            <User className="h-2 w-2" />
+                          )}
+                          <span className="truncate">{ref.name || ref.type}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Legacy reference images (URLs only) */}
+                  {shot.referenceImages
+                    ?.filter((url) => !shot.typedReferenceImages?.some((ref) => ref.url === url))
+                    .map((url, idx) => (
+                      <div
+                        key={`legacy-ref-${idx}`}
+                        className="relative aspect-video rounded-lg overflow-hidden border border-border h-20"
+                      >
+                        <Image src={url} alt={`Reference ${idx + 1}`} fill className="object-cover" />
+                      </div>
+                    ))}
+
+                  {/* Start frame */}
+                  {shot.startFrameImage && (
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
+                      <Image src={shot.startFrameImage} alt="Start frame" fill className="object-cover" />
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                        <span className="text-[9px] text-white">Start Frame</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* End frame */}
+                  {shot.endFrameImage && (
+                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
+                      <Image src={shot.endFrameImage} alt="End frame" fill className="object-cover" />
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                        <span className="text-[9px] text-white">End Frame</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {shot.video.durationMs && (
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                <p className="text-sm text-muted-foreground">
+                  {(shot.video.durationMs / 1000).toFixed(1)} seconds
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6 py-4">
           {/* Source Type Toggle */}
           <div className="space-y-2">
             <Label>Source</Label>
@@ -1295,45 +1393,69 @@ export function ShotEditorModal({
             </div>
           )}
         </div>
+        )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          {onDelete && (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-              className="w-full sm:w-auto"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Shot
-            </Button>
-          )}
-          <div className="flex-1" />
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          {sourceType === "generated" ? (
-            <Button
-              type="button"
-              onClick={handleGenerate}
-              disabled={isGenerating || !prompt.trim()}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Video
-                </>
+          {hasCompletedVideo ? (
+            <>
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="text-xs text-destructive hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Remove Shot
+                </Button>
               )}
-            </Button>
+              <div className="flex-1" />
+              <Button type="button" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </>
           ) : (
-            <Button type="button" onClick={handleSave}>
-              Save Shot
-            </Button>
+            <>
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  className="w-full sm:w-auto"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Shot
+                </Button>
+              )}
+              <div className="flex-1" />
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              {sourceType === "generated" ? (
+                <Button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerating || !prompt.trim()}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Generate Video
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button type="button" onClick={handleSave}>
+                  Save Shot
+                </Button>
+              )}
+            </>
           )}
         </DialogFooter>
       </DialogContent>
