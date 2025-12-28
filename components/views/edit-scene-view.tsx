@@ -514,7 +514,8 @@ export function EditSceneView({
   // Shot editing state
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [showShotEditor, setShowShotEditor] = useState(false);
-  const [pendingShots, setPendingShots] = useState<Map<string, string>>(new Map()); // shotId -> operationId
+  // shotId -> { operationId, thumbnailUrl, thumbnailPath } for polling
+  const [pendingShots, setPendingShots] = useState<Map<string, { operationId: string; thumbnailUrl?: string; thumbnailPath?: string }>>(new Map());
   const [removedShots, setRemovedShots] = useState<Shot[]>([]); // Shots that were deleted but have videos
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
@@ -633,12 +634,35 @@ export function EditSceneView({
     if (pendingShots.size === 0) return;
 
     const pollInterval = setInterval(async () => {
-      for (const [shotId, operationId] of pendingShots.entries()) {
+      for (const [shotId, pendingData] of pendingShots.entries()) {
         try {
-          const statusUrl = `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${shotId}`;
+          const { operationId, thumbnailUrl: predictedThumbnailUrl, thumbnailPath } = pendingData;
+          
+          // First, check if thumbnail exists via HEAD request (simple/fast)
+          if (predictedThumbnailUrl) {
+            try {
+              const headResponse = await fetch(predictedThumbnailUrl, { method: 'HEAD' });
+              if (headResponse.ok) {
+                console.log(
+                  "[EditSceneView] Thumbnail exists! Video is ready:",
+                  JSON.stringify({ shotId, thumbnailUrl: predictedThumbnailUrl }, null, 2)
+                );
+                // Thumbnail exists - now call video-status to get the video URL
+              }
+            } catch (headError) {
+              // HEAD request failed - thumbnail not ready yet, continue with normal polling
+              console.log(
+                "[EditSceneView] Thumbnail not ready yet:",
+                JSON.stringify({ shotId, thumbnailUrl: predictedThumbnailUrl }, null, 2)
+              );
+            }
+          }
+          
+          // Call video-status API to check/trigger backend processing
+          const statusUrl = `/api/ai/video-status?operationId=${encodeURIComponent(operationId)}&projectId=${projectId}&sceneId=${scene.id}&videoId=${shotId}${thumbnailPath ? `&thumbnailPath=${encodeURIComponent(thumbnailPath)}` : ''}`;
           console.log(
             "[EditSceneView] Polling video status:",
-            JSON.stringify({ shotId, operationId, statusUrl }, null, 2)
+            JSON.stringify({ shotId, operationId, statusUrl, hasThumbnailPath: !!thumbnailPath }, null, 2)
           );
 
           const response = await fetch(statusUrl);
@@ -1155,10 +1179,14 @@ export function EditSceneView({
           ),
         }));
 
-        // Add to pending shots for polling
+        // Add to pending shots for polling (includes thumbnailUrl for HEAD check)
         setPendingShots((prev) => {
           const next = new Map(prev);
-          next.set(newShot.id, data.video.operationId);
+          next.set(newShot.id, { 
+            operationId: data.video.operationId,
+            thumbnailUrl: data.thumbnailUrl,
+            thumbnailPath: data.thumbnailPath,
+          });
           return next;
         });
 
@@ -1362,6 +1390,28 @@ export function EditSceneView({
     setSelectedShot(null);
   };
 
+  // Save old video to media library when replacing a shot (without removing the shot from scene)
+  const handleSaveVideoToMediaLibrary = (shot: Shot) => {
+    if (shot.video?.url && shot.video.status === "completed") {
+      // Create a copy with a new unique ID to avoid duplicate key conflicts
+      const mediaLibraryShot: Shot = {
+        ...shot,
+        id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      };
+      console.log(
+        "[EditSceneView] Saving video to media library:",
+        JSON.stringify({ 
+          originalShotId: shot.id,
+          newMediaLibraryId: mediaLibraryShot.id,
+          videoUrl: shot.video.url,
+          thumbnailUrl: shot.video.thumbnailUrl 
+        }, null, 2)
+      );
+      setRemovedShots((prev) => [...prev, mediaLibraryShot]);
+      toast.success("Old video saved to Media Library");
+    }
+  };
+
   // Permanently remove a shot from the media library
   const handleRemoveFromLibrary = (shotId: string) => {
     setRemovedShots((prev) => prev.filter((s) => s.id !== shotId));
@@ -1437,7 +1487,7 @@ export function EditSceneView({
           sceneId: scene.id,
           shotId: shot.id,
           aspectRatio: "16:9",
-          durationSeconds: 8,
+          durationSeconds: shot.durationSeconds || 8,
           generationMode: shot.generationMode,
           startFrameImage: shot.startFrameImage,
           endFrameImage: shot.endFrameImage,
@@ -1470,10 +1520,14 @@ export function EditSceneView({
           }
         });
 
-        // Add to pending shots for polling
+        // Add to pending shots for polling (includes thumbnailUrl for HEAD check)
         setPendingShots((prev) => {
           const next = new Map(prev);
-          next.set(shot.id, data.video.operationId);
+          next.set(shot.id, {
+            operationId: data.video.operationId,
+            thumbnailUrl: data.thumbnailUrl,
+            thumbnailPath: data.thumbnailPath,
+          });
           return next;
         });
 
@@ -2069,6 +2123,7 @@ export function EditSceneView({
             : undefined
         }
         onGenerateVideo={handleGenerateVideo}
+        onSaveVideoToMediaLibrary={handleSaveVideoToMediaLibrary}
         projectId={projectId}
         sceneId={scene.id}
         characters={characters}

@@ -82,6 +82,7 @@ export interface Shot {
   // Video source configuration
   sourceType: VideoSourceType;
   generationMode?: GenerationMode;
+  durationSeconds?: 4 | 6 | 8; // Video duration in seconds (default: 8)
 
   // Images for generation
   startFrameImage?: string; // URL for start frame

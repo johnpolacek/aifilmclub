@@ -50,6 +50,7 @@ interface ShotEditorModalProps {
   onSave: (shot: Shot) => void;
   onDelete?: (shotId: string) => void;
   onGenerateVideo: (shot: Shot) => void;
+  onSaveVideoToMediaLibrary?: (shot: Shot) => void; // Save old video to media library when replacing
   projectId: string;
   sceneId: string;
   characters?: Character[];
@@ -186,6 +187,7 @@ export function ShotEditorModal({
   onSave,
   onDelete,
   onGenerateVideo,
+  onSaveVideoToMediaLibrary,
   projectId,
   sceneId,
   characters = [],
@@ -211,6 +213,7 @@ export function ShotEditorModal({
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isVideoDragOver, setIsVideoDragOver] = useState(false);
+  const [durationSeconds, setDurationSeconds] = useState<4 | 6 | 8>(shot?.durationSeconds || 8);
 
   // Start frame generation state
   const [startFrameInputMode, setStartFrameInputMode] = useState<"upload" | "generate">("upload");
@@ -224,6 +227,9 @@ export function ShotEditorModal({
   const [endFrameReferenceImages, setEndFrameReferenceImages] = useState<ReferenceImage[]>([]);
   const [isGeneratingEndFrame, setIsGeneratingEndFrame] = useState(false);
 
+  // Replace mode state
+  const [isReplaceMode, setIsReplaceMode] = useState(false);
+
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal opens or shot changes
@@ -235,6 +241,7 @@ export function ShotEditorModal({
       setStartFrameImage(shot.startFrameImage);
       setEndFrameImage(shot.endFrameImage);
       setTypedReferenceImages(shot.typedReferenceImages || []);
+      setDurationSeconds(shot.durationSeconds || 8); // Use shot's duration or default to 8 seconds
       // Reset generating state when modal opens to prevent stuck state
       setIsGenerating(false);
       setIsUploading(false);
@@ -248,6 +255,8 @@ export function ShotEditorModal({
       setEndFramePrompt("");
       setEndFrameReferenceImages([]);
       setIsGeneratingEndFrame(false);
+      // Reset replace mode when modal opens
+      setIsReplaceMode(false);
     }
   }, [open, shot]);
 
@@ -417,9 +426,19 @@ export function ShotEditorModal({
               shotId: shot.id, 
               videoUrl: result.url,
               projectId,
-              sceneId 
+              sceneId,
+              isReplaceMode 
             }, null, 2)
           );
+
+          // If replacing, save old video to media library (without removing the shot)
+          if (isReplaceMode && shot.video?.url && shot.video?.status === "completed" && onSaveVideoToMediaLibrary) {
+            console.log(
+              "[ShotEditorModal] Saving old video to media library before upload replacement:",
+              JSON.stringify({ shotId: shot.id, oldVideoUrl: shot.video.url }, null, 2)
+            );
+            onSaveVideoToMediaLibrary(shot);
+          }
 
           // Generate thumbnail client-side from the original file
           let thumbnailUrl: string | undefined;
@@ -478,7 +497,8 @@ export function ShotEditorModal({
             updatedAt: new Date().toISOString(),
           };
           onSave(updatedShot);
-          toast.success("Video uploaded");
+          toast.success(isReplaceMode ? "Shot replaced" : "Video uploaded");
+          setIsReplaceMode(false);
           onOpenChange(false);
         } else {
           toast.error(result.error || "Failed to upload video");
@@ -491,7 +511,7 @@ export function ShotEditorModal({
         setUploadProgress(0);
       }
     },
-    [shot, projectId, sceneId, prompt, onSave, onOpenChange]
+    [shot, projectId, sceneId, prompt, onSave, onOpenChange, isReplaceMode, onSaveVideoToMediaLibrary]
   );
 
   // Handle video upload from file input
@@ -577,11 +597,21 @@ export function ShotEditorModal({
       return;
     }
 
+    // If replacing, save old video to media library (without removing the shot)
+    if (isReplaceMode && shot.video?.url && shot.video?.status === "completed" && onSaveVideoToMediaLibrary) {
+      console.log(
+        "[ShotEditorModal] Saving old video to media library before replacing:",
+        JSON.stringify({ shotId: shot.id, oldVideoUrl: shot.video.url }, null, 2)
+      );
+      onSaveVideoToMediaLibrary(shot);
+    }
+
     const updatedShot: Shot = {
       ...shot,
       prompt,
       sourceType: "generated",
       generationMode,
+      durationSeconds,
       startFrameImage,
       endFrameImage,
       typedReferenceImages: typedReferenceImages.length > 0 ? typedReferenceImages : undefined,
@@ -598,6 +628,7 @@ export function ShotEditorModal({
 
     setIsGenerating(true);
     onGenerateVideo(updatedShot);
+    setIsReplaceMode(false);
     // Close modal immediately - generation status is tracked via shot.video.status
     // This prevents the UI from getting stuck in "Generating..." state if API fails
     onOpenChange(false);
@@ -624,17 +655,19 @@ export function ShotEditorModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Film className="h-5 w-5 text-primary" />
-            {isNew ? "Add Shot" : "Edit Shot"}
+            {isReplaceMode ? "Replace Shot" : isNew ? "Add Shot" : "Edit Shot"}
           </DialogTitle>
           <DialogDescription>
-            {hasCompletedVideo 
+            {isReplaceMode
+              ? "Upload a new video or generate one to replace this shot. The current shot will be moved to the media library."
+              : hasCompletedVideo 
               ? "View and manage this shot."
               : "Configure how this shot will be generated or upload a video directly."}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Simplified view for completed shots */}
-        {hasCompletedVideo && shot.video ? (
+        {/* Simplified view for completed shots (unless in replace mode) */}
+        {hasCompletedVideo && shot.video && !isReplaceMode ? (
           <div className="space-y-6 py-4">
             <div className="space-y-2">
               <Label>Video</Label>
@@ -662,7 +695,7 @@ export function ShotEditorModal({
             shot.endFrameImage ? (
               <div className="space-y-2">
                 <Label>Reference Images</Label>
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                <div className="grid grid-cols-3 gap-1">
                   {/* Typed reference images */}
                   {shot.typedReferenceImages?.map((ref, idx) => (
                     <div
@@ -769,7 +802,13 @@ export function ShotEditorModal({
                 <Label>Generation Mode</Label>
                 <Select
                   value={generationMode}
-                  onValueChange={(v) => setGenerationMode(v as GenerationMode)}
+                  onValueChange={(v) => {
+                    setGenerationMode(v as GenerationMode);
+                    // Reference images mode requires 8 seconds duration
+                    if (v === "reference-images") {
+                      setDurationSeconds(8);
+                    }
+                  }}
                 >
                   <SelectTrigger className="w-full h-auto! py-3 [&>span]:flex-1 [&>span]:text-center">
                     <SelectValue>
@@ -1337,6 +1376,43 @@ export function ShotEditorModal({
                   rows={3}
                 />
               </div>
+
+              {/* Duration - Note: Reference images mode requires 8 seconds */}
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                {generationMode === "reference-images" ? (
+                  <div className="text-sm text-muted-foreground p-2 bg-muted rounded-md">
+                    Duration is fixed to <strong>8 seconds</strong> when using reference images.
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={durationSeconds === 4 ? "default" : "outline"}
+                      onClick={() => setDurationSeconds(4)}
+                      className="flex-1"
+                    >
+                      4 seconds
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={durationSeconds === 6 ? "default" : "outline"}
+                      onClick={() => setDurationSeconds(6)}
+                      className="flex-1"
+                    >
+                      6 seconds
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={durationSeconds === 8 ? "default" : "outline"}
+                      onClick={() => setDurationSeconds(8)}
+                      className="flex-1"
+                    >
+                      8 seconds
+                    </Button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             /* Upload Video */
@@ -1396,7 +1472,7 @@ export function ShotEditorModal({
         )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          {hasCompletedVideo ? (
+          {hasCompletedVideo && !isReplaceMode ? (
             <>
               {onDelete && (
                 <Button
@@ -1404,12 +1480,21 @@ export function ShotEditorModal({
                   variant="ghost"
                   size="sm"
                   onClick={handleDelete}
-                  className="text-xs text-destructive hover:text-destructive"
+                  className="text-sm text-destructive hover:text-destructive"
                 >
                   <X className="h-3.5 w-3.5 mr-1.5" />
                   Remove Shot
                 </Button>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsReplaceMode(true)}
+              >
+                <Upload className="h-3.5 w-3.5 mr-1.5" />
+                Replace Shot
+              </Button>
               <div className="flex-1" />
               <Button type="button" onClick={() => onOpenChange(false)}>
                 Close
@@ -1420,16 +1505,27 @@ export function ShotEditorModal({
               {onDelete && (
                 <Button
                   type="button"
-                  variant="destructive"
+                  variant="ghost"
+                  size="sm"
                   onClick={handleDelete}
-                  className="w-full sm:w-auto"
+                  className="text-sm text-destructive hover:text-destructive"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Shot
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Remove Shot
                 </Button>
               )}
               <div className="flex-1" />
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  if (isReplaceMode) {
+                    setIsReplaceMode(false);
+                  } else {
+                    onOpenChange(false);
+                  }
+                }}
+              >
                 Cancel
               </Button>
               {sourceType === "generated" ? (

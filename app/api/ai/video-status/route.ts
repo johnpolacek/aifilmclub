@@ -130,6 +130,7 @@ export async function GET(request: Request) {
     const projectId = searchParams.get("projectId");
     const sceneId = searchParams.get("sceneId");
     const videoId = searchParams.get("videoId");
+    const thumbnailPath = searchParams.get("thumbnailPath"); // Predictable path from generate-video
 
     if (!operationId) {
       return NextResponse.json(
@@ -140,7 +141,7 @@ export async function GET(request: Request) {
 
     console.log(
       "[video-status] Checking status:",
-      JSON.stringify({ operationId, projectId, sceneId, videoId }, null, 2)
+      JSON.stringify({ operationId, projectId, sceneId, videoId, thumbnailPath }, null, 2)
     );
 
     // Check video status
@@ -157,7 +158,8 @@ export async function GET(request: Request) {
       );
     }
 
-    // If video is completed and we have a URL, optionally download and store in S3
+    // If video is completed, get the video data and store in S3
+    // Veo 3.1 can return either a URL (if GCS output configured) or base64-encoded bytes (default)
     let finalVideoUrl = result.videoUrl;
     let thumbnailUrl: string | undefined;
     
@@ -166,6 +168,8 @@ export async function GET(request: Request) {
       JSON.stringify({ 
         status: result.status, 
         hasVideoUrl: !!result.videoUrl,
+        hasVideoBase64: !!result.videoBase64,
+        base64Length: result.videoBase64?.length,
         videoUrl: result.videoUrl?.substring(0, 100),
         projectId, 
         sceneId,
@@ -173,42 +177,83 @@ export async function GET(request: Request) {
       }, null, 2)
     );
     
-    if (result.status === "completed" && result.videoUrl && projectId && sceneId) {
+    // Handle completed video - either from URL or base64 bytes
+    if (result.status === "completed" && (result.videoUrl || result.videoBase64) && projectId && sceneId) {
       try {
-        console.log(
-          "[video-status] Downloading video for S3 upload:",
-          JSON.stringify({ videoUrl: result.videoUrl.substring(0, 100) }, null, 2)
-        );
+        let videoBuffer: Buffer | null = null;
 
-        // Get API key for authenticated download
-        const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-        
-        // Download video and upload to S3 for permanent storage
-        // The Google API video URL requires API key authentication
-        const downloadUrl = result.videoUrl.includes("?") 
-          ? `${result.videoUrl}&key=${apiKey}`
-          : `${result.videoUrl}?key=${apiKey}`;
-        
-        const videoResponse = await fetch(downloadUrl);
-        console.log(
-          "[video-status] Video download response:",
-          JSON.stringify({ 
-            ok: videoResponse.ok, 
-            status: videoResponse.status,
-            contentType: videoResponse.headers.get("content-type"),
-            contentLength: videoResponse.headers.get("content-length")
-          }, null, 2)
-        );
+        // CASE 1: Video returned as base64-encoded bytes (Veo 3.1 default)
+        if (result.videoBase64) {
+          console.log(
+            "[video-status] Processing base64-encoded video:",
+            JSON.stringify({ base64Length: result.videoBase64.length }, null, 2)
+          );
+          videoBuffer = Buffer.from(result.videoBase64, "base64");
+          console.log(
+            "[video-status] Video buffer decoded from base64:",
+            JSON.stringify({ bufferSize: videoBuffer.length }, null, 2)
+          );
+        }
+        // CASE 2: Video returned as URL (GCS bucket configured)
+        else if (result.videoUrl) {
+          console.log(
+            "[video-status] Downloading video from URL:",
+            JSON.stringify({ videoUrl: result.videoUrl.substring(0, 100) }, null, 2)
+          );
 
-        if (videoResponse.ok) {
-          const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-          const videoKey = `generated/videos/${projectId}/${sceneId}/${videoId || operationId}.mp4`;
+          // Get API key for authenticated download
+          const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+          
+          // Download video and upload to S3 for permanent storage
+          // The Google API video URL requires API key authentication
+          const downloadUrl = result.videoUrl.includes("?") 
+            ? `${result.videoUrl}&key=${apiKey}`
+            : `${result.videoUrl}?key=${apiKey}`;
+          
+          const videoResponse = await fetch(downloadUrl);
+          console.log(
+            "[video-status] Video download response:",
+            JSON.stringify({ 
+              ok: videoResponse.ok, 
+              status: videoResponse.status,
+              contentType: videoResponse.headers.get("content-type"),
+              contentLength: videoResponse.headers.get("content-length")
+            }, null, 2)
+          );
+
+          if (videoResponse.ok) {
+            videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+          } else {
+            const errorBody = await videoResponse.text().catch(() => "");
+            console.error(
+              "[video-status] Video download failed:",
+              JSON.stringify({ 
+                status: videoResponse.status, 
+                statusText: videoResponse.statusText,
+                errorBody: errorBody.substring(0, 500)
+              }, null, 2)
+            );
+            
+            return NextResponse.json({
+              success: false,
+              status: "failed",
+              error: `Failed to download video from Google (${videoResponse.status}). Please try generating again.`,
+              operationId,
+            }, { status: 500 });
+          }
+        }
+
+        if (videoBuffer) {
+          // Add timestamp to video key to bust CloudFront cache when replacing shots
+          const timestamp = Date.now();
+          const videoKey = `generated/videos/${projectId}/${sceneId}/${videoId || operationId}-${timestamp}.mp4`;
           
           console.log(
             "[video-status] Video buffer received:",
             JSON.stringify({ 
               bufferSize: videoBuffer.length,
-              videoKey 
+              videoKey,
+              timestamp
             }, null, 2)
           );
           
@@ -218,7 +263,11 @@ export async function GET(request: Request) {
           
           console.log(
             "[video-status] Video uploaded to S3:",
-            JSON.stringify({ videoKey, finalVideoUrl }, null, 2)
+            JSON.stringify({ 
+              videoKey, 
+              finalVideoUrl,
+              s3Path: `s3://aifilmcamp/${videoKey}` 
+            }, null, 2)
           );
 
           // Generate thumbnail from middle of video
@@ -231,10 +280,11 @@ export async function GET(request: Request) {
           const thumbnailBuffer = await extractVideoThumbnail(videoBuffer, durationMs);
           
           if (thumbnailBuffer) {
-            const thumbnailKey = `generated/thumbnails/${projectId}/${sceneId}/${videoId || operationId}.jpg`;
+            // Use the predictable thumbnailPath if provided, otherwise generate one
+            const thumbnailKey = thumbnailPath || `generated/thumbnails/${projectId}/${sceneId}/${videoId || operationId}-${timestamp}.jpg`;
             console.log(
               "[video-status] Uploading thumbnail to S3:",
-              JSON.stringify({ thumbnailKey, thumbnailBufferSize: thumbnailBuffer.length }, null, 2)
+              JSON.stringify({ thumbnailKey, thumbnailBufferSize: thumbnailBuffer.length, usingPredictablePath: !!thumbnailPath }, null, 2)
             );
 
             thumbnailUrl = await uploadImageFromBuffer(
@@ -253,22 +303,11 @@ export async function GET(request: Request) {
             );
           }
         } else {
-          // Video download failed - the Google URL requires API key so it won't work for the client
-          const errorBody = await videoResponse.text().catch(() => "");
-          console.error(
-            "[video-status] Video download failed:",
-            JSON.stringify({ 
-              status: videoResponse.status, 
-              statusText: videoResponse.statusText,
-              errorBody: errorBody.substring(0, 500)
-            }, null, 2)
-          );
-          
-          // Return as failed since the client can't access the video
+          console.error("[video-status] No video buffer available");
           return NextResponse.json({
             success: false,
             status: "failed",
-            error: `Failed to download video from Google (${videoResponse.status}). Please try generating again.`,
+            error: "No video data available. Please try generating again.",
             operationId,
           }, { status: 500 });
         }

@@ -1,12 +1,64 @@
 import { google } from "@ai-sdk/google";
 import { experimental_generateImage } from "ai";
+import { GoogleAuth } from "google-auth-library";
+import { GoogleGenAI } from "@google/genai";
 import type { GenerationMode } from "@/lib/scenes";
 
 /**
  * Google Gemini AI Service
- * Uses Vercel AI SDK for image and video generation
- * Supports Veo 3.1 for advanced video generation
+ * Uses Vercel AI SDK for image generation
+ * Uses Vertex AI REST API for Veo 3.1 video generation (supports service account auth)
  */
+
+// Initialize Google Auth client (lazy initialization)
+let authClient: GoogleAuth | null = null;
+
+// Initialize Google GenAI client (uses API key - for simple SDK operations)
+let genAIClient: GoogleGenAI | null = null;
+
+function getGenAIClient(): GoogleGenAI {
+  if (!genAIClient) {
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Google API key not configured");
+    }
+    genAIClient = new GoogleGenAI({ apiKey });
+  }
+  return genAIClient;
+}
+
+function getAuthClient(): GoogleAuth {
+  if (!authClient) {
+    // Check if we have service account key as JSON string (works for both local and production)
+    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    
+    if (serviceAccountKey) {
+      // Parse JSON string and use it directly
+      try {
+        const keyData = JSON.parse(serviceAccountKey);
+        authClient = new GoogleAuth({
+          credentials: keyData,
+          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        });
+      } catch (error) {
+        console.error("[getAuthClient] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:", JSON.stringify({ error }, null, 2));
+        throw new Error("Invalid GOOGLE_SERVICE_ACCOUNT_KEY format");
+      }
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      // Fallback: Use file path (local development only)
+      authClient = new GoogleAuth({
+        keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      });
+    } else {
+      // Fallback: Try Application Default Credentials (if running on GCP)
+      authClient = new GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      });
+    }
+  }
+  return authClient;
+}
 
 // ============================================================================
 // IMAGE GENERATION TYPES
@@ -48,7 +100,7 @@ export interface ImageGenerationResult {
 export interface VideoGenerationOptions {
   prompt: string;
   aspectRatio?: "16:9" | "9:16";
-  durationSeconds?: 5 | 8;
+  durationSeconds?: 4 | 6 | 8;
 
   // Generation mode
   generationMode?: GenerationMode;
@@ -66,6 +118,7 @@ export interface VideoGenerationResult {
   success: boolean;
   videoId?: string; // Job ID for polling
   videoUrl?: string;
+  videoBase64?: string; // Base64-encoded video data (Veo 3.1 default response)
   status?: "pending" | "processing" | "completed" | "failed";
   durationMs?: number;
   error?: string;
@@ -77,7 +130,7 @@ export interface VideoGenerationResult {
 
 /**
  * Analyze reference images and generate a style/content description
- * Uses Gemini's vision capabilities to understand the images
+ * Uses Gemini's vision capabilities to understand the images via Vertex AI
  */
 export async function analyzeReferenceImages(
   imageUrls: string[]
@@ -87,10 +140,20 @@ export async function analyzeReferenceImages(
   }
 
   try {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
 
-    if (!apiKey) {
-      return { success: false, error: "Google API key not configured" };
+    if (!projectId) {
+      return { success: false, error: "GOOGLE_CLOUD_PROJECT_ID not configured" };
+    }
+
+    // Get authenticated client
+    const auth = getAuthClient();
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+
+    if (!accessToken.token) {
+      return { success: false, error: "Failed to obtain access token" };
     }
 
     // Prepare images for Gemini
@@ -112,41 +175,43 @@ export async function analyzeReferenceImages(
       })
     );
 
-    // Call Gemini to analyze the images
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                ...imageParts,
-                {
-                  text: `Analyze these reference images and provide a concise description (2-3 sentences) that captures:
+    // Call Gemini via Vertex AI to analyze the images
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/gemini-2.0-flash:generateContent`;
+    
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              ...imageParts,
+              {
+                text: `Analyze these reference images and provide a concise description (2-3 sentences) that captures:
 1. The visual style (lighting, color palette, artistic style)
 2. Key character/subject details (appearance, clothing, features)
 3. The overall mood and atmosphere
 
 Format your response as a brief style guide that could be used to generate a similar image. Start directly with the description, no preamble.`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 200,
+              },
+            ],
           },
-        }),
-      }
-    );
+        ],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 200,
+        },
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
-        "[analyzeReferenceImages] API error:",
-        JSON.stringify({ error: errorText }, null, 2)
+        "[analyzeReferenceImages] Vertex AI error:",
+        JSON.stringify({ status: response.status, error: errorText }, null, 2)
       );
       return { success: false, error: "Failed to analyze images" };
     }
@@ -284,14 +349,14 @@ async function prepareImageForVeo(
 }
 
 /**
- * Generate a video using Google Veo 3.1
+ * Generate a video using Google Veo 3.1 via Vertex AI REST API
+ * Uses v1beta1 endpoint for predictLongRunning (async generation)
+ * Returns operation name for status polling
+ * 
  * Supports multiple generation modes:
  * - text-only: Generate from text prompt only
  * - start-frame: Generate from start frame image + prompt
- * - start-end-frame: Generate from start and end frame images + prompt
  * - reference-images: Generate using up to 3 reference images + prompt
- *
- * Note: Video generation is async - this starts the job and returns a job ID
  */
 export async function generateVideo(
   options: VideoGenerationOptions
@@ -311,26 +376,30 @@ export async function generateVideo(
   }
 
   try {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
 
-    if (!apiKey) {
-      return { success: false, error: "Google API key not configured" };
+    if (!projectId) {
+      return { success: false, error: "GOOGLE_CLOUD_PROJECT_ID not configured" };
     }
 
-    // Build the request based on generation mode
-    // Using Veo 3.1 model
-    const modelId = "veo-3.1-generate-preview";
+    // Get authenticated client using service account
+    const auth = getAuthClient();
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
 
-    // Build instance object based on generation mode
-    // Note: referenceImages is not included because Veo 3.1 API doesn't support it yet
-    // Instead, we analyze reference images and incorporate style into the prompt
-    interface VeoInstance {
-      prompt: string;
-      image?: { bytesBase64Encoded: string; mimeType: string };
-      lastFrame?: { bytesBase64Encoded: string; mimeType: string };
+    if (!accessToken.token) {
+      return { success: false, error: "Failed to obtain access token" };
     }
 
-    const instance: VeoInstance = { prompt };
+    // Note: When using reference images, duration MUST be 8 seconds per API docs
+    const effectiveDuration = generationMode === "reference-images" ? 8 : durationSeconds;
+
+    // Build Vertex AI request payload in instances/parameters format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const instance: any = {
+      prompt,
+    };
 
     // Add images based on generation mode
     if (generationMode === "start-frame" && startFrameImage) {
@@ -350,103 +419,101 @@ export async function generateVideo(
         };
       }
       if (endFrameImage) {
-        const preparedEndImage = await prepareImageForVeo(endFrameImage);
-        if (preparedEndImage) {
-          instance.lastFrame = {
-            bytesBase64Encoded: preparedEndImage.data,
-            mimeType: preparedEndImage.mimeType,
-          };
-        }
+        console.log("[generateVideo] Warning: End frame support may require different parameter format");
       }
     } else if (
       generationMode === "reference-images" &&
       referenceImages &&
       referenceImages.length > 0
     ) {
-      // Reference images are not fully supported by Veo 3.1 API yet
-      // Instead, analyze the reference images and incorporate style into the prompt
+      // Use referenceImages field with proper referenceType values
+      const maxReferenceImages = Math.min(referenceImages.length, 3);
       console.log(
-        "[generateVideo] Reference images mode - analyzing images for style description:",
-        JSON.stringify({ referenceCount: referenceImages.length }, null, 2)
+        "[generateVideo] Reference images mode - preparing images:",
+        JSON.stringify({ referenceCount: referenceImages.length, usingCount: maxReferenceImages }, null, 2)
       );
       
-      const analysisResult = await analyzeReferenceImages(referenceImages);
-      if (analysisResult.success && analysisResult.description) {
-        // Prepend style description to the prompt
-        instance.prompt = `${analysisResult.description}\n\n${prompt}`;
-        console.log(
-          "[generateVideo] Enhanced prompt with style description:",
-          JSON.stringify({ 
-            styleDescription: analysisResult.description.substring(0, 100),
-            originalPromptLength: prompt.length,
-            enhancedPromptLength: instance.prompt.length
-          }, null, 2)
-        );
-      } else {
-        console.warn(
-          "[generateVideo] Could not analyze reference images, using original prompt:",
-          JSON.stringify({ error: analysisResult.error }, null, 2)
-        );
-      }
+      const preparedReferenceImages = await Promise.all(
+        referenceImages.slice(0, maxReferenceImages).map(async (img) => {
+          const prepared = await prepareImageForVeo(img);
+          if (!prepared) {
+            throw new Error(`Failed to prepare reference image: ${img.substring(0, 50)}...`);
+          }
+          return {
+            image: {
+              bytesBase64Encoded: prepared.data,
+              mimeType: prepared.mimeType,
+            },
+            // Veo 3.1 only supports "asset" (subject) reference images, NOT "style"
+            referenceType: "asset",
+          };
+        })
+      );
+
+      instance.referenceImages = preparedReferenceImages;
     }
 
+    // Build full request body in Vertex AI format
+    const requestBody = {
+      instances: [instance],
+      parameters: {
+        aspectRatio,
+        durationSeconds: effectiveDuration,
+        sampleCount: 1,
+      },
+    };
+
     console.log(
-      "[generateVideo] Starting Veo 3.1 generation:",
+      "[generateVideo] Starting Veo 3.1 generation via Vertex AI:",
       JSON.stringify(
         {
           mode: generationMode,
-          promptLength: instance.prompt.length,
-          hasStartFrame: !!instance.image,
-          hasEndFrame: !!instance.lastFrame,
+          promptLength: prompt.length,
+          hasImage: !!instance.image,
+          referenceImageCount: instance.referenceImages?.length || 0,
+          durationSeconds: effectiveDuration,
         },
         null,
         2
       )
     );
 
-    // Create a video generation request using Veo 3.1
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predictLongRunning?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          instances: [instance],
-          parameters: {
-            aspectRatio,
-            durationSeconds,
-            // Note: personGeneration "allow_adult" and generateAudio are not supported
-            // on the Gemini API endpoint - these may be available on Vertex AI
-          },
-        }),
-      }
-    );
+    // Call Vertex AI REST API for video generation using v1beta1
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/veo-3.1-generate-preview:predictLongRunning`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
-        "[generateVideo] API Error:",
-        JSON.stringify({ status: response.status, error: errorText }, null, 2)
+        "[generateVideo] Vertex AI API error:",
+        JSON.stringify({ status: response.status, error: errorText.substring(0, 500) }, null, 2)
       );
       return {
         success: false,
-        error: `API Error: ${response.status} - ${errorText}`,
+        error: `Vertex AI API error: ${response.status} - ${errorText.substring(0, 200)}`,
       };
     }
 
     const data = await response.json();
-
-    // The response contains an operation name for polling
     const operationName = data.name;
 
     if (!operationName) {
+      console.error("[generateVideo] No operation name in response:", JSON.stringify(data, null, 2));
       return {
         success: false,
-        error: "No operation name returned",
+        error: "No operation name returned from Vertex AI",
       };
     }
+
+    console.log("[generateVideo] Video generation started:", JSON.stringify({ operationName }, null, 2));
 
     return {
       success: true,
@@ -474,7 +541,8 @@ export async function generateVideo(
 }
 
 /**
- * Check the status of a video generation job
+ * Check the status of a video generation job using Vertex AI REST API
+ * Uses the :fetchPredictOperation POST endpoint for Publisher Models (Veo)
  */
 export async function checkVideoStatus(videoId: string): Promise<VideoGenerationResult> {
   if (!videoId) {
@@ -482,49 +550,69 @@ export async function checkVideoStatus(videoId: string): Promise<VideoGeneration
   }
 
   try {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
 
-    if (!apiKey) {
-      return { success: false, error: "Google API key not configured" };
+    if (!projectId) {
+      return { success: false, error: "GOOGLE_CLOUD_PROJECT_ID not configured" };
     }
 
-    // Poll the operation status
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${videoId}?key=${apiKey}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // Get authenticated client
+    const auth = getAuthClient();
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+
+    if (!accessToken.token) {
+      return { success: false, error: "Failed to obtain access token" };
+    }
+
+    // Use :fetchPredictOperation endpoint (POST with operationName in body)
+    // This is required for Publisher Models (like Veo) which use UUID-based operation IDs
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models/veo-3.1-generate-preview:fetchPredictOperation`;
+
+    console.log("[checkVideoStatus] Polling operation:", JSON.stringify({
+      endpoint,
+      operationName: videoId,
+    }, null, 2));
+
+    const response = await fetch(endpoint, {
+      method: "POST", // Must be POST, not GET
+      headers: {
+        "Authorization": `Bearer ${accessToken.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ operationName: videoId }), // Full operation name in body
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
-        "[checkVideoStatus] API Error:",
-        JSON.stringify({ status: response.status, error: errorText }, null, 2)
+        "[checkVideoStatus] API error:",
+        JSON.stringify({
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText.substring(0, 500),
+        }, null, 2)
       );
       return {
         success: false,
-        error: `API Error: ${response.status}`,
+        videoId,
+        error: `API Error: ${response.status} - ${errorText.substring(0, 200)}`,
       };
     }
 
     const data = await response.json();
 
+    console.log("[checkVideoStatus] Operation response:", JSON.stringify({
+      done: data.done,
+      hasError: !!data.error,
+      hasResponse: !!data.response,
+    }, null, 2));
+
     // Check if operation is done
     if (data.done) {
-      console.log(
-        "[checkVideoStatus] Operation completed, full response:",
-        JSON.stringify(data, null, 2)
-      );
-
       if (data.error) {
-        console.error(
-          "[checkVideoStatus] Operation failed with error:",
-          JSON.stringify(data.error, null, 2)
-        );
+        console.error("[checkVideoStatus] Operation failed:", JSON.stringify(data.error, null, 2));
         return {
           success: false,
           videoId,
@@ -533,90 +621,81 @@ export async function checkVideoStatus(videoId: string): Promise<VideoGeneration
         };
       }
 
-      // Check for RAI (Responsible AI) filtering - video was blocked by safety filters
+      // Check for RAI filtering
       const generateVideoResponse = data.response?.generateVideoResponse;
       if (generateVideoResponse?.raiMediaFilteredCount > 0) {
         const filterReasons = generateVideoResponse.raiMediaFilteredReasons || [];
-        const errorMessage = filterReasons[0] || "Video was blocked by safety filters. Please modify your prompt and try again.";
-        console.error(
-          "[checkVideoStatus] Video blocked by safety filters:",
-          JSON.stringify({ raiMediaFilteredCount: generateVideoResponse.raiMediaFilteredCount, reasons: filterReasons }, null, 2)
-        );
         return {
           success: false,
           videoId,
           status: "failed",
-          error: errorMessage,
+          error: filterReasons[0] || "Video was blocked by safety filters.",
         };
       }
 
-      // Extract video URL and metadata from response
-      // Try multiple possible response formats
-      const generatedSample = data.response?.generatedSamples?.[0];
-      let videoUrl = generatedSample?.video?.uri;
+      // Extract video from response - can be either a URL or base64-encoded bytes
+      // Veo 3.1 returns bytesBase64Encoded by default unless outputStorageUri is configured
+      let videoUrl: string | undefined;
+      let videoBase64: string | undefined;
       
-      // Alternative format: check for video directly in response
-      if (!videoUrl && data.response?.video?.uri) {
-        videoUrl = data.response.video.uri;
-      }
-      
-      // Alternative format: check for videos array
-      if (!videoUrl && data.response?.videos?.[0]?.uri) {
-        videoUrl = data.response.videos[0].uri;
-      }
-      
-      // Alternative format: Gemini API may return in different structure
-      if (!videoUrl && data.result?.video?.uri) {
-        videoUrl = data.result.video.uri;
+      // Try to find video in various response formats
+      const videoSources = [
+        data.response?.predictions?.[0],
+        data.response?.generatedSamples?.[0]?.video,
+        generateVideoResponse?.generatedSamples?.[0]?.video,
+        data.response?.videos?.[0],
+      ];
+
+      for (const source of videoSources) {
+        if (!source) continue;
+        
+        // Check for URL first
+        if (source.uri || source.videoUri) {
+          videoUrl = source.uri || source.videoUri;
+          break;
+        }
+        
+        // Check for base64-encoded video (Veo 3.1 default)
+        if (source.bytesBase64Encoded) {
+          videoBase64 = source.bytesBase64Encoded;
+          break;
+        }
       }
 
-      // Alternative format: check in generateVideoResponse
-      if (!videoUrl && generateVideoResponse?.generatedSamples?.[0]?.video?.uri) {
-        videoUrl = generateVideoResponse.generatedSamples[0].video.uri;
-      }
-
-      console.log(
-        "[checkVideoStatus] Extracted video URL:",
-        JSON.stringify({ 
-          videoUrl: videoUrl?.substring(0, 100),
-          hasGeneratedSamples: !!data.response?.generatedSamples,
-          responseKeys: Object.keys(data.response || {})
-        }, null, 2)
-      );
-
-      if (!videoUrl) {
-        console.error(
-          "[checkVideoStatus] No video URL found in response structure:",
-          JSON.stringify({
-            responseKeys: Object.keys(data.response || {}),
-            generatedSamplesLength: data.response?.generatedSamples?.length,
-            firstSampleKeys: generatedSample ? Object.keys(generatedSample) : [],
-            generateVideoResponseKeys: generateVideoResponse ? Object.keys(generateVideoResponse) : []
-          }, null, 2)
-        );
+      if (!videoUrl && !videoBase64) {
+        console.error("[checkVideoStatus] No video data in response:", JSON.stringify({
+          responseKeys: Object.keys(data.response || {}),
+          fullResponse: data.response,
+        }, null, 2));
         return {
           success: false,
           videoId,
           status: "failed",
-          error: "No video URL in response. The video may have been blocked or failed to generate.",
+          error: "No video data in response",
         };
       }
 
-      // Extract duration if available (Veo 3.1 provides this)
-      // Duration is typically in seconds, convert to ms
-      const durationSeconds = generatedSample?.video?.durationSeconds;
-      const durationMs = durationSeconds ? Math.round(durationSeconds * 1000) : undefined;
+      if (videoUrl) {
+        console.log("[checkVideoStatus] Video ready (URL):", JSON.stringify({ 
+          videoUrl: videoUrl.substring(0, 100) 
+        }, null, 2));
+      } else {
+        console.log("[checkVideoStatus] Video ready (base64):", JSON.stringify({ 
+          base64Length: videoBase64?.length 
+        }, null, 2));
+      }
 
       return {
         success: true,
         videoId,
         videoUrl,
+        videoBase64,
         status: "completed",
-        durationMs,
       };
     }
 
     // Still processing
+    console.log("[checkVideoStatus] Operation still processing");
     return {
       success: true,
       videoId,

@@ -113,12 +113,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create video record
-    const videoId = `vid-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    // Create video record with predictable IDs
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 9);
+    const videoId = `vid-${timestamp}-${randomSuffix}`;
+    
+    // Generate predictable thumbnail ID upfront - this is what frontend will poll for
+    const thumbnailId = `thumb-${timestamp}-${randomSuffix}`;
+    const thumbnailPath = `generated/thumbnails/${projectId}/${sceneId}/${thumbnailId}.jpg`;
+    
+    // Build the full thumbnail URL that frontend will check
+    const s3Bucket = process.env.AWS_S3_BUCKET || "aifilmcamp";
+    const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN;
+    const thumbnailUrl = cloudfrontDomain 
+      ? `https://${cloudfrontDomain}/${thumbnailPath}`
+      : `https://${s3Bucket}.s3.amazonaws.com/${thumbnailPath}`;
 
     console.log(
       "[generate-video] Video generation started:",
-      JSON.stringify({ videoId, operationId: result.videoId, generationMode }, null, 2)
+      JSON.stringify({ 
+        videoId, 
+        operationId: result.videoId, 
+        generationMode,
+        thumbnailId,
+        thumbnailUrl,
+      }, null, 2)
     );
 
     return NextResponse.json({
@@ -132,6 +151,10 @@ export async function POST(request: Request) {
         generationMode,
         createdAt: new Date().toISOString(),
       },
+      // Predictable thumbnail URL for frontend to poll
+      thumbnailId,
+      thumbnailUrl,
+      thumbnailPath,
       // Include shotId if provided for client-side tracking
       shotId,
     });
