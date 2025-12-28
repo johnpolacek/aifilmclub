@@ -197,6 +197,7 @@ export function ShotEditorModal({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isVideoDragOver, setIsVideoDragOver] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -244,9 +245,8 @@ export function ShotEditorModal({
     }
   };
 
-  // Handle video upload - uses presigned URLs for large files
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Handle video file upload - uses presigned URLs for large files
+  const processVideoUpload = async (file: File) => {
     if (!file) return;
 
     setIsUploading(true);
@@ -339,9 +339,38 @@ export function ShotEditorModal({
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  // Handle video upload from file input
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processVideoUpload(file);
       if (e.target) {
         e.target.value = "";
       }
+    }
+  };
+
+  // Handle video drag and drop
+  const handleVideoDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsVideoDragOver(true);
+  }, []);
+
+  const handleVideoDragLeave = useCallback(() => {
+    setIsVideoDragOver(false);
+  }, []);
+
+  const handleVideoDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsVideoDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file?.type.startsWith("video/")) {
+      await processVideoUpload(file);
+    } else {
+      toast.error("Please drop a video file");
     }
   };
 
@@ -613,8 +642,15 @@ export function ShotEditorModal({
                 <button
                   type="button"
                   onClick={() => videoInputRef.current?.click()}
+                  onDragOver={handleVideoDragOver}
+                  onDragLeave={handleVideoDragLeave}
+                  onDrop={handleVideoDrop}
                   disabled={isUploading}
-                  className="w-full aspect-video rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors relative overflow-hidden"
+                  className={`
+                    w-full aspect-video rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors relative overflow-hidden cursor-pointer
+                    ${isVideoDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"}
+                    ${isUploading ? "opacity-50 cursor-not-allowed" : ""}
+                  `}
                 >
                   {isUploading ? (
                     <>
@@ -633,7 +669,7 @@ export function ShotEditorModal({
                   ) : (
                     <>
                       <Video className="h-8 w-8 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Click to upload video</span>
+                      <span className="text-sm text-muted-foreground">Drop video or click to upload</span>
                       <span className="text-xs text-muted-foreground">Supports files up to 500MB</span>
                     </>
                   )}
