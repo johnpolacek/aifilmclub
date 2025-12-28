@@ -38,7 +38,7 @@ export function Header() {
 
           <div className="flex items-center gap-3">
             <SignedIn>
-              <div suppressHydrationWarning>
+              <div className="flex items-center gap-3" suppressHydrationWarning>
                 <Link
                   href="/dashboard"
                   className="hidden sm:inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-sm font-medium transition-all h-8 px-3 hover:bg-primary/20 hover:text-white"
