@@ -389,7 +389,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
                 }
               }
             }}
-            muted={isMuted}
+            muted={isMuted || currentShot.audioMuted}
             playsInline
           >
             <track kind="captions" />

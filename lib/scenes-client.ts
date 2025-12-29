@@ -103,6 +103,9 @@ export interface Shot {
   // Timeline position (calculated from order + durations)
   startTimeMs?: number;
 
+  // Audio settings
+  audioMuted?: boolean; // When true, video plays silently (e.g., after detaching audio)
+
   createdAt: string;
   updatedAt: string;
 }

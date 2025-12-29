@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { AudioWaveform } from "@/components/audio-waveform";
-import { Button } from "@/components/ui/button";
 import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, Shot } from "@/lib/scenes-client";
 
@@ -186,12 +185,7 @@ function AudioTrackRow({
         left: `${left}px`,
         width: `${width}px`,
       }}
-      onClick={(e) => {
-        // Only trigger onClick if not dragging
-        if (!isDragging) {
-          onClick();
-        }
-      }}
+      onClick={onClick}
     >
       {/* Waveform visualization */}
       <div className="absolute inset-0">
@@ -226,6 +220,7 @@ export default function Timeline({
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const [draggedAudioTrackId, setDraggedAudioTrackId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const audioTrackDraggedRef = useRef(false); // Track if drag actually occurred
 
   // Calculate shot positions sequentially based on order and effective durations
   const shotPositions = useMemo(() => {
@@ -296,9 +291,15 @@ export default function Timeline({
     
     const trackRect = e.currentTarget.getBoundingClientRect();
     const offsetX = e.clientX - trackRect.left;
+    const startX = e.clientX;
     setDraggedAudioTrackId(trackId);
+    audioTrackDraggedRef.current = false; // Reset drag flag
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      // Only consider it a drag if moved more than 3 pixels
+      if (Math.abs(moveEvent.clientX - startX) > 3) {
+        audioTrackDraggedRef.current = true;
+      }
       if (!timelineRef.current) return;
       const timelineRect = timelineRef.current.getBoundingClientRect();
       const newX = moveEvent.clientX - timelineRect.left - offsetX;
@@ -340,10 +341,10 @@ export default function Timeline({
   }, [totalDurationMs]);
 
   return (
-    <div className="bg-card/50 backdrop-blur">
+    <div className="bg-card/50 backdrop-blur w-full">
       {/* Timeline Ruler */}
-      <div className="border-b border-border px-2 py-1">
-        <div className="relative" style={{ width: `${timelineWidth}px`, height: '24px' }}>
+      <div className="border-b border-border px-2 py-1 overflow-x-auto">
+        <div className="relative" style={{ minWidth: `${timelineWidth}px`, height: '24px' }}>
           {timeMarkers.map((seconds) => {
             const left = (seconds * pixelsPerSecond);
             return (
@@ -384,17 +385,6 @@ export default function Timeline({
               left={left}
             />
           ))}
-          {/* Add Shot button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onAddShot}
-            className="absolute h-16 px-4 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
-            style={{ left: `${timelineWidth}px`, top: '0' }}
-          >
-            <Plus className="h-4 w-4" />
-            <span className="text-xs font-medium">Add Shot</span>
-          </Button>
         </div>
       </div>
 
@@ -412,7 +402,13 @@ export default function Timeline({
                 track={track}
                 isSelected={selectedAudioTrackId === track.id}
                 isDragging={draggedAudioTrackId === track.id}
-                onClick={() => onAudioTrackClick(track)}
+                onClick={() => {
+                  // Only open modal if this wasn't a drag
+                  if (!audioTrackDraggedRef.current) {
+                    onAudioTrackClick(track);
+                  }
+                  audioTrackDraggedRef.current = false; // Reset for next interaction
+                }}
                 onDragStart={() => handleAudioTrackDragStart(track.id)}
                 onDragOver={handleAudioTrackDragOver}
                 onDragEnd={handleAudioTrackDragEnd}
@@ -424,16 +420,25 @@ export default function Timeline({
           );
         })}
 
-        {/* Add audio track button */}
-        <button
-          type="button"
-          onClick={onAddAudioTrack}
-          className="h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
-          style={{ minWidth: `${timelineWidth}px` }}
-        >
-          <Plus className="h-4 w-4" />
-          Add Audio Track
-        </button>
+        {/* Add buttons */}
+        <div className="flex items-center justify-center gap-4 w-full border-t border-border mt-6 pt-4">
+          <button
+            type="button"
+            onClick={onAddShot}
+            className="h-8 bg-primary text-primary-foreground rounded inline-flex items-center justify-center gap-2 px-4 text-xs font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Shot
+          </button>
+          <button
+            type="button"
+            onClick={onAddAudioTrack}
+            className="h-8 border-2 border-dashed border-muted-foreground/30 rounded inline-flex items-center justify-center gap-2 px-4 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Audio Track
+          </button>
+        </div>
       </div>
     </div>
   );

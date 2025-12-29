@@ -14,6 +14,7 @@ import {
   Upload,
   User,
   Video,
+  VolumeX,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -707,6 +708,14 @@ export function ShotEditorDialog({
         );
         // Add the source shot reference
         audioTrack.sourceVideoShotId = shot.id;
+
+        // Mute the shot's video since audio is now detached
+        const updatedShot: Shot = {
+          ...shot,
+          audioMuted: true,
+          updatedAt: new Date().toISOString(),
+        };
+        onSave(updatedShot);
 
         onDetachAudio(audioTrack);
         toast.success("Audio detached successfully");
@@ -1944,7 +1953,25 @@ export function ShotEditorDialog({
                   <Scissors className="h-3.5 w-3.5 mr-1.5" />
                   Trim Video
                 </Button>
-                {onDetachAudio && (
+                {shot.audioMuted ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const updatedShot: Shot = {
+                        ...shot,
+                        audioMuted: false,
+                        updatedAt: new Date().toISOString(),
+                      };
+                      onSave(updatedShot);
+                      toast.success("Video audio restored");
+                    }}
+                  >
+                    <VolumeX className="h-3.5 w-3.5 mr-1.5" />
+                    Unmute Video
+                  </Button>
+                ) : onDetachAudio && (
                   <Button
                     type="button"
                     variant="outline"
