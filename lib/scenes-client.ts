@@ -129,6 +129,10 @@ export interface AudioTrack {
   sourceUrl: string; // URL to audio file
   sourceVideoShotId?: string; // If extracted, which shot it came from
 
+  // Original audio (preserved when trimming creates a new file)
+  originalSourceUrl?: string; // Original audio URL before trimming
+  originalDurationMs?: number; // Original audio duration before trimming
+
   // Timeline positioning
   startTimeMs: number; // Where audio starts on timeline
   durationMs: number; // Audio duration
