@@ -5,6 +5,9 @@ import {
   Image as ImageIcon,
   Loader2,
   MapPin,
+  Pause,
+  Play,
+  Scissors,
   Sparkles,
   Trash2,
   Upload,
@@ -33,8 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
+import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { GenerationMode, ReferenceImage, ReferenceImageType, Shot } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
 import type { Character, Location } from "@/components/project-form";
@@ -43,7 +48,7 @@ import type { Character, Location } from "@/components/project-form";
 // TYPES
 // ============================================================================
 
-interface ShotEditorModalProps {
+interface ShotEditorDialogProps {
   shot: Shot | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -180,7 +185,7 @@ function ImageDropZone({
   );
 }
 
-export function ShotEditorModal({
+export function ShotEditorDialog({
   shot,
   open,
   onOpenChange,
@@ -195,7 +200,7 @@ export function ShotEditorModal({
   username = "",
   sceneCharacters = [],
   sceneLocationId,
-}: ShotEditorModalProps) {
+}: ShotEditorDialogProps) {
   // Local state for editing
   const [prompt, setPrompt] = useState(shot?.prompt || "");
   const [sourceType, setSourceType] = useState<"uploaded" | "generated">(
@@ -230,6 +235,14 @@ export function ShotEditorModal({
   // Replace mode state
   const [isReplaceMode, setIsReplaceMode] = useState(false);
 
+  // Video trimming state
+  const [isTrimMode, setIsTrimMode] = useState(false);
+  const [trimStartMs, setTrimStartMs] = useState<number>(shot?.trimStartMs || 0);
+  const [trimEndMs, setTrimEndMs] = useState<number>(shot?.trimEndMs || 0);
+  const [isTrimmerPlaying, setIsTrimmerPlaying] = useState(false);
+  const [trimmerCurrentTime, setTrimmerCurrentTime] = useState(0);
+  const trimmerVideoRef = useRef<HTMLVideoElement>(null);
+
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal opens or shot changes
@@ -257,6 +270,12 @@ export function ShotEditorModal({
       setIsGeneratingEndFrame(false);
       // Reset replace mode when modal opens
       setIsReplaceMode(false);
+      // Reset trim state
+      setIsTrimMode(false);
+      setTrimStartMs(shot.trimStartMs || 0);
+      setTrimEndMs(shot.trimEndMs || 0);
+      setIsTrimmerPlaying(false);
+      setTrimmerCurrentTime(0);
     }
   }, [open, shot]);
 
@@ -294,7 +313,7 @@ export function ShotEditorModal({
         toast.error(result.error || "Failed to upload image");
       }
     } catch (error) {
-      console.error("[ShotEditorModal] Upload error:", JSON.stringify({ error }, null, 2));
+      console.error("[ShotEditorDialog] Upload error:", JSON.stringify({ error }, null, 2));
       toast.error("Failed to upload image");
     } finally {
       setIsUploading(false);
@@ -361,7 +380,7 @@ export function ShotEditorModal({
       }
     } catch (error) {
       console.error(
-        "[ShotEditorModal] Generate frame error:",
+        "[ShotEditorDialog] Generate frame error:",
         JSON.stringify({ error, frameType }, null, 2)
       );
       toast.error("Failed to generate image");
@@ -421,7 +440,7 @@ export function ShotEditorModal({
 
         if (result.success && shot && result.url) {
           console.log(
-            "[ShotEditorModal] Video uploaded successfully:",
+            "[ShotEditorDialog] Video uploaded successfully:",
             JSON.stringify({ 
               shotId: shot.id, 
               videoUrl: result.url,
@@ -434,7 +453,7 @@ export function ShotEditorModal({
           // If replacing, save old video to media library (without removing the shot)
           if (isReplaceMode && shot.video?.url && shot.video?.status === "completed" && onSaveVideoToMediaLibrary) {
             console.log(
-              "[ShotEditorModal] Saving old video to media library before upload replacement:",
+              "[ShotEditorDialog] Saving old video to media library before upload replacement:",
               JSON.stringify({ shotId: shot.id, oldVideoUrl: shot.video.url }, null, 2)
             );
             onSaveVideoToMediaLibrary(shot);
@@ -444,7 +463,7 @@ export function ShotEditorModal({
           let thumbnailUrl: string | undefined;
           let durationMs = 5000; // Default duration
           try {
-            console.log("[ShotEditorModal] Generating thumbnail client-side");
+            console.log("[ShotEditorDialog] Generating thumbnail client-side");
             const thumbnailResult = await generateThumbnailFromFile(file);
             
             if (thumbnailResult.success && thumbnailResult.thumbnailBlob) {
@@ -466,19 +485,19 @@ export function ShotEditorModal({
               if (thumbnailUploadResult.success && thumbnailUploadResult.url) {
                 thumbnailUrl = thumbnailUploadResult.url;
                 console.log(
-                  "[ShotEditorModal] Thumbnail uploaded:",
+                  "[ShotEditorDialog] Thumbnail uploaded:",
                   JSON.stringify({ thumbnailUrl, durationMs }, null, 2)
                 );
               }
             } else {
               console.log(
-                "[ShotEditorModal] Thumbnail generation failed:",
+                "[ShotEditorDialog] Thumbnail generation failed:",
                 JSON.stringify({ error: thumbnailResult.error }, null, 2)
               );
             }
           } catch (thumbnailError) {
             console.error(
-              "[ShotEditorModal] Error generating thumbnail:",
+              "[ShotEditorDialog] Error generating thumbnail:",
               JSON.stringify({ error: thumbnailError }, null, 2)
             );
             // Continue without thumbnail - video will still work
@@ -511,7 +530,7 @@ export function ShotEditorModal({
           toast.error(result.error || "Failed to upload video");
         }
       } catch (error) {
-        console.error("[ShotEditorModal] Video upload error:", JSON.stringify({ error }, null, 2));
+        console.error("[ShotEditorDialog] Video upload error:", JSON.stringify({ error }, null, 2));
         toast.error("Failed to upload video");
       } finally {
         setIsUploading(false);
@@ -607,7 +626,7 @@ export function ShotEditorModal({
     // If replacing, save old video to media library (without removing the shot)
     if (isReplaceMode && shot.video?.url && shot.video?.status === "completed" && onSaveVideoToMediaLibrary) {
       console.log(
-        "[ShotEditorModal] Saving old video to media library before replacing:",
+        "[ShotEditorDialog] Saving old video to media library before replacing:",
         JSON.stringify({ shotId: shot.id, oldVideoUrl: shot.video.url }, null, 2)
       );
       onSaveVideoToMediaLibrary(shot);
@@ -653,19 +672,27 @@ export function ShotEditorModal({
   const isNew = !shot.video?.url;
   const hasCompletedVideo = shot.video?.url && shot.video?.status === "completed";
 
-  // Determine if we need a wider dialog
-  const needsWiderDialog = generationMode === "start-frame" || generationMode === "start-end-frame";
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`max-h-[90vh] overflow-y-auto ${needsWiderDialog ? "max-w-4xl" : "max-w-2xl"}`}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Film className="h-5 w-5 text-primary" />
-            {isReplaceMode ? "Replace Shot" : isNew ? "Add Shot" : "Edit Shot"}
+            {isTrimMode ? (
+              <>
+                <Scissors className="h-5 w-5 text-primary" />
+                Trim Video
+              </>
+            ) : (
+              <>
+                <Film className="h-5 w-5 text-primary" />
+                {isReplaceMode ? "Replace Shot" : isNew ? "Add Shot" : "Edit Shot"}
+              </>
+            )}
           </DialogTitle>
           <DialogDescription>
-            {isReplaceMode
+            {isTrimMode
+              ? "Drag the handles to set in and out points. Click play to preview the trimmed segment."
+              : isReplaceMode
               ? "Upload a new video or generate one to replace this shot. The current shot will be moved to the media library."
               : hasCompletedVideo 
               ? "View and manage this shot."
@@ -676,95 +703,271 @@ export function ShotEditorModal({
         {/* Simplified view for completed shots (unless in replace mode) */}
         {hasCompletedVideo && shot.video && !isReplaceMode ? (
           <div className="space-y-6 py-4">
-            <div className="space-y-2">
-              <Label>Video</Label>
-              <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
-                <video
-                  src={shot.video.url}
-                  controls
-                  className="w-full h-full object-cover"
-                  poster={shot.video.thumbnailUrl}
-                />
-              </div>
-            </div>
-
-            {shot.prompt && (
-              <div className="space-y-2">
-                <Label>Prompt</Label>
-                <p className="text-sm text-muted-foreground">{shot.prompt}</p>
-              </div>
-            )}
-
-            {/* Reference Images */}
-            {(shot.typedReferenceImages && shot.typedReferenceImages.length > 0) ||
-            (shot.referenceImages && shot.referenceImages.length > 0) ||
-            shot.startFrameImage ||
-            shot.endFrameImage ? (
-              <div className="space-y-2">
-                <Label>Reference Images</Label>
-                <div className="grid grid-cols-3 gap-1">
-                  {/* Typed reference images */}
-                  {shot.typedReferenceImages?.map((ref, idx) => (
-                    <div
-                      key={`ref-${idx}`}
-                      className="relative aspect-video rounded-lg overflow-hidden border border-border group h-20"
-                    >
-                      <Image src={ref.url} alt={ref.name || `Reference ${idx + 1}`} fill className="object-cover" />
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
-                        <div className="flex items-center gap-1 text-[9px] text-white">
-                          {ref.type === "location" ? (
-                            <MapPin className="h-2 w-2" />
-                          ) : (
-                            <User className="h-2 w-2" />
-                          )}
-                          <span className="truncate">{ref.name || ref.type}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            {isTrimMode ? (
+              /* ============ TRIM MODE ============ */
+              <div className="space-y-4">
+                {/* Large Video Player for Trimming */}
+                <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-black">
+                  <video
+                    ref={trimmerVideoRef}
+                    src={shot.video.url}
+                    className="w-full h-full object-contain"
+                    poster={shot.video.thumbnailUrl}
+                    onTimeUpdate={(e) => {
+                      const video = e.currentTarget;
+                      setTrimmerCurrentTime(video.currentTime * 1000);
+                      // Stop at trim end point
+                      const fullDuration = shot.video?.durationMs || 5000;
+                      const trimEndPoint = fullDuration - trimEndMs;
+                      if (video.currentTime * 1000 >= trimEndPoint) {
+                        video.pause();
+                        setIsTrimmerPlaying(false);
+                      }
+                    }}
+                    onPlay={() => setIsTrimmerPlaying(true)}
+                    onPause={() => setIsTrimmerPlaying(false)}
+                    onEnded={() => setIsTrimmerPlaying(false)}
+                  />
                   
-                  {/* Legacy reference images (URLs only) */}
-                  {shot.referenceImages
-                    ?.filter((url) => !shot.typedReferenceImages?.some((ref) => ref.url === url))
-                    .map((url, idx) => (
-                      <div
-                        key={`legacy-ref-${idx}`}
-                        className="relative aspect-video rounded-lg overflow-hidden border border-border h-20"
-                      >
-                        <Image src={url} alt={`Reference ${idx + 1}`} fill className="object-cover" />
-                      </div>
-                    ))}
-
-                  {/* Start frame */}
-                  {shot.startFrameImage && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
-                      <Image src={shot.startFrameImage} alt="Start frame" fill className="object-cover" />
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
-                        <span className="text-[9px] text-white">Start Frame</span>
-                      </div>
+                  {/* Play/Pause Overlay */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const video = trimmerVideoRef.current;
+                      if (!video) return;
+                      
+                      if (isTrimmerPlaying) {
+                        video.pause();
+                      } else {
+                        // Start from trim start if before it or at end
+                        const fullDuration = shot.video?.durationMs || 5000;
+                        const trimEndPoint = fullDuration - trimEndMs;
+                        if (video.currentTime * 1000 < trimStartMs || video.currentTime * 1000 >= trimEndPoint) {
+                          video.currentTime = trimStartMs / 1000;
+                        }
+                        video.play();
+                      }
+                    }}
+                    className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity"
+                  >
+                    <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center">
+                      {isTrimmerPlaying ? (
+                        <Pause className="h-7 w-7 text-black" />
+                      ) : (
+                        <Play className="h-7 w-7 text-black ml-1" />
+                      )}
                     </div>
-                  )}
+                  </button>
+                </div>
 
-                  {/* End frame */}
-                  {shot.endFrameImage && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
-                      <Image src={shot.endFrameImage} alt="End frame" fill className="object-cover" />
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
-                        <span className="text-[9px] text-white">End Frame</span>
-                      </div>
+                {/* Trim Timeline Bar */}
+                <div className="space-y-3 px-1">
+                  {/* Custom trim bar with draggable handles */}
+                  <div className="relative h-10 bg-muted border border-border rounded overflow-visible">
+                    {/* Active region highlight (between handles) */}
+                    <div 
+                      className="absolute inset-y-0 bg-primary/15"
+                      style={{ 
+                        left: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%`,
+                        right: `${(trimEndMs / (shot.video.durationMs || 5000)) * 100}%`
+                      }}
+                    />
+                    {/* Trimmed out regions (dark overlay) */}
+                    <div 
+                      className="absolute inset-y-0 left-0 bg-black/50 rounded-l"
+                      style={{ width: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%` }}
+                    />
+                    <div 
+                      className="absolute inset-y-0 right-0 bg-black/50 rounded-r"
+                      style={{ width: `${(trimEndMs / (shot.video.durationMs || 5000)) * 100}%` }}
+                    />
+
+                    {/* Left trim handle (In point) - vertical line */}
+                    <div
+                      className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
+                      style={{ left: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%`, transform: 'translateX(-50%)' }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startValue = trimStartMs;
+                        const fullDuration = shot.video?.durationMs || 5000;
+                        const containerWidth = e.currentTarget.parentElement?.offsetWidth || 1;
+                        
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          const deltaX = moveEvent.clientX - startX;
+                          const deltaMs = (deltaX / containerWidth) * fullDuration;
+                          const newValue = Math.max(0, Math.min(fullDuration - trimEndMs - 100, startValue + deltaMs));
+                          setTrimStartMs(newValue);
+                          if (trimmerVideoRef.current) {
+                            trimmerVideoRef.current.currentTime = newValue / 1000;
+                            setTrimmerCurrentTime(newValue);
+                          }
+                        };
+                        
+                        const handleMouseUp = () => {
+                          document.removeEventListener("mousemove", handleMouseMove);
+                          document.removeEventListener("mouseup", handleMouseUp);
+                        };
+                        
+                        document.addEventListener("mousemove", handleMouseMove);
+                        document.addEventListener("mouseup", handleMouseUp);
+                      }}
+                    />
+
+                    {/* Right trim handle (Out point) - vertical line */}
+                    <div
+                      className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
+                      style={{ left: `${((shot.video.durationMs || 5000) - trimEndMs) / (shot.video.durationMs || 5000) * 100}%`, transform: 'translateX(-50%)' }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startValue = trimEndMs;
+                        const fullDuration = shot.video?.durationMs || 5000;
+                        const containerWidth = e.currentTarget.parentElement?.offsetWidth || 1;
+                        
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          const deltaX = moveEvent.clientX - startX;
+                          const deltaMs = (deltaX / containerWidth) * fullDuration;
+                          const newValue = Math.max(0, Math.min(fullDuration - trimStartMs - 100, startValue - deltaMs));
+                          setTrimEndMs(newValue);
+                          if (trimmerVideoRef.current) {
+                            const outPoint = (fullDuration - newValue) / 1000;
+                            trimmerVideoRef.current.currentTime = outPoint;
+                            setTrimmerCurrentTime(fullDuration - newValue);
+                          }
+                        };
+                        
+                        const handleMouseUp = () => {
+                          document.removeEventListener("mousemove", handleMouseMove);
+                          document.removeEventListener("mouseup", handleMouseUp);
+                        };
+                        
+                        document.addEventListener("mousemove", handleMouseMove);
+                        document.addEventListener("mouseup", handleMouseUp);
+                      }}
+                    />
+                  </div>
+
+                  {/* Time labels */}
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="text-muted-foreground">
+                      <span className="text-xs">In:</span>{" "}
+                      <span className="font-mono">{(trimStartMs / 1000).toFixed(2)}s</span>
                     </div>
-                  )}
+                    <div className="text-center">
+                      <span className="text-xs text-muted-foreground">Duration:</span>{" "}
+                      <span className="font-mono font-medium text-foreground">
+                        {(getEffectiveDuration({ ...shot, trimStartMs, trimEndMs }) / 1000).toFixed(2)}s
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      <span className="text-xs">Out:</span>{" "}
+                      <span className="font-mono">{(((shot.video.durationMs || 5000) - trimEndMs) / 1000).toFixed(2)}s</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              /* ============ NORMAL VIEW ============ */
+              <>
+                {/* Video Preview */}
+                <div className="space-y-2">
+                  <Label>Video</Label>
+                  <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                    <video
+                      src={shot.video.url}
+                      controls
+                      className="w-full h-full object-cover"
+                      poster={shot.video.thumbnailUrl}
+                    />
+                  </div>
+                  {/* Duration info */}
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>
+                      {shot.trimStartMs || shot.trimEndMs ? (
+                        <>
+                          Trimmed: {(getEffectiveDuration(shot) / 1000).toFixed(2)}s
+                          <span className="text-xs ml-1">
+                            (of {((shot.video.durationMs || 5000) / 1000).toFixed(1)}s)
+                          </span>
+                        </>
+                      ) : (
+                        <>Duration: {((shot.video.durationMs || 5000) / 1000).toFixed(1)}s</>
+                      )}
+                    </span>
+                  </div>
+                </div>
 
-            {shot.video.durationMs && (
-              <div className="space-y-2">
-                <Label>Duration</Label>
-                <p className="text-sm text-muted-foreground">
-                  {(shot.video.durationMs / 1000).toFixed(1)} seconds
-                </p>
-              </div>
+                {shot.prompt && (
+                  <div className="space-y-2">
+                    <Label>Prompt</Label>
+                    <p className="text-sm text-muted-foreground">{shot.prompt}</p>
+                  </div>
+                )}
+
+                {/* Reference Images */}
+                {(shot.typedReferenceImages && shot.typedReferenceImages.length > 0) ||
+                (shot.referenceImages && shot.referenceImages.length > 0) ||
+                shot.startFrameImage ||
+                shot.endFrameImage ? (
+                  <div className="space-y-2">
+                    <Label>Reference Images</Label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {/* Typed reference images */}
+                      {shot.typedReferenceImages?.map((ref, idx) => (
+                        <div
+                          key={`ref-${idx}`}
+                          className="relative aspect-video rounded-lg overflow-hidden border border-border group h-20"
+                        >
+                          <Image src={ref.url} alt={ref.name || `Reference ${idx + 1}`} fill className="object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                            <div className="flex items-center gap-1 text-[9px] text-white">
+                              {ref.type === "location" ? (
+                                <MapPin className="h-2 w-2" />
+                              ) : (
+                                <User className="h-2 w-2" />
+                              )}
+                              <span className="truncate">{ref.name || ref.type}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Legacy reference images (URLs only) */}
+                      {shot.referenceImages
+                        ?.filter((url) => !shot.typedReferenceImages?.some((ref) => ref.url === url))
+                        .map((url, idx) => (
+                          <div
+                            key={`legacy-ref-${idx}`}
+                            className="relative aspect-video rounded-lg overflow-hidden border border-border h-20"
+                          >
+                            <Image src={url} alt={`Reference ${idx + 1}`} fill className="object-cover" />
+                          </div>
+                        ))}
+
+                      {/* Start frame */}
+                      {shot.startFrameImage && (
+                        <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
+                          <Image src={shot.startFrameImage} alt="Start frame" fill className="object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                            <span className="text-[9px] text-white">Start Frame</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* End frame */}
+                      {shot.endFrameImage && (
+                        <div className="relative aspect-video rounded-lg overflow-hidden border border-border h-20">
+                          <Image src={shot.endFrameImage} alt="End frame" fill className="object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                            <span className="text-[9px] text-white">End Frame</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         ) : (
@@ -1343,7 +1546,7 @@ export function ShotEditorModal({
                                         fill
                                         className="object-cover"
                                       />
-                                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1">
+                                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 to-transparent p-1">
                                         <span className="text-[10px] text-white truncate block">
                                           {character.name}
                                         </span>
@@ -1481,33 +1684,100 @@ export function ShotEditorModal({
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {hasCompletedVideo && !isReplaceMode ? (
-            <>
-              {onDelete && (
+            isTrimMode ? (
+              /* ============ TRIM MODE FOOTER ============ */
+              <>
+                {(trimStartMs > 0 || trimEndMs > 0) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setTrimStartMs(0);
+                      setTrimEndMs(0);
+                      if (trimmerVideoRef.current) {
+                        trimmerVideoRef.current.currentTime = 0;
+                        setTrimmerCurrentTime(0);
+                      }
+                    }}
+                  >
+                    Reset
+                  </Button>
+                )}
+                <div className="flex-1" />
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => {
+                    // Cancel - reset trim values and exit trim mode
+                    setTrimStartMs(shot?.trimStartMs || 0);
+                    setTrimEndMs(shot?.trimEndMs || 0);
+                    setIsTrimMode(false);
+                    setIsTrimmerPlaying(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button"
+                  onClick={() => {
+                    if (!shot) return;
+                    const updatedShot: Shot = {
+                      ...shot,
+                      trimStartMs: trimStartMs > 0 ? trimStartMs : undefined,
+                      trimEndMs: trimEndMs > 0 ? trimEndMs : undefined,
+                      updatedAt: new Date().toISOString(),
+                    };
+                    onSave(updatedShot);
+                    setIsTrimMode(false);
+                  }}
+                >
+                  Apply Trim
+                </Button>
+              </>
+            ) : (
+              /* ============ NORMAL VIEW FOOTER ============ */
+              <>
+                {onDelete && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    className="text-sm text-destructive hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1.5" />
+                    Remove Shot
+                  </Button>
+                )}
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={handleDelete}
-                  className="text-sm text-destructive hover:text-destructive"
+                  onClick={() => setIsReplaceMode(true)}
                 >
-                  <X className="h-3.5 w-3.5 mr-1.5" />
-                  Remove Shot
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  Replace Shot
                 </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsReplaceMode(true)}
-              >
-                <Upload className="h-3.5 w-3.5 mr-1.5" />
-                Replace Shot
-              </Button>
-              <div className="flex-1" />
-              <Button type="button" onClick={() => onOpenChange(false)}>
-                Close
-              </Button>
-            </>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsTrimMode(true);
+                    // Initialize trimmer at current position
+                    setTrimmerCurrentTime(trimStartMs);
+                  }}
+                >
+                  <Scissors className="h-3.5 w-3.5 mr-1.5" />
+                  Trim Video
+                </Button>
+                <div className="flex-1" />
+                <Button type="button" onClick={() => onOpenChange(false)}>
+                  Close
+                </Button>
+              </>
+            )
           ) : (
             <>
               {onDelete && (
@@ -1567,4 +1837,4 @@ export function ShotEditorModal({
   );
 }
 
-export default ShotEditorModal;
+export default ShotEditorDialog;

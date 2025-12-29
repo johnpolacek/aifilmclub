@@ -25,7 +25,7 @@ import { AudioTrackModal } from "@/components/audio-track-modal";
 import type { Character, Location } from "@/components/project-form";
 import { ScenePlayer } from "@/components/scene-player";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
-import { ShotEditorModal } from "@/components/shot-editor-modal";
+import { ShotEditorDialog } from "@/components/shot-editor-modal";
 import Timeline from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2395,8 +2395,8 @@ export function EditSceneView({
       </div>
 
 
-      {/* Shot Editor Modal */}
-      <ShotEditorModal
+      {/* Shot Editor Dialog */}
+      <ShotEditorDialog
         shot={selectedShot}
         open={showShotEditor}
         onOpenChange={setShowShotEditor}

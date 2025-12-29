@@ -15,6 +15,7 @@ import {
 import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, Shot } from "@/lib/scenes-client";
 
 // ============================================================================
@@ -64,9 +65,9 @@ function ShotCard({
   onDragEnd,
   pixelsPerSecond,
 }: ShotCardProps) {
-  // Calculate width based on duration (default 5 seconds if not set)
-  const durationMs = shot.video?.durationMs || 5000;
-  const width = Math.max(80, (durationMs / 1000) * pixelsPerSecond);
+  // Calculate width based on effective duration (after trimming)
+  const effectiveDurationMs = getEffectiveDuration(shot);
+  const width = Math.max(80, (effectiveDurationMs / 1000) * pixelsPerSecond);
 
   // Get thumbnail URL - prioritize video thumbnail, then start frame image, then video URL
   const thumbnailUrl = shot.video?.thumbnailUrl && shot.video.thumbnailUrl.trim() 
@@ -257,10 +258,9 @@ export default function Timeline({
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Calculate total timeline duration
+  // Calculate total timeline duration using effective (trimmed) durations
   const totalDurationMs = shots.reduce((total, shot) => {
-    const videoDuration = shot.video?.durationMs || 5000;
-    return total + videoDuration;
+    return total + getEffectiveDuration(shot);
   }, 0);
 
   // Handle shot reordering

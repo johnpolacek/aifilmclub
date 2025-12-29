@@ -4,6 +4,7 @@ import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-rea
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, Shot } from "@/lib/scenes-client";
 import { cn } from "@/lib/utils";
 
@@ -35,19 +36,26 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     return filtered;
   }, [shots]);
 
-  // Calculate timeline positions for shots (using actual durations if available)
+  // Calculate timeline positions for shots (using effective durations after trimming)
   const shotTimeline = useMemo(() => {
     let currentTimeMs = 0;
     return playableShots.map((shot) => {
       const startTime = currentTimeMs;
-      // Use actual measured duration if available, otherwise stored duration or default
-      const duration = actualDurations.get(shot.id) || shot.video?.durationMs || 5000;
-      currentTimeMs += duration;
+      // Get base duration (from actual measurement or stored value)
+      const baseDuration = actualDurations.get(shot.id) || shot.video?.durationMs || 5000;
+      // Apply trim to get effective duration
+      const trimStartMs = shot.trimStartMs || 0;
+      const trimEndMs = shot.trimEndMs || 0;
+      const effectiveDuration = Math.max(0, baseDuration - trimStartMs - trimEndMs);
+      currentTimeMs += effectiveDuration;
       return {
         shot,
         startTimeMs: startTime,
         endTimeMs: currentTimeMs,
-        durationMs: duration,
+        durationMs: effectiveDuration,
+        trimStartMs, // Store for playback offset
+        trimEndMs, // Store for end detection
+        baseDuration, // Original video duration
       };
     });
   }, [playableShots, actualDurations]);
@@ -65,12 +73,14 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
   const hasNext = currentShotIndex < playableShots.length - 1;
   const hasPrev = currentShotIndex > 0;
 
-  // Calculate global time from current shot and video time
+  // Calculate global time from current shot and video time (accounting for trim)
   const globalTimeMs = useMemo(() => {
     if (shotTimeline.length === 0) return 0;
     const shotInfo = shotTimeline[currentShotIndex];
     if (!shotInfo) return 0;
-    return shotInfo.startTimeMs + currentTime * 1000;
+    // currentTime is in video time, subtract trim start to get effective position
+    const effectiveVideoTime = Math.max(0, (currentTime * 1000) - shotInfo.trimStartMs);
+    return shotInfo.startTimeMs + effectiveVideoTime;
   }, [shotTimeline, currentShotIndex, currentTime]);
 
   // Sync audio tracks with video playback
@@ -142,43 +152,69 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
   // Go to next shot
   const goToNextShot = useCallback(() => {
     if (hasNext) {
-      setCurrentShotIndex((prev) => prev + 1);
-      setCurrentTime(0);
+      const nextIndex = currentShotIndex + 1;
+      const nextShotInfo = shotTimeline[nextIndex];
+      setCurrentShotIndex(nextIndex);
       setVideoError(null);
+      // Set to trim start position
+      if (nextShotInfo && videoRef.current) {
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = nextShotInfo.trimStartMs / 1000;
+          }
+        }, 50);
+      }
     }
-  }, [hasNext]);
+  }, [hasNext, currentShotIndex, shotTimeline]);
 
   // Go to previous shot
   const goToPrevShot = useCallback(() => {
-    // If we're more than 2 seconds into current shot, restart it
-    if (currentTime > 2) {
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        setCurrentTime(0);
+    const currentShotInfo = shotTimeline[currentShotIndex];
+    const effectiveCurrentTime = currentShotInfo 
+      ? (currentTime * 1000 - currentShotInfo.trimStartMs) / 1000 
+      : currentTime;
+    
+    // If we're more than 2 seconds into current shot, restart it at trim start
+    if (effectiveCurrentTime > 2) {
+      if (videoRef.current && currentShotInfo) {
+        videoRef.current.currentTime = currentShotInfo.trimStartMs / 1000;
+        setCurrentTime(currentShotInfo.trimStartMs / 1000);
       }
     } else if (hasPrev) {
-      setCurrentShotIndex((prev) => prev - 1);
-      setCurrentTime(0);
+      const prevIndex = currentShotIndex - 1;
+      const prevShotInfo = shotTimeline[prevIndex];
+      setCurrentShotIndex(prevIndex);
       setVideoError(null);
+      // Set to trim start position
+      if (prevShotInfo && videoRef.current) {
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = prevShotInfo.trimStartMs / 1000;
+          }
+        }, 50);
+      }
     }
-  }, [hasPrev, currentTime]);
+  }, [hasPrev, currentTime, currentShotIndex, shotTimeline]);
 
   // Go to specific shot
   const goToShot = useCallback(
     (index: number) => {
       if (index >= 0 && index < playableShots.length) {
+        const targetShotInfo = shotTimeline[index];
         setCurrentShotIndex(index);
-        setCurrentTime(0);
         setVideoError(null);
-        // If we were playing, continue playing
-        if (isPlaying) {
-          setTimeout(() => {
-            videoRef.current?.play();
-          }, 50);
-        }
+        // Seek to trim start and continue playing if we were playing
+        setTimeout(() => {
+          if (videoRef.current && targetShotInfo) {
+            videoRef.current.currentTime = targetShotInfo.trimStartMs / 1000;
+            if (isPlaying) {
+              videoRef.current.play();
+            }
+          }
+        }, 50);
       }
     },
-    [playableShots.length, isPlaying]
+    [playableShots.length, isPlaying, shotTimeline]
   );
 
   // Handle video ended
@@ -196,12 +232,32 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     }
   }, [hasNext, goToNextShot, playVideo, syncAudioTracks, totalDurationMs]);
 
-  // Handle video time update
+  // Handle video time update (with trim end detection)
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+      const video = videoRef.current;
+      setCurrentTime(video.currentTime);
+      
+      // Check if we've reached the trim end point
+      const shotInfo = shotTimeline[currentShotIndex];
+      if (shotInfo) {
+        const trimEndPoint = (shotInfo.baseDuration - shotInfo.trimEndMs) / 1000;
+        if (video.currentTime >= trimEndPoint - 0.05) { // Small threshold for timing accuracy
+          // Manually trigger video ended behavior
+          video.pause();
+          if (hasNext) {
+            goToNextShot();
+            setTimeout(() => {
+              playVideo();
+            }, 50);
+          } else {
+            setIsPlaying(false);
+            syncAudioTracks(totalDurationMs, false);
+          }
+        }
+      }
     }
-  }, []);
+  }, [shotTimeline, currentShotIndex, hasNext, goToNextShot, playVideo, syncAudioTracks, totalDurationMs]);
 
   // Sync audio when global time changes
   useEffect(() => {
@@ -220,7 +276,8 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
 
       if (targetShot) {
         const shotIndex = playableShots.findIndex((s) => s.id === targetShot.shot.id);
-        const videoTime = (seekTimeMs - targetShot.startTimeMs) / 1000;
+        // Add trim start offset to get actual video time
+        const videoTime = (seekTimeMs - targetShot.startTimeMs + targetShot.trimStartMs) / 1000;
 
         if (shotIndex !== currentShotIndex) {
           setCurrentShotIndex(shotIndex);
@@ -311,6 +368,11 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
             }}
             onLoadedData={() => {
               setVideoError(null);
+              // Seek to trim start position when video loads
+              const shotInfo = shotTimeline[currentShotIndex];
+              if (shotInfo && shotInfo.trimStartMs > 0 && videoRef.current) {
+                videoRef.current.currentTime = shotInfo.trimStartMs / 1000;
+              }
             }}
             onLoadedMetadata={(e) => {
               const video = e.currentTarget;

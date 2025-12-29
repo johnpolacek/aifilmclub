@@ -93,6 +93,10 @@ export interface Shot {
   // Final video
   video?: ShotVideo;
 
+  // Video trimming (preserves original, only affects playback)
+  trimStartMs?: number; // Trim from beginning of video
+  trimEndMs?: number; // Trim from end of video
+
   // Timeline position (calculated from order + durations)
   startTimeMs?: number;
 
@@ -197,6 +201,18 @@ export interface Scene {
 // ============================================================================
 
 /**
+ * Get the effective duration of a shot after trimming
+ * Returns the playable duration (full duration minus trim from start and end)
+ */
+export function getEffectiveDuration(shot: Shot): number {
+  const fullDuration = shot.video?.durationMs || 5000;
+  const trimStart = shot.trimStartMs || 0;
+  const trimEnd = shot.trimEndMs || 0;
+  // Ensure we don't go negative
+  return Math.max(0, fullDuration - trimStart - trimEnd);
+}
+
+/**
  * Create a new shot with default values
  */
 export function createNewShot(order: number): Shot {
@@ -239,7 +255,7 @@ export function createNewAudioTrack(
 
 /**
  * Calculate timeline positions for all shots in a scene
- * Based on video durations (shots cut directly to each other within a scene)
+ * Based on effective video durations (after trimming)
  */
 export function calculateTimelinePositions(shots: Shot[]): Shot[] {
   let currentTimeMs = 0;
@@ -250,9 +266,8 @@ export function calculateTimelinePositions(shots: Shot[]): Shot[] {
       startTimeMs: currentTimeMs,
     };
 
-    // Add video duration (default to 5 seconds if not set)
-    const videoDurationMs = shot.video?.durationMs || 5000;
-    currentTimeMs += videoDurationMs;
+    // Add effective duration (respects trim settings)
+    currentTimeMs += getEffectiveDuration(shot);
 
     return updatedShot;
   });
@@ -260,6 +275,7 @@ export function calculateTimelinePositions(shots: Shot[]): Shot[] {
 
 /**
  * Get total timeline duration for a scene (shots only, transition is to next scene)
+ * Uses effective duration (after trimming) for each shot
  */
 export function getSceneDuration(scene: Scene): number {
   if (!scene.shots || scene.shots.length === 0) {
@@ -268,8 +284,8 @@ export function getSceneDuration(scene: Scene): number {
 
   let totalMs = 0;
   scene.shots.forEach((shot) => {
-    // Add video duration (default to 5 seconds if not set)
-    totalMs += shot.video?.durationMs || 5000;
+    // Add effective duration (respects trim settings)
+    totalMs += getEffectiveDuration(shot);
   });
 
   return totalMs;
