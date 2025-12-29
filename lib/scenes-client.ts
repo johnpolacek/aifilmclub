@@ -93,7 +93,10 @@ export interface Shot {
   // Final video
   video?: ShotVideo;
 
-  // Video trimming (preserves original, only affects playback)
+  // Original video (preserved when trimming creates a new file)
+  originalVideo?: ShotVideo;
+
+  // Video trimming values (used for creating trimmed video file)
   trimStartMs?: number; // Trim from beginning of video
   trimEndMs?: number; // Trim from end of video
 

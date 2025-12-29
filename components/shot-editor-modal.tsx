@@ -241,6 +241,7 @@ export function ShotEditorDialog({
   const [trimEndMs, setTrimEndMs] = useState<number>(shot?.trimEndMs || 0);
   const [isTrimmerPlaying, setIsTrimmerPlaying] = useState(false);
   const [trimmerCurrentTime, setTrimmerCurrentTime] = useState(0);
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const trimmerVideoRef = useRef<HTMLVideoElement>(null);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -705,20 +706,25 @@ export function ShotEditorDialog({
           <div className="space-y-6 py-4">
             {isTrimMode ? (
               /* ============ TRIM MODE ============ */
+              (() => {
+                // Use original video for trimming if available
+                const sourceVideo = shot.originalVideo || shot.video;
+                const sourceDuration = sourceVideo?.durationMs || 8000;
+                
+                return (
               <div className="space-y-4">
                 {/* Large Video Player for Trimming */}
                 <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-black">
                   <video
                     ref={trimmerVideoRef}
-                    src={shot.video.url}
+                    src={sourceVideo?.url}
                     className="w-full h-full object-contain"
-                    poster={shot.video.thumbnailUrl}
+                    poster={sourceVideo?.thumbnailUrl}
                     onTimeUpdate={(e) => {
                       const video = e.currentTarget;
                       setTrimmerCurrentTime(video.currentTime * 1000);
                       // Stop at trim end point
-                      const fullDuration = shot.video?.durationMs || 5000;
-                      const trimEndPoint = fullDuration - trimEndMs;
+                      const trimEndPoint = sourceDuration - trimEndMs;
                       if (video.currentTime * 1000 >= trimEndPoint) {
                         video.pause();
                         setIsTrimmerPlaying(false);
@@ -740,8 +746,7 @@ export function ShotEditorDialog({
                         video.pause();
                       } else {
                         // Start from trim start if before it or at end
-                        const fullDuration = shot.video?.durationMs || 5000;
-                        const trimEndPoint = fullDuration - trimEndMs;
+                        const trimEndPoint = sourceDuration - trimEndMs;
                         if (video.currentTime * 1000 < trimStartMs || video.currentTime * 1000 >= trimEndPoint) {
                           video.currentTime = trimStartMs / 1000;
                         }
@@ -768,35 +773,34 @@ export function ShotEditorDialog({
                     <div 
                       className="absolute inset-y-0 bg-primary/15"
                       style={{ 
-                        left: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%`,
-                        right: `${(trimEndMs / (shot.video.durationMs || 5000)) * 100}%`
+                        left: `${(trimStartMs / sourceDuration) * 100}%`,
+                        right: `${(trimEndMs / sourceDuration) * 100}%`
                       }}
                     />
                     {/* Trimmed out regions (dark overlay) */}
                     <div 
                       className="absolute inset-y-0 left-0 bg-black/50 rounded-l"
-                      style={{ width: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%` }}
+                      style={{ width: `${(trimStartMs / sourceDuration) * 100}%` }}
                     />
                     <div 
                       className="absolute inset-y-0 right-0 bg-black/50 rounded-r"
-                      style={{ width: `${(trimEndMs / (shot.video.durationMs || 5000)) * 100}%` }}
+                      style={{ width: `${(trimEndMs / sourceDuration) * 100}%` }}
                     />
 
                     {/* Left trim handle (In point) - vertical line */}
                     <div
                       className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
-                      style={{ left: `${(trimStartMs / (shot.video.durationMs || 5000)) * 100}%`, transform: 'translateX(-50%)' }}
+                      style={{ left: `${(trimStartMs / sourceDuration) * 100}%`, transform: 'translateX(-50%)' }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         const startX = e.clientX;
                         const startValue = trimStartMs;
-                        const fullDuration = shot.video?.durationMs || 5000;
                         const containerWidth = e.currentTarget.parentElement?.offsetWidth || 1;
                         
                         const handleMouseMove = (moveEvent: MouseEvent) => {
                           const deltaX = moveEvent.clientX - startX;
-                          const deltaMs = (deltaX / containerWidth) * fullDuration;
-                          const newValue = Math.max(0, Math.min(fullDuration - trimEndMs - 100, startValue + deltaMs));
+                          const deltaMs = (deltaX / containerWidth) * sourceDuration;
+                          const newValue = Math.max(0, Math.min(sourceDuration - trimEndMs - 100, startValue + deltaMs));
                           setTrimStartMs(newValue);
                           if (trimmerVideoRef.current) {
                             trimmerVideoRef.current.currentTime = newValue / 1000;
@@ -817,23 +821,22 @@ export function ShotEditorDialog({
                     {/* Right trim handle (Out point) - vertical line */}
                     <div
                       className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
-                      style={{ left: `${((shot.video.durationMs || 5000) - trimEndMs) / (shot.video.durationMs || 5000) * 100}%`, transform: 'translateX(-50%)' }}
+                      style={{ left: `${(sourceDuration - trimEndMs) / sourceDuration * 100}%`, transform: 'translateX(-50%)' }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         const startX = e.clientX;
                         const startValue = trimEndMs;
-                        const fullDuration = shot.video?.durationMs || 5000;
                         const containerWidth = e.currentTarget.parentElement?.offsetWidth || 1;
                         
                         const handleMouseMove = (moveEvent: MouseEvent) => {
                           const deltaX = moveEvent.clientX - startX;
-                          const deltaMs = (deltaX / containerWidth) * fullDuration;
-                          const newValue = Math.max(0, Math.min(fullDuration - trimStartMs - 100, startValue - deltaMs));
+                          const deltaMs = (deltaX / containerWidth) * sourceDuration;
+                          const newValue = Math.max(0, Math.min(sourceDuration - trimStartMs - 100, startValue - deltaMs));
                           setTrimEndMs(newValue);
                           if (trimmerVideoRef.current) {
-                            const outPoint = (fullDuration - newValue) / 1000;
+                            const outPoint = (sourceDuration - newValue) / 1000;
                             trimmerVideoRef.current.currentTime = outPoint;
-                            setTrimmerCurrentTime(fullDuration - newValue);
+                            setTrimmerCurrentTime(sourceDuration - newValue);
                           }
                         };
                         
@@ -857,16 +860,18 @@ export function ShotEditorDialog({
                     <div className="text-center">
                       <span className="text-xs text-muted-foreground">Duration:</span>{" "}
                       <span className="font-mono font-medium text-foreground">
-                        {(getEffectiveDuration({ ...shot, trimStartMs, trimEndMs }) / 1000).toFixed(2)}s
+                        {((sourceDuration - trimStartMs - trimEndMs) / 1000).toFixed(2)}s
                       </span>
                     </div>
                     <div className="text-muted-foreground">
                       <span className="text-xs">Out:</span>{" "}
-                      <span className="font-mono">{(((shot.video.durationMs || 5000) - trimEndMs) / 1000).toFixed(2)}s</span>
+                      <span className="font-mono">{((sourceDuration - trimEndMs) / 1000).toFixed(2)}s</span>
                     </div>
                   </div>
                 </div>
               </div>
+                );
+              })()
             ) : (
               /* ============ NORMAL VIEW ============ */
               <>
@@ -875,26 +880,73 @@ export function ShotEditorDialog({
                   <Label>Video</Label>
                   <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
                     <video
+                      ref={trimmerVideoRef}
                       src={shot.video.url}
-                      controls
                       className="w-full h-full object-cover"
                       poster={shot.video.thumbnailUrl}
+                      onLoadedMetadata={() => {
+                        // Start at trim point if trimmed
+                        if (trimmerVideoRef.current && shot.trimStartMs) {
+                          trimmerVideoRef.current.currentTime = shot.trimStartMs / 1000;
+                        }
+                      }}
+                      onTimeUpdate={() => {
+                        // Stop at trim end point
+                        if (trimmerVideoRef.current && shot.trimEndMs) {
+                          const fullDuration = shot.video?.durationMs || 5000;
+                          const endPoint = (fullDuration - shot.trimEndMs) / 1000;
+                          if (trimmerVideoRef.current.currentTime >= endPoint) {
+                            trimmerVideoRef.current.pause();
+                            trimmerVideoRef.current.currentTime = (shot.trimStartMs || 0) / 1000;
+                          }
+                        }
+                      }}
+                      onEnded={() => {
+                        // Reset to trim start on end
+                        if (trimmerVideoRef.current && shot.trimStartMs) {
+                          trimmerVideoRef.current.currentTime = shot.trimStartMs / 1000;
+                        }
+                      }}
+                      controls
                     />
                   </div>
                   {/* Duration info */}
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      {shot.trimStartMs || shot.trimEndMs ? (
+                      {shot.originalVideo ? (
                         <>
-                          Trimmed: {(getEffectiveDuration(shot) / 1000).toFixed(2)}s
+                          Duration: {((shot.video.durationMs || 5000) / 1000).toFixed(2)}s
                           <span className="text-xs ml-1">
-                            (of {((shot.video.durationMs || 5000) / 1000).toFixed(1)}s)
+                            (original: {((shot.originalVideo.durationMs || 5000) / 1000).toFixed(1)}s)
                           </span>
                         </>
                       ) : (
                         <>Duration: {((shot.video.durationMs || 5000) / 1000).toFixed(1)}s</>
                       )}
                     </span>
+                    {shot.originalVideo && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-6 px-2"
+                        onClick={() => {
+                          // Restore original video
+                          const updatedShot: Shot = {
+                            ...shot,
+                            video: shot.originalVideo,
+                            originalVideo: undefined,
+                            trimStartMs: undefined,
+                            trimEndMs: undefined,
+                            updatedAt: new Date().toISOString(),
+                          };
+                          onSave(updatedShot);
+                          toast.success("Original video restored");
+                        }}
+                      >
+                        Restore Original
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -1720,19 +1772,84 @@ export function ShotEditorDialog({
                 </Button>
                 <Button 
                   type="button"
-                  onClick={() => {
-                    if (!shot) return;
-                    const updatedShot: Shot = {
-                      ...shot,
-                      trimStartMs: trimStartMs > 0 ? trimStartMs : undefined,
-                      trimEndMs: trimEndMs > 0 ? trimEndMs : undefined,
-                      updatedAt: new Date().toISOString(),
-                    };
-                    onSave(updatedShot);
-                    setIsTrimMode(false);
+                  disabled={isTrimmingVideo || (trimStartMs === 0 && trimEndMs === 0)}
+                  onClick={async () => {
+                    if (!shot || !shot.video) return;
+                    
+                    // If no trim values, just close
+                    if (trimStartMs === 0 && trimEndMs === 0) {
+                      setIsTrimMode(false);
+                      return;
+                    }
+                    
+                    setIsTrimmingVideo(true);
+                    
+                    try {
+                      // Use original video if available, otherwise use current video
+                      const sourceVideo = shot.originalVideo || shot.video;
+                      const sourceVideoUrl = sourceVideo.url;
+                      const sourceDuration = sourceVideo.durationMs || 8000;
+                      
+                      const response = await fetch("/api/video/trim", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          projectId,
+                          sceneId,
+                          shotId: shot.id,
+                          videoUrl: sourceVideoUrl,
+                          trimStartMs,
+                          trimEndMs,
+                          durationMs: sourceDuration,
+                        }),
+                      });
+                      
+                      const result = await response.json();
+                      
+                      if (!result.success) {
+                        throw new Error(result.error || "Failed to trim video");
+                      }
+                      
+                      // Calculate effective duration
+                      const effectiveDuration = sourceDuration - trimStartMs - trimEndMs;
+                      
+                      // Create updated shot with trimmed video
+                      const updatedShot: Shot = {
+                        ...shot,
+                        // Store original video if not already stored
+                        originalVideo: shot.originalVideo || shot.video,
+                        // Replace video with trimmed version
+                        video: {
+                          url: result.trimmedVideoUrl,
+                          status: "completed" as const,
+                          durationMs: effectiveDuration,
+                          thumbnailUrl: result.thumbnailUrl || shot.video.thumbnailUrl,
+                        },
+                        // Store trim values for reference
+                        trimStartMs,
+                        trimEndMs,
+                        updatedAt: new Date().toISOString(),
+                      };
+                      
+                      onSave(updatedShot);
+                      setIsTrimMode(false);
+                      toast.success("Video trimmed successfully");
+                    } catch (error) {
+                      console.error("[ShotEditorDialog] Trim error:", error);
+                      toast.error(error instanceof Error ? error.message : "Failed to trim video");
+                    } finally {
+                      setIsTrimmingVideo(false);
+                    }
                   }}
                 >
-                  Apply Trim
+                  {isTrimmingVideo ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Trimming...
+                    </>
+                  ) : (
+                    "Apply Trim"
+                  )}
                 </Button>
               </>
             ) : (
@@ -1765,8 +1882,10 @@ export function ShotEditorDialog({
                   size="sm"
                   onClick={() => {
                     setIsTrimMode(true);
-                    // Initialize trimmer at current position
-                    setTrimmerCurrentTime(trimStartMs);
+                    // Reset trim values for new trim (we're creating a new trimmed file)
+                    setTrimStartMs(0);
+                    setTrimEndMs(0);
+                    setTrimmerCurrentTime(0);
                   }}
                 >
                   <Scissors className="h-3.5 w-3.5 mr-1.5" />
