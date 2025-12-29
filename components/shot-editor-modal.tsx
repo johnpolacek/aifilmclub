@@ -675,7 +675,7 @@ export function ShotEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
+      <DialogContent className={`max-h-[90vh] overflow-y-auto ${isNew ? "sm:max-w-2xl" : "sm:max-w-6xl"}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isTrimMode ? (
