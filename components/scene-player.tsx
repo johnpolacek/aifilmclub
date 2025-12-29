@@ -716,37 +716,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         </div>
       </div>
 
-      {/* Shot Timeline */}
-      {playableShots.length > 1 && (
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {shotTimeline.map((item, index) => {
-            const widthPercent = Math.max((item.durationMs / totalDurationMs) * 100, 10);
-            const isActive = index === currentShotIndex;
-            const isPlayed = index < currentShotIndex;
-
-            return (
-              <button
-                key={item.shot.id}
-                type="button"
-                onClick={() => goToShot(index)}
-                className={cn(
-                  "shrink-0 py-1.5 px-2 rounded text-xs font-medium transition-all",
-                  isActive
-                    ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
-                    : isPlayed
-                      ? "bg-primary/20 text-primary hover:bg-primary/30"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                )}
-                style={{ minWidth: `${widthPercent}%`, maxWidth: "150px" }}
-                title={item.shot.prompt || `Shot ${index + 1}`}
-              >
-                Shot {index + 1}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Hidden audio elements for audio tracks */}
       {audioTracks.map((track) => (
         <audio
