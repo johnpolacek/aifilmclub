@@ -29,7 +29,6 @@ interface TimelineProps {
   onAudioTrackMove?: (trackId: string, newStartTimeMs: number) => void;
   onAddShot: () => void;
   onAddAudioTrack: () => void;
-  pixelsPerSecond?: number;
 }
 
 // ============================================================================
@@ -45,8 +44,7 @@ interface ShotCardProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
   onDragEnd: () => void;
-  pixelsPerSecond: number;
-  left: number; // Absolute position in pixels
+  widthPercent: number; // Percentage of total timeline width
 }
 
 function ShotCard({
@@ -58,13 +56,8 @@ function ShotCard({
   onDragOver,
   onDrop,
   onDragEnd,
-  pixelsPerSecond,
-  left,
+  widthPercent,
 }: ShotCardProps) {
-  // Calculate width based on effective duration (after trimming)
-  const effectiveDurationMs = getEffectiveDuration(shot);
-  const width = Math.max(80, (effectiveDurationMs / 1000) * pixelsPerSecond);
-
   // Get thumbnail URL - prioritize video thumbnail, then start frame image, then video URL
   const thumbnailUrl = shot.video?.thumbnailUrl && shot.video.thumbnailUrl.trim() 
     ? shot.video.thumbnailUrl 
@@ -80,13 +73,13 @@ function ShotCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={`
-        absolute h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden
+        h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden shrink-0
         ${isSelected ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border hover:border-primary/50"}
         ${isDragging ? "opacity-50 scale-95" : ""}
       `}
       style={{
-        left: `${left}px`,
-        width: `${width}px`,
+        width: `${widthPercent}%`,
+        minWidth: '60px',
       }}
     >
       {/* Thumbnail or placeholder */}
@@ -150,8 +143,8 @@ interface AudioTrackRowProps {
   onDragOver: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
-  pixelsPerSecond: number;
-  left: number; // Absolute position in pixels
+  leftPercent: number;
+  widthPercent: number;
 }
 
 function AudioTrackRow({
@@ -163,12 +156,9 @@ function AudioTrackRow({
   onDragOver,
   onDragEnd,
   onMouseDown,
-  pixelsPerSecond,
-  left,
+  leftPercent,
+  widthPercent,
 }: AudioTrackRowProps) {
-  // Calculate width based on duration
-  const width = Math.max(40, (track.durationMs / 1000) * pixelsPerSecond);
-
   return (
     <div
       draggable
@@ -182,8 +172,9 @@ function AudioTrackRow({
           : "border-border bg-muted/20 hover:border-primary/50"
       } ${track.muted ? "opacity-40" : ""} ${isDragging ? "opacity-50 scale-95" : ""}`}
       style={{
-        left: `${left}px`,
-        width: `${width}px`,
+        left: `${leftPercent}%`,
+        width: `${Math.max(5, widthPercent)}%`,
+        minWidth: '40px',
       }}
       onClick={onClick}
     >
@@ -191,9 +182,10 @@ function AudioTrackRow({
       <div className="absolute inset-0">
         <AudioWaveform
           audioUrl={track.sourceUrl}
-          width={width}
+          width={200} // Fixed width for waveform sampling
           height={40}
           color={isSelected ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.5)"}
+          className="w-full h-full"
         />
       </div>
     </div>
@@ -215,29 +207,11 @@ export default function Timeline({
   onAudioTrackMove,
   onAddShot,
   onAddAudioTrack,
-  pixelsPerSecond = 20,
 }: TimelineProps) {
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const [draggedAudioTrackId, setDraggedAudioTrackId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const audioTrackDraggedRef = useRef(false); // Track if drag actually occurred
-
-  // Calculate shot positions sequentially based on order and effective durations
-  const shotPositions = useMemo(() => {
-    const sortedShots = [...shots].sort((a, b) => a.order - b.order);
-    let currentTimeMs = 0;
-    return sortedShots.map((shot) => {
-      const startTimeMs = currentTimeMs;
-      const effectiveDurationMs = getEffectiveDuration(shot);
-      const left = (startTimeMs / 1000) * pixelsPerSecond;
-      currentTimeMs += effectiveDurationMs;
-      return {
-        shot,
-        left,
-        startTimeMs,
-      };
-    });
-  }, [shots, pixelsPerSecond]);
 
   // Calculate total timeline duration using effective (trimmed) durations
   const totalDurationMs = useMemo(() => {
@@ -246,8 +220,22 @@ export default function Timeline({
     }, 0);
   }, [shots]);
 
-  // Calculate timeline width in pixels
-  const timelineWidth = Math.max(400, (totalDurationMs / 1000) * pixelsPerSecond);
+  // Calculate shot positions with percentage widths for proportional layout
+  const shotPositions = useMemo(() => {
+    const sortedShots = [...shots].sort((a, b) => a.order - b.order);
+    let currentTimeMs = 0;
+    return sortedShots.map((shot) => {
+      const startTimeMs = currentTimeMs;
+      const effectiveDurationMs = getEffectiveDuration(shot);
+      const widthPercent = totalDurationMs > 0 ? (effectiveDurationMs / totalDurationMs) * 100 : 0;
+      currentTimeMs += effectiveDurationMs;
+      return {
+        shot,
+        startTimeMs,
+        widthPercent,
+      };
+    });
+  }, [shots, totalDurationMs]);
 
   // Handle shot reordering
   const handleDragStart = useCallback((shotId: string) => {
@@ -302,8 +290,11 @@ export default function Timeline({
       }
       if (!timelineRef.current) return;
       const timelineRect = timelineRef.current.getBoundingClientRect();
+      const timelineWidth = timelineRect.width;
       const newX = moveEvent.clientX - timelineRect.left - offsetX;
-      const newStartTimeMs = Math.max(0, (newX / pixelsPerSecond) * 1000);
+      // Convert pixel position to percentage, then to milliseconds
+      const newPercent = Math.max(0, Math.min(100, (newX / timelineWidth) * 100));
+      const newStartTimeMs = (newPercent / 100) * totalDurationMs;
       onAudioTrackMove(trackId, newStartTimeMs);
     };
 
@@ -315,7 +306,7 @@ export default function Timeline({
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-  }, [audioTracks, pixelsPerSecond, onAudioTrackMove]);
+  }, [audioTracks, totalDurationMs, onAudioTrackMove]);
 
   const handleAudioTrackDragStart = useCallback((trackId: string) => {
     setDraggedAudioTrackId(trackId);
@@ -343,15 +334,15 @@ export default function Timeline({
   return (
     <div className="bg-card/50 backdrop-blur w-full">
       {/* Timeline Ruler */}
-      <div className="border-b border-border px-2 py-1 overflow-x-auto">
-        <div className="relative" style={{ minWidth: `${timelineWidth}px`, height: '24px' }}>
+      <div className="border-b border-border px-2 py-1 w-full">
+        <div className="relative w-full" style={{ height: '24px' }}>
           {timeMarkers.map((seconds) => {
-            const left = (seconds * pixelsPerSecond);
+            const leftPercent = totalDurationMs > 0 ? (seconds * 1000 / totalDurationMs) * 100 : 0;
             return (
               <div
                 key={seconds}
                 className="absolute top-0 bottom-0 flex flex-col items-center"
-                style={{ left: `${left}px`, transform: 'translateX(-50%)' }}
+                style={{ left: `${leftPercent}%`, transform: 'translateX(-50%)' }}
               >
                 <div className="w-px h-2 bg-border" />
                 <span className="text-[10px] text-muted-foreground mt-0.5">
@@ -364,13 +355,13 @@ export default function Timeline({
       </div>
 
       {/* Shots Row */}
-      <div className="border-b border-border px-2 py-2">
+      <div className="border-b border-border px-2 py-2 w-full">
         <div 
           ref={timelineRef} 
-          className="relative overflow-x-auto"
-          style={{ height: '64px', minWidth: `${timelineWidth}px` }}
+          className="flex gap-1 w-full"
+          style={{ height: '64px' }}
         >
-          {shotPositions.map(({ shot, left }) => (
+          {shotPositions.map(({ shot, widthPercent }) => (
             <ShotCard
               key={shot.id}
               shot={shot}
@@ -381,22 +372,22 @@ export default function Timeline({
               onDragOver={handleDragOver}
               onDrop={() => handleDrop(shot.id)}
               onDragEnd={handleDragEnd}
-              pixelsPerSecond={pixelsPerSecond}
-              left={left}
+              widthPercent={widthPercent}
             />
           ))}
         </div>
       </div>
 
       {/* Audio Tracks */}
-      <div className="px-2 py-2 space-y-2">
+      <div className="px-2 py-2 space-y-2 w-full">
         {audioTracks.map((track) => {
-          const left = (track.startTimeMs / 1000) * pixelsPerSecond;
+          const leftPercent = totalDurationMs > 0 ? (track.startTimeMs / totalDurationMs) * 100 : 0;
+          const widthPercent = totalDurationMs > 0 ? (track.durationMs / totalDurationMs) * 100 : 10;
           return (
             <div
               key={track.id}
-              className="relative overflow-x-auto"
-              style={{ height: '40px', minWidth: `${timelineWidth}px` }}
+              className="relative w-full"
+              style={{ height: '40px' }}
             >
               <AudioTrackRow
                 track={track}
@@ -413,8 +404,8 @@ export default function Timeline({
                 onDragOver={handleAudioTrackDragOver}
                 onDragEnd={handleAudioTrackDragEnd}
                 onMouseDown={(e) => handleAudioTrackMouseDown(track.id, e)}
-                pixelsPerSecond={pixelsPerSecond}
-                left={left}
+                leftPercent={leftPercent}
+                widthPercent={widthPercent}
               />
             </div>
           );
