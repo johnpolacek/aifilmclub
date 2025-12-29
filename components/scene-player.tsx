@@ -16,6 +16,7 @@ interface ScenePlayerProps {
 
 export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const nextVideoRef = useRef<HTMLVideoElement>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentShotIndex, setCurrentShotIndex] = useState(0);
@@ -23,6 +24,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [preloadedShotIndex, setPreloadedShotIndex] = useState<number | null>(null);
 
   // Track actual video durations as they load
   const [actualDurations, setActualDurations] = useState<Map<string, number>>(new Map());
@@ -122,23 +124,30 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     [audioTracks, isMuted, volume]
   );
 
+  // Get the currently active video element
+  const getActiveVideo = useCallback(() => {
+    return videoRef.current;
+  }, []);
+
   // Play video
   const playVideo = useCallback(() => {
-    if (videoRef.current) {
-      videoRef.current.play();
+    const video = getActiveVideo();
+    if (video) {
+      video.play();
       setIsPlaying(true);
       syncAudioTracks(globalTimeMs, true);
     }
-  }, [globalTimeMs, syncAudioTracks]);
+  }, [globalTimeMs, syncAudioTracks, getActiveVideo]);
 
   // Pause video
   const pauseVideo = useCallback(() => {
-    if (videoRef.current) {
-      videoRef.current.pause();
+    const video = getActiveVideo();
+    if (video) {
+      video.pause();
       setIsPlaying(false);
       syncAudioTracks(globalTimeMs, false);
     }
-  }, [globalTimeMs, syncAudioTracks]);
+  }, [globalTimeMs, syncAudioTracks, getActiveVideo]);
 
   // Toggle play/pause
   const togglePlay = useCallback(() => {
@@ -154,10 +163,54 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     if (hasNext) {
       const nextIndex = currentShotIndex + 1;
       const nextShotInfo = shotTimeline[nextIndex];
+      const nextShot = playableShots[nextIndex];
+      const currentVideo = videoRef.current;
+      const wasPlaying = !currentVideo?.paused;
+      
+      // If next video is preloaded and ready, copy its src to current video for instant switch
+      if (preloadedShotIndex === nextIndex && nextVideoRef.current && nextShot?.video?.url) {
+        const nextVideo = nextVideoRef.current;
+        
+        if (nextVideo.readyState >= 2 && currentVideo) { // HAVE_CURRENT_DATA or higher
+          // Copy preloaded video's src to current video - this is instant since it's already loaded
+          const nextVideoSrc = nextVideo.src;
+          const nextVideoCurrentTime = nextShotInfo.trimStartMs / 1000;
+          
+          // If src is different, update it (should be instant since browser has it cached)
+          if (currentVideo.src !== nextVideoSrc) {
+            currentVideo.src = nextVideoSrc;
+          }
+          
+          // Set position and state
+          currentVideo.currentTime = nextVideoCurrentTime;
+          currentVideo.volume = volume;
+          currentVideo.muted = isMuted || nextShot.audioMuted || false;
+          
+          // Update state
+          setCurrentShotIndex(nextIndex);
+          setVideoError(null);
+          setPreloadedShotIndex(null);
+          
+          // Continue playing if it was playing
+          if (wasPlaying) {
+            // Small delay to ensure src is applied
+            setTimeout(() => {
+              if (currentVideo && currentVideo.src === nextVideoSrc) {
+                currentVideo.play().catch(() => {});
+              }
+            }, 10);
+          }
+          
+          return;
+        }
+      }
+      
+      // Fallback: change src if preload didn't work
       setCurrentShotIndex(nextIndex);
       setVideoError(null);
-      // Set to trim start position
-      if (nextShotInfo && videoRef.current) {
+      setPreloadedShotIndex(null);
+      
+      if (nextShotInfo && currentVideo) {
         setTimeout(() => {
           if (videoRef.current) {
             videoRef.current.currentTime = nextShotInfo.trimStartMs / 1000;
@@ -165,7 +218,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }, 50);
       }
     }
-  }, [hasNext, currentShotIndex, shotTimeline]);
+  }, [hasNext, currentShotIndex, shotTimeline, playableShots, preloadedShotIndex, volume, isMuted]);
 
   // Go to previous shot
   const goToPrevShot = useCallback(() => {
@@ -203,18 +256,20 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         const targetShotInfo = shotTimeline[index];
         setCurrentShotIndex(index);
         setVideoError(null);
+        setPreloadedShotIndex(null);
         // Seek to trim start and continue playing if we were playing
         setTimeout(() => {
-          if (videoRef.current && targetShotInfo) {
-            videoRef.current.currentTime = targetShotInfo.trimStartMs / 1000;
+          const video = getActiveVideo();
+          if (video && targetShotInfo) {
+            video.currentTime = targetShotInfo.trimStartMs / 1000;
             if (isPlaying) {
-              videoRef.current.play();
+              video.play();
             }
           }
         }, 50);
       }
     },
-    [playableShots.length, isPlaying, shotTimeline]
+    [playableShots.length, isPlaying, shotTimeline, getActiveVideo]
   );
 
   // Handle video ended
@@ -234,8 +289,8 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
 
   // Handle video time update (with trim end detection)
   const handleTimeUpdate = useCallback(() => {
-    if (videoRef.current) {
-      const video = videoRef.current;
+    const video = getActiveVideo();
+    if (video) {
       setCurrentTime(video.currentTime);
       
       // Check if we've reached the trim end point
@@ -257,7 +312,31 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }
       }
     }
-  }, [shotTimeline, currentShotIndex, hasNext, goToNextShot, playVideo, syncAudioTracks, totalDurationMs]);
+  }, [shotTimeline, currentShotIndex, hasNext, goToNextShot, playVideo, syncAudioTracks, totalDurationMs, getActiveVideo]);
+
+  // Preload next video for smooth transitions
+  useEffect(() => {
+    if (hasNext) {
+      const nextIndex = currentShotIndex + 1;
+      const nextShot = playableShots[nextIndex];
+      
+      if (nextShot?.video?.url && nextVideoRef.current) {
+        // Only preload if not already preloaded
+        if (preloadedShotIndex !== nextIndex) {
+          const nextVideo = nextVideoRef.current;
+          nextVideo.src = nextShot.video.url;
+          nextVideo.load();
+          setPreloadedShotIndex(nextIndex);
+          
+          console.log("[ScenePlayer] Preloading next shot:", JSON.stringify({
+            shotIndex: nextIndex,
+            shotId: nextShot.id,
+            url: nextShot.video.url
+          }, null, 2));
+        }
+      }
+    }
+  }, [currentShotIndex, hasNext, playableShots, preloadedShotIndex]);
 
   // Sync audio when global time changes
   useEffect(() => {
@@ -282,37 +361,43 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         if (shotIndex !== currentShotIndex) {
           setCurrentShotIndex(shotIndex);
           setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.currentTime = videoTime;
+            const video = getActiveVideo();
+            if (video) {
+              video.currentTime = videoTime;
               if (isPlaying) {
-                videoRef.current.play();
+                video.play();
               }
             }
           }, 50);
-        } else if (videoRef.current) {
-          videoRef.current.currentTime = videoTime;
+        } else {
+          const video = getActiveVideo();
+          if (video) {
+            video.currentTime = videoTime;
+          }
         }
       }
     },
-    [shotTimeline, playableShots, currentShotIndex, isPlaying]
+    [shotTimeline, playableShots, currentShotIndex, isPlaying, getActiveVideo]
   );
 
   // Toggle mute
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
+    const video = getActiveVideo();
+    if (video) {
+      video.muted = !isMuted;
     }
-  }, [isMuted]);
+  }, [isMuted, getActiveVideo]);
 
   // Handle volume change
   const handleVolumeChange = useCallback((value: number[]) => {
     const newVolume = value[0];
     setVolume(newVolume);
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume;
+    const video = getActiveVideo();
+    if (video) {
+      video.volume = newVolume;
     }
-  }, []);
+  }, [getActiveVideo]);
 
   // Format time as MM:SS
   const formatTime = (ms: number) => {
@@ -337,64 +422,90 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     );
   }
 
+  // Shared event handlers for video elements
+  const createVideoHandlers = useCallback((shotIndex: number, shot: Shot) => {
+    return {
+      onEnded: handleVideoEnded,
+      onTimeUpdate: handleTimeUpdate,
+      onClick: togglePlay,
+      onPlay: () => {
+        setIsPlaying(true);
+        setVideoError(null);
+      },
+      onPause: () => setIsPlaying(false),
+      onError: (e: React.SyntheticEvent<HTMLVideoElement>) => {
+        const video = e.currentTarget;
+        const error = video.error;
+        const errorMessage = error ? `${error.code}: ${error.message}` : "Unknown error";
+        console.error("[ScenePlayer] Video error:", JSON.stringify({
+          src: video.src,
+          error: errorMessage,
+          networkState: video.networkState,
+          readyState: video.readyState
+        }, null, 2));
+        setVideoError(`Failed to load video: ${errorMessage}`);
+      },
+      onLoadedData: () => {
+        setVideoError(null);
+        // Seek to trim start position when video loads
+        const shotInfo = shotTimeline[shotIndex];
+        const video = getActiveVideo();
+        if (shotInfo && shotInfo.trimStartMs > 0 && video) {
+          video.currentTime = shotInfo.trimStartMs / 1000;
+        }
+      },
+      onLoadedMetadata: (e: React.SyntheticEvent<HTMLVideoElement>) => {
+        const video = e.currentTarget;
+        if (video.duration && isFinite(video.duration) && shot) {
+          const durationMs = Math.round(video.duration * 1000);
+          // Only update if different from stored/default duration
+          const storedDuration = shot.video?.durationMs || 5000;
+          if (Math.abs(durationMs - storedDuration) > 100) {
+            setActualDurations(prev => {
+              const next = new Map(prev);
+              next.set(shot.id, durationMs);
+              return next;
+            });
+          }
+        }
+      },
+    };
+  }, [handleVideoEnded, handleTimeUpdate, togglePlay, shotTimeline, getActiveVideo]);
+
   return (
     <div className={cn("space-y-3", className)}>
       {/* Video Player */}
       <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+        {/* Current video */}
         {currentShot && currentShot.video?.url && (
           <video
             ref={videoRef}
             src={currentShot.video.url}
             className="w-full h-full object-contain cursor-pointer"
-            onEnded={handleVideoEnded}
-            onTimeUpdate={handleTimeUpdate}
-            onClick={togglePlay}
-            onPlay={() => {
-              setIsPlaying(true);
-              setVideoError(null);
-            }}
-            onPause={() => setIsPlaying(false)}
-            onError={(e) => {
-              const video = e.currentTarget;
-              const error = video.error;
-              const errorMessage = error ? `${error.code}: ${error.message}` : "Unknown error";
-              console.error("[ScenePlayer] Video error:", JSON.stringify({
-                src: video.src,
-                error: errorMessage,
-                networkState: video.networkState,
-                readyState: video.readyState
-              }, null, 2));
-              setVideoError(`Failed to load video: ${errorMessage}`);
-            }}
-            onLoadedData={() => {
-              setVideoError(null);
-              // Seek to trim start position when video loads
-              const shotInfo = shotTimeline[currentShotIndex];
-              if (shotInfo && shotInfo.trimStartMs > 0 && videoRef.current) {
-                videoRef.current.currentTime = shotInfo.trimStartMs / 1000;
-              }
-            }}
-            onLoadedMetadata={(e) => {
-              const video = e.currentTarget;
-              if (video.duration && isFinite(video.duration) && currentShot) {
-                const durationMs = Math.round(video.duration * 1000);
-                // Only update if different from stored/default duration
-                const storedDuration = currentShot.video?.durationMs || 5000;
-                if (Math.abs(durationMs - storedDuration) > 100) {
-                  setActualDurations(prev => {
-                    const next = new Map(prev);
-                    next.set(currentShot.id, durationMs);
-                    return next;
-                  });
-                }
-              }
-            }}
+            {...createVideoHandlers(currentShotIndex, currentShot)}
             muted={isMuted || currentShot.audioMuted}
             playsInline
           >
             <track kind="captions" />
           </video>
         )}
+        
+        {/* Preloaded next video (hidden, for preloading only) */}
+        {(() => {
+          const nextShot = hasNext ? playableShots[currentShotIndex + 1] : null;
+          return nextShot?.video?.url ? (
+            <video
+              ref={nextVideoRef}
+              src={nextShot.video.url}
+              className="hidden"
+              muted
+              playsInline
+              preload="auto"
+            >
+              <track kind="captions" />
+            </video>
+          ) : null;
+        })()}
 
         {/* Video error state */}
         {videoError && (
