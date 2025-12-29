@@ -185,6 +185,12 @@ export default function ProjectForm({
   const router = useRouter();
   const genreSelectId = useId();
   const durationSelectId = useId();
+  const toolSelectIds = {
+    video: useId(),
+    image: useId(),
+    sound: useId(),
+    other: useId(),
+  };
 
   const [formData, setFormData] = useState<ProjectFormData>({
     title: initialData?.title || "",
@@ -1920,10 +1926,11 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label htmlFor="genre">Genre</Label>
                         <Select
+                          id={genreSelectId}
                           value={formData.genre}
                           onValueChange={(value) => setFormData({ ...formData, genre: value })}
                         >
-                          <SelectTrigger className="w-full bg-background" id={genreSelectId}>
+                          <SelectTrigger className="w-full bg-background">
                             <SelectValue placeholder="Select genre..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -1946,10 +1953,11 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label htmlFor="duration">Duration</Label>
                         <Select
+                          id={durationSelectId}
                           value={formData.duration}
                           onValueChange={(value) => setFormData({ ...formData, duration: value })}
                         >
-                          <SelectTrigger className="w-full bg-background" id={durationSelectId}>
+                          <SelectTrigger className="w-full bg-background">
                             <SelectValue placeholder="Select duration..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -2254,6 +2262,7 @@ export default function ProjectForm({
                         )}
                         <div className="space-y-2">
                           <Select
+                            id={toolSelectIds[category]}
                             value={selectedTool[category]}
                             onValueChange={(value) => {
                               setSelectedTool({ ...selectedTool, [category]: value });
@@ -3647,10 +3656,11 @@ export default function ProjectForm({
                         <div className="space-y-2">
                           <Label htmlFor="genre">Genre</Label>
                           <Select
+                            id={genreSelectId}
                             value={formData.genre}
                             onValueChange={(value) => setFormData({ ...formData, genre: value })}
                           >
-                            <SelectTrigger className="w-full bg-background" id={genreSelectId}>
+                            <SelectTrigger className="w-full bg-background">
                               <SelectValue placeholder="Select genre..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -3673,10 +3683,11 @@ export default function ProjectForm({
                         <div className="space-y-2">
                           <Label htmlFor="duration">Duration</Label>
                           <Select
+                            id={durationSelectId}
                             value={formData.duration}
                             onValueChange={(value) => setFormData({ ...formData, duration: value })}
                           >
-                            <SelectTrigger className="w-full bg-background" id={durationSelectId}>
+                            <SelectTrigger className="w-full bg-background">
                               <SelectValue placeholder="Select duration..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -5161,6 +5172,7 @@ export default function ProjectForm({
                         )}
                         <div className="space-y-2">
                           <Select
+                            id={toolSelectIds[category]}
                             value={selectedTool[category]}
                             onValueChange={(value) => {
                               setSelectedTool({ ...selectedTool, [category]: value });

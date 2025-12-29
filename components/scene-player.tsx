@@ -16,7 +16,8 @@ interface ScenePlayerProps {
 
 export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const nextVideoRef = useRef<HTMLVideoElement>(null);
+  const preloadedVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const preloadedShotsRef = useRef<Set<string>>(new Set());
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentShotIndex, setCurrentShotIndex] = useState(0);
@@ -24,7 +25,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [preloadedShotIndex, setPreloadedShotIndex] = useState<number | null>(null);
 
   // Track actual video durations as they load
   const [actualDurations, setActualDurations] = useState<Map<string, number>>(new Map());
@@ -168,12 +168,12 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       const wasPlaying = !currentVideo?.paused;
       
       // If next video is preloaded and ready, copy its src to current video for instant switch
-      if (preloadedShotIndex === nextIndex && nextVideoRef.current && nextShot?.video?.url) {
-        const nextVideo = nextVideoRef.current;
+      if (nextShot?.video?.url && preloadedShotsRef.current.has(nextShot.id)) {
+        const preloadedVideo = preloadedVideoRefs.current.get(nextShot.id);
         
-        if (nextVideo.readyState >= 2 && currentVideo) { // HAVE_CURRENT_DATA or higher
+        if (preloadedVideo && preloadedVideo.readyState >= 2 && currentVideo) { // HAVE_CURRENT_DATA or higher
           // Copy preloaded video's src to current video - this is instant since it's already loaded
-          const nextVideoSrc = nextVideo.src;
+          const nextVideoSrc = preloadedVideo.src;
           const nextVideoCurrentTime = nextShotInfo.trimStartMs / 1000;
           
           // If src is different, update it (should be instant since browser has it cached)
@@ -189,7 +189,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           // Update state
           setCurrentShotIndex(nextIndex);
           setVideoError(null);
-          setPreloadedShotIndex(null);
           
           // Continue playing if it was playing
           if (wasPlaying) {
@@ -208,7 +207,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       // Fallback: change src if preload didn't work
       setCurrentShotIndex(nextIndex);
       setVideoError(null);
-      setPreloadedShotIndex(null);
       
       if (nextShotInfo && currentVideo) {
         setTimeout(() => {
@@ -218,7 +216,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }, 50);
       }
     }
-  }, [hasNext, currentShotIndex, shotTimeline, playableShots, preloadedShotIndex, volume, isMuted]);
+  }, [hasNext, currentShotIndex, shotTimeline, playableShots, volume, isMuted]);
 
   // Go to previous shot
   const goToPrevShot = useCallback(() => {
@@ -235,11 +233,47 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       }
     } else if (hasPrev) {
       const prevIndex = currentShotIndex - 1;
+      const prevShot = playableShots[prevIndex];
       const prevShotInfo = shotTimeline[prevIndex];
+      const currentVideo = videoRef.current;
+      const wasPlaying = !currentVideo?.paused;
+      
+      // If prev video is preloaded and ready, use it for instant switch
+      if (prevShot?.video?.url && preloadedShotsRef.current.has(prevShot.id)) {
+        const preloadedVideo = preloadedVideoRefs.current.get(prevShot.id);
+        
+        if (preloadedVideo && preloadedVideo.readyState >= 2 && currentVideo) {
+          const prevVideoSrc = preloadedVideo.src;
+          const prevVideoCurrentTime = prevShotInfo.trimStartMs / 1000;
+          
+          // Copy preloaded video's src to current video
+          if (currentVideo.src !== prevVideoSrc) {
+            currentVideo.src = prevVideoSrc;
+          }
+          
+          currentVideo.currentTime = prevVideoCurrentTime;
+          currentVideo.volume = volume;
+          currentVideo.muted = isMuted || prevShot.audioMuted || false;
+          
+          setCurrentShotIndex(prevIndex);
+          setVideoError(null);
+          
+          if (wasPlaying) {
+            setTimeout(() => {
+              if (currentVideo && currentVideo.src === prevVideoSrc) {
+                currentVideo.play().catch(() => {});
+              }
+            }, 10);
+          }
+          
+          return;
+        }
+      }
+      
+      // Fallback: change src if preload didn't work
       setCurrentShotIndex(prevIndex);
       setVideoError(null);
-      // Set to trim start position
-      if (prevShotInfo && videoRef.current) {
+      if (prevShotInfo && currentVideo) {
         setTimeout(() => {
           if (videoRef.current) {
             videoRef.current.currentTime = prevShotInfo.trimStartMs / 1000;
@@ -247,17 +281,52 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }, 50);
       }
     }
-  }, [hasPrev, currentTime, currentShotIndex, shotTimeline]);
+  }, [hasPrev, currentTime, currentShotIndex, shotTimeline, playableShots, volume, isMuted]);
 
   // Go to specific shot
   const goToShot = useCallback(
     (index: number) => {
       if (index >= 0 && index < playableShots.length) {
+        const targetShot = playableShots[index];
         const targetShotInfo = shotTimeline[index];
+        const currentVideo = videoRef.current;
+        const wasPlaying = !currentVideo?.paused;
+        
+        // If target video is preloaded and ready, use it for instant switch
+        if (targetShot?.video?.url && preloadedShotsRef.current.has(targetShot.id)) {
+          const preloadedVideo = preloadedVideoRefs.current.get(targetShot.id);
+          
+          if (preloadedVideo && preloadedVideo.readyState >= 2 && currentVideo) {
+            const targetVideoSrc = preloadedVideo.src;
+            const targetVideoCurrentTime = targetShotInfo.trimStartMs / 1000;
+            
+            // Copy preloaded video's src to current video
+            if (currentVideo.src !== targetVideoSrc) {
+              currentVideo.src = targetVideoSrc;
+            }
+            
+            currentVideo.currentTime = targetVideoCurrentTime;
+            currentVideo.volume = volume;
+            currentVideo.muted = isMuted || targetShot.audioMuted || false;
+            
+            setCurrentShotIndex(index);
+            setVideoError(null);
+            
+            if (wasPlaying) {
+              setTimeout(() => {
+                if (currentVideo && currentVideo.src === targetVideoSrc) {
+                  currentVideo.play().catch(() => {});
+                }
+              }, 10);
+            }
+            
+            return;
+          }
+        }
+        
+        // Fallback: change src if preload didn't work
         setCurrentShotIndex(index);
         setVideoError(null);
-        setPreloadedShotIndex(null);
-        // Seek to trim start and continue playing if we were playing
         setTimeout(() => {
           const video = getActiveVideo();
           if (video && targetShotInfo) {
@@ -269,7 +338,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }, 50);
       }
     },
-    [playableShots.length, isPlaying, shotTimeline, getActiveVideo]
+    [playableShots, isPlaying, shotTimeline, getActiveVideo, volume, isMuted]
   );
 
   // Handle video ended
@@ -314,29 +383,25 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
     }
   }, [shotTimeline, currentShotIndex, hasNext, goToNextShot, playVideo, syncAudioTracks, totalDurationMs, getActiveVideo]);
 
-  // Preload next video for smooth transitions
+  // Preload all shot videos for smooth transitions
   useEffect(() => {
-    if (hasNext) {
-      const nextIndex = currentShotIndex + 1;
-      const nextShot = playableShots[nextIndex];
-      
-      if (nextShot?.video?.url && nextVideoRef.current) {
-        // Only preload if not already preloaded
-        if (preloadedShotIndex !== nextIndex) {
-          const nextVideo = nextVideoRef.current;
-          nextVideo.src = nextShot.video.url;
-          nextVideo.load();
-          setPreloadedShotIndex(nextIndex);
+    playableShots.forEach((shot) => {
+      if (shot.video?.url && !preloadedShotsRef.current.has(shot.id)) {
+        const preloadedVideo = preloadedVideoRefs.current.get(shot.id);
+        if (preloadedVideo) {
+          preloadedVideo.src = shot.video.url;
+          preloadedVideo.load();
+          preloadedShotsRef.current.add(shot.id);
           
-          console.log("[ScenePlayer] Preloading next shot:", JSON.stringify({
-            shotIndex: nextIndex,
-            shotId: nextShot.id,
-            url: nextShot.video.url
+          console.log("[ScenePlayer] Preloading shot:", JSON.stringify({
+            shotId: shot.id,
+            shotIndex: playableShots.indexOf(shot),
+            url: shot.video.url
           }, null, 2));
         }
       }
-    }
-  }, [currentShotIndex, hasNext, playableShots, preloadedShotIndex]);
+    });
+  }, [playableShots]);
 
   // Sync audio when global time changes
   useEffect(() => {
@@ -349,16 +414,52 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       const seekTimeMs = value[0];
 
       // Find which shot this time belongs to
-      const targetShot = shotTimeline.find(
+      const targetShotItem = shotTimeline.find(
         (item) => seekTimeMs >= item.startTimeMs && seekTimeMs < item.endTimeMs
       );
 
-      if (targetShot) {
-        const shotIndex = playableShots.findIndex((s) => s.id === targetShot.shot.id);
+      if (targetShotItem) {
+        const shotIndex = playableShots.findIndex((s) => s.id === targetShotItem.shot.id);
+        const targetShot = playableShots[shotIndex];
         // Add trim start offset to get actual video time
-        const videoTime = (seekTimeMs - targetShot.startTimeMs + targetShot.trimStartMs) / 1000;
+        const videoTime = (seekTimeMs - targetShotItem.startTimeMs + targetShotItem.trimStartMs) / 1000;
 
         if (shotIndex !== currentShotIndex) {
+          const currentVideo = videoRef.current;
+          const wasPlaying = !currentVideo?.paused;
+          
+          // If target video is preloaded and ready, use it for instant switch
+          if (targetShot?.video?.url && preloadedShotsRef.current.has(targetShot.id)) {
+            const preloadedVideo = preloadedVideoRefs.current.get(targetShot.id);
+            
+            if (preloadedVideo && preloadedVideo.readyState >= 2 && currentVideo) {
+              const targetVideoSrc = preloadedVideo.src;
+              
+              // Copy preloaded video's src to current video
+              if (currentVideo.src !== targetVideoSrc) {
+                currentVideo.src = targetVideoSrc;
+              }
+              
+              currentVideo.currentTime = videoTime;
+              currentVideo.volume = volume;
+              currentVideo.muted = isMuted || targetShot.audioMuted || false;
+              
+              setCurrentShotIndex(shotIndex);
+              setVideoError(null);
+              
+              if (wasPlaying) {
+                setTimeout(() => {
+                  if (currentVideo && currentVideo.src === targetVideoSrc) {
+                    currentVideo.play().catch(() => {});
+                  }
+                }, 10);
+              }
+              
+              return;
+            }
+          }
+          
+          // Fallback: change src if preload didn't work
           setCurrentShotIndex(shotIndex);
           setTimeout(() => {
             const video = getActiveVideo();
@@ -377,7 +478,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
         }
       }
     },
-    [shotTimeline, playableShots, currentShotIndex, isPlaying, getActiveVideo]
+    [shotTimeline, playableShots, currentShotIndex, isPlaying, getActiveVideo, volume, isMuted]
   );
 
   // Toggle mute
@@ -490,13 +591,22 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           </video>
         )}
         
-        {/* Preloaded next video (hidden, for preloading only) */}
-        {(() => {
-          const nextShot = hasNext ? playableShots[currentShotIndex + 1] : null;
-          return nextShot?.video?.url ? (
+        {/* Preloaded videos for all shots (hidden, for preloading only) */}
+        {playableShots.map((shot) => {
+          // Skip the current shot since it's already rendered above
+          if (shot.id === currentShot?.id) return null;
+          
+          return shot.video?.url ? (
             <video
-              ref={nextVideoRef}
-              src={nextShot.video.url}
+              key={shot.id}
+              ref={(el) => {
+                if (el) {
+                  preloadedVideoRefs.current.set(shot.id, el);
+                } else {
+                  preloadedVideoRefs.current.delete(shot.id);
+                }
+              }}
+              src={shot.video.url}
               className="hidden"
               muted
               playsInline
@@ -505,7 +615,7 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
               <track kind="captions" />
             </video>
           ) : null;
-        })()}
+        })}
 
         {/* Video error state */}
         {videoError && (
