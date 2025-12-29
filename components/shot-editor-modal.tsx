@@ -850,6 +850,7 @@ export function ShotEditorDialog({
                     />
 
                     {/* Left trim handle (In point) - vertical line */}
+                    {/* NOTE: During dragging, we only update local state. The trimmed video is NOT saved until "Apply Trim" is clicked. */}
                     <div
                       className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
                       style={{ left: `${(trimStartMs / sourceDuration) * 100}%`, transform: 'translateX(-50%)' }}
@@ -863,6 +864,7 @@ export function ShotEditorDialog({
                           const deltaX = moveEvent.clientX - startX;
                           const deltaMs = (deltaX / containerWidth) * sourceDuration;
                           const newValue = Math.max(0, Math.min(sourceDuration - trimEndMs - 100, startValue + deltaMs));
+                          // Only update local state during dragging - no API calls or saves
                           setTrimStartMs(newValue);
                           if (trimmerVideoRef.current) {
                             trimmerVideoRef.current.currentTime = newValue / 1000;
@@ -881,6 +883,7 @@ export function ShotEditorDialog({
                     />
 
                     {/* Right trim handle (Out point) - vertical line */}
+                    {/* NOTE: During dragging, we only update local state. The trimmed video is NOT saved until "Apply Trim" is clicked. */}
                     <div
                       className="absolute top-0 bottom-0 w-1 bg-primary cursor-ew-resize z-30"
                       style={{ left: `${(sourceDuration - trimEndMs) / sourceDuration * 100}%`, transform: 'translateX(-50%)' }}
@@ -894,6 +897,7 @@ export function ShotEditorDialog({
                           const deltaX = moveEvent.clientX - startX;
                           const deltaMs = (deltaX / containerWidth) * sourceDuration;
                           const newValue = Math.max(0, Math.min(sourceDuration - trimStartMs - 100, startValue - deltaMs));
+                          // Only update local state during dragging - no API calls or saves
                           setTrimEndMs(newValue);
                           if (trimmerVideoRef.current) {
                             const outPoint = (sourceDuration - newValue) / 1000;
@@ -1832,6 +1836,7 @@ export function ShotEditorDialog({
                 >
                   Cancel
                 </Button>
+                {/* Apply Trim button - This is the ONLY place where the trimmed video is created and saved */}
                 <Button 
                   type="button"
                   disabled={isTrimmingVideo || (trimStartMs === 0 && trimEndMs === 0)}
@@ -1852,6 +1857,7 @@ export function ShotEditorDialog({
                       const sourceVideoUrl = sourceVideo.url;
                       const sourceDuration = sourceVideo.durationMs || 8000;
                       
+                      // Create trimmed video file via API (this is the ONLY place this happens)
                       const response = await fetch("/api/video/trim", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -1875,7 +1881,7 @@ export function ShotEditorDialog({
                       // Calculate effective duration
                       const effectiveDuration = sourceDuration - trimStartMs - trimEndMs;
                       
-                      // Create updated shot with trimmed video
+                      // Create updated shot with trimmed video and save it
                       const updatedShot: Shot = {
                         ...shot,
                         // Store original video if not already stored
@@ -1893,6 +1899,7 @@ export function ShotEditorDialog({
                         updatedAt: new Date().toISOString(),
                       };
                       
+                      // Save the updated shot (this triggers the scene save in the parent component)
                       onSave(updatedShot);
                       setIsTrimMode(false);
                       toast.success("Video trimmed successfully");

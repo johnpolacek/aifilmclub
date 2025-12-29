@@ -210,6 +210,7 @@ export default function Timeline({
 }: TimelineProps) {
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const [draggedAudioTrackId, setDraggedAudioTrackId] = useState<string | null>(null);
+  const [draggedAudioTrackPosition, setDraggedAudioTrackPosition] = useState<number | null>(null); // Track dragged position for visual updates
   const timelineRef = useRef<HTMLDivElement>(null);
   const audioTrackDraggedRef = useRef(false); // Track if drag actually occurred
 
@@ -271,6 +272,7 @@ export default function Timeline({
   }, []);
 
   // Handle audio track dragging
+  // NOTE: During dragging, we only update local visual state. The position is NOT saved until drag ends.
   const handleAudioTrackMouseDown = useCallback((trackId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -282,6 +284,9 @@ export default function Timeline({
     const startX = e.clientX;
     setDraggedAudioTrackId(trackId);
     audioTrackDraggedRef.current = false; // Reset drag flag
+    
+    // Store the final position to save when drag ends
+    let finalStartTimeMs = track.startTimeMs;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       // Only consider it a drag if moved more than 3 pixels
@@ -295,12 +300,25 @@ export default function Timeline({
       // Convert pixel position to percentage, then to milliseconds
       const newPercent = Math.max(0, Math.min(100, (newX / timelineWidth) * 100));
       const newStartTimeMs = (newPercent / 100) * totalDurationMs;
-      onAudioTrackMove(trackId, newStartTimeMs);
+      
+      // Store the final position but don't save yet - only update visual state during dragging
+      finalStartTimeMs = newStartTimeMs;
+      
+      // Update local state for visual feedback during dragging (no API calls)
+      setDraggedAudioTrackPosition(newStartTimeMs);
     };
 
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      
+      // Only save the position when drag ends (not during dragging)
+      if (audioTrackDraggedRef.current && finalStartTimeMs !== track.startTimeMs) {
+        onAudioTrackMove(trackId, finalStartTimeMs);
+      }
+      
+      // Clear dragged position state
+      setDraggedAudioTrackPosition(null);
       setDraggedAudioTrackId(null);
     };
 
@@ -381,7 +399,11 @@ export default function Timeline({
       {/* Audio Tracks */}
       <div className="px-2 py-2 space-y-2 w-full">
         {audioTracks.map((track) => {
-          const leftPercent = totalDurationMs > 0 ? (track.startTimeMs / totalDurationMs) * 100 : 0;
+          // Use dragged position for visual feedback during dragging, otherwise use actual position
+          const displayStartTimeMs = draggedAudioTrackId === track.id && draggedAudioTrackPosition !== null
+            ? draggedAudioTrackPosition
+            : track.startTimeMs;
+          const leftPercent = totalDurationMs > 0 ? (displayStartTimeMs / totalDurationMs) * 100 : 0;
           const widthPercent = totalDurationMs > 0 ? (track.durationMs / totalDurationMs) * 100 : 10;
           return (
             <div
