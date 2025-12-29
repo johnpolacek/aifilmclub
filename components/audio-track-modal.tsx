@@ -1,14 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import {
-  Loader2,
-  Music,
-  Trash2,
-  Upload,
-  Video,
-  Volume2,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Music, Trash2, Upload, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,17 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import type { AudioTrack, AudioSourceType, Shot } from "@/lib/scenes-client";
+import type { AudioTrack } from "@/lib/scenes-client";
 import { createNewAudioTrack } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
 
@@ -39,7 +24,6 @@ import { uploadFile } from "@/lib/upload-utils";
 
 interface AudioTrackModalProps {
   track: AudioTrack | null;
-  shots: Shot[]; // Available shots for extraction
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (track: AudioTrack) => void;
@@ -54,7 +38,6 @@ interface AudioTrackModalProps {
 
 export function AudioTrackModal({
   track,
-  shots,
   open,
   onOpenChange,
   onSave,
@@ -63,18 +46,19 @@ export function AudioTrackModal({
   sceneId,
 }: AudioTrackModalProps) {
   // Local state
-  const [name, setName] = useState(track?.name || "");
-  const [sourceType, setSourceType] = useState<AudioSourceType>(
-    track?.sourceType || "imported"
-  );
   const [sourceUrl, setSourceUrl] = useState(track?.sourceUrl || "");
-  const [selectedShotId, setSelectedShotId] = useState(track?.sourceVideoShotId || "");
-  const [startTimeMs, setStartTimeMs] = useState(track?.startTimeMs || 0);
   const [volume, setVolume] = useState(track?.volume || 1);
   const [isUploading, setIsUploading] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
 
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state when track changes or modal opens
+  useEffect(() => {
+    if (open) {
+      setSourceUrl(track?.sourceUrl || "");
+      setVolume(track?.volume || 1);
+    }
+  }, [open, track]);
 
   // Handle audio file upload - uses presigned URLs for large audio files
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,14 +72,12 @@ export function AudioTrackModal({
         sceneId,
         mediaType: "audio",
         onProgress: (percent) => {
-          // Could add progress state here if needed
           console.log(`[AudioTrackModal] Upload progress: ${percent}%`);
         },
       });
 
       if (result.success && result.url) {
         setSourceUrl(result.url);
-        setName(name || file.name.replace(/\.[^/.]+$/, ""));
         toast.success("Audio uploaded");
       } else {
         toast.error(result.error || "Failed to upload audio");
@@ -111,80 +93,27 @@ export function AudioTrackModal({
     }
   };
 
-  // Handle audio extraction from video
-  const handleExtractAudio = async () => {
-    if (!selectedShotId) {
-      toast.error("Please select a shot to extract audio from");
-      return;
-    }
-
-    const selectedShot = shots.find((s) => s.id === selectedShotId);
-    if (!selectedShot?.video?.url) {
-      toast.error("Selected shot has no video");
-      return;
-    }
-
-    setIsExtracting(true);
-    try {
-      const response = await fetch("/api/audio/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          sceneId,
-          shotId: selectedShotId,
-          videoUrl: selectedShot.video.url,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setSourceUrl(data.audioUrl);
-        setName(name || `Audio from Shot ${selectedShot.order + 1}`);
-        toast.success("Audio extracted successfully");
-      } else {
-        toast.error(data.error || "Failed to extract audio");
-      }
-    } catch (error) {
-      console.error("[AudioTrackModal] Extract error:", JSON.stringify({ error }, null, 2));
-      toast.error("Failed to extract audio");
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
   // Handle save
   const handleSave = () => {
-    if (!name.trim()) {
-      toast.error("Please enter a track name");
-      return;
-    }
-
     if (!sourceUrl) {
-      toast.error("Please upload or extract audio");
+      toast.error("Please upload an audio file");
       return;
     }
 
     const audioTrack: AudioTrack = track
       ? {
           ...track,
-          name,
-          sourceType,
+          name: "",
+          sourceType: track.sourceType,
           sourceUrl,
-          sourceVideoShotId: sourceType === "extracted" ? selectedShotId : undefined,
-          startTimeMs,
           volume,
           updatedAt: new Date().toISOString(),
         }
-      : createNewAudioTrack(name, sourceType, sourceUrl, startTimeMs, 5000);
+      : createNewAudioTrack("", "imported", sourceUrl, 0, 5000);
 
-    // Add additional fields if new
+    // Set volume for new tracks
     if (!track) {
       audioTrack.volume = volume;
-      if (sourceType === "extracted") {
-        audioTrack.sourceVideoShotId = selectedShotId;
-      }
     }
 
     onSave(audioTrack);
@@ -198,8 +127,10 @@ export function AudioTrackModal({
     onOpenChange(false);
   };
 
-  // Get shots with completed videos
-  const shotsWithVideos = shots.filter((s) => s.video?.url && s.video.status === "completed");
+  // Handle replacing audio file
+  const handleReplaceAudio = () => {
+    audioInputRef.current?.click();
+  };
 
   const isNew = !track;
 
@@ -212,137 +143,64 @@ export function AudioTrackModal({
             {isNew ? "Add Audio Track" : "Edit Audio Track"}
           </DialogTitle>
           <DialogDescription>
-            Import an audio file or extract audio from a video clip.
+            {isNew 
+              ? "Import an audio file. Drag on the timeline to position it."
+              : "Adjust audio settings. Drag on the timeline to reposition."
+            }
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Track Name */}
-          <div className="space-y-2">
-            <Label htmlFor="track-name">Track Name</Label>
-            <Input
-              id="track-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Background Music"
-            />
-          </div>
-
-          {/* Source Type Toggle */}
-          <div className="space-y-2">
-            <Label>Source</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={sourceType === "imported" ? "default" : "outline"}
-                onClick={() => setSourceType("imported")}
-                className="flex-1"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Import Audio
-              </Button>
-              <Button
-                type="button"
-                variant={sourceType === "extracted" ? "default" : "outline"}
-                onClick={() => setSourceType("extracted")}
-                className="flex-1"
-                disabled={shotsWithVideos.length === 0}
-              >
-                <Video className="h-4 w-4 mr-2" />
-                Extract from Video
-              </Button>
-            </div>
-          </div>
-
-          {sourceType === "imported" ? (
-            /* Import Audio */
+          {/* Audio Player & Replace */}
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept="audio/mp3,audio/wav,audio/ogg,audio/aac,audio/m4a"
+            onChange={handleAudioUpload}
+            className="hidden"
+          />
+          {sourceUrl ? (
             <div className="space-y-2">
-              <Label>Audio File</Label>
-              <input
-                ref={audioInputRef}
-                type="file"
-                accept="audio/mp3,audio/wav,audio/ogg,audio/aac,audio/m4a"
-                onChange={handleAudioUpload}
-                className="hidden"
-              />
-              {sourceUrl ? (
-                <div className="p-4 rounded-lg border border-border bg-muted/30 flex items-center gap-3">
-                  <Music className="h-8 w-8 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{name || "Audio file"}</p>
-                    <audio src={sourceUrl} controls className="w-full mt-2" />
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => audioInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="w-full h-24 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors"
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  ) : (
-                    <>
-                      <Upload className="h-6 w-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">
-                        Click to upload audio file
-                      </span>
-                    </>
-                  )}
-                </button>
-              )}
+              <div>
+                <audio 
+                  src={sourceUrl} 
+                  controls 
+                  className="w-full"
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleReplaceAudio}
+                disabled={isUploading}
+                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
+                {isUploading ? "Uploading..." : "Replace audio"}
+              </button>
             </div>
           ) : (
-            /* Extract from Video */
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Shot</Label>
-                <Select value={selectedShotId} onValueChange={setSelectedShotId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a shot..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shotsWithVideos.map((shot) => (
-                      <SelectItem key={shot.id} value={shot.id}>
-                        Shot {shot.order + 1}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedShotId && !sourceUrl && (
-                <Button
-                  type="button"
-                  onClick={handleExtractAudio}
-                  disabled={isExtracting}
-                  className="w-full"
-                >
-                  {isExtracting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Extracting...
-                    </>
-                  ) : (
-                    <>
-                      <Music className="h-4 w-4 mr-2" />
-                      Extract Audio
-                    </>
-                  )}
-                </Button>
+            <button
+              type="button"
+              onClick={() => audioInputRef.current?.click()}
+              disabled={isUploading}
+              className="w-full h-24 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors"
+            >
+              {isUploading ? (
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Click to upload audio file
+                  </span>
+                </>
               )}
-
-              {sourceUrl && (
-                <div className="p-4 rounded-lg border border-border bg-muted/30 flex items-center gap-3">
-                  <Music className="h-8 w-8 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Extracted audio</p>
-                    <audio src={sourceUrl} controls className="w-full mt-2" />
-                  </div>
-                </div>
-              )}
-            </div>
+            </button>
           )}
 
           {/* Volume */}
@@ -363,32 +221,18 @@ export function AudioTrackModal({
               step={1}
             />
           </div>
-
-          {/* Start Time (simplified) */}
-          <div className="space-y-2">
-            <Label htmlFor="start-time">Start Time (seconds)</Label>
-            <Input
-              id="start-time"
-              type="number"
-              min="0"
-              step="0.1"
-              value={startTimeMs / 1000}
-              onChange={(e) => setStartTimeMs(Number(e.target.value) * 1000)}
-            />
-          </div>
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {onDelete && track && (
-            <Button
+            <button
               type="button"
-              variant="destructive"
               onClick={handleDelete}
-              className="w-full sm:w-auto"
+              className="flex items-center gap-1 sm:w-auto text-xs text-destructive hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              <X className="h-3 w-3" />
               Delete Track
-            </Button>
+            </button>
           )}
           <div className="flex-1" />
           <Button
@@ -401,7 +245,7 @@ export function AudioTrackModal({
           <Button
             type="button"
             onClick={handleSave}
-            disabled={!name.trim() || !sourceUrl}
+            disabled={!sourceUrl}
           >
             {isNew ? "Add Track" : "Save Changes"}
           </Button>
@@ -412,4 +256,3 @@ export function AudioTrackModal({
 }
 
 export default AudioTrackModal;
-

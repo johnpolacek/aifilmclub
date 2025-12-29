@@ -1828,6 +1828,24 @@ export function EditSceneView({
     }));
   };
 
+  // Handle detach audio from shot - add extracted audio as new track
+  const handleDetachAudio = (audioTrack: AudioTrack) => {
+    setScene((prev) => ({
+      ...prev,
+      audioTracks: [...prev.audioTracks, audioTrack],
+    }));
+  };
+
+  // Handle audio track position change (dragging)
+  const handleAudioTrackMove = (trackId: string, newStartTimeMs: number) => {
+    setScene((prev) => ({
+      ...prev,
+      audioTracks: prev.audioTracks.map((t) =>
+        t.id === trackId ? { ...t, startTimeMs: newStartTimeMs, updatedAt: new Date().toISOString() } : t
+      ),
+    }));
+  };
+
   // ============================================================================
   // AUTO-SAVE LOGIC
   // ============================================================================
@@ -2270,9 +2288,7 @@ export function EditSceneView({
                 onShotClick={handleShotClick}
                 onShotReorder={handleShotReorder}
                 onAudioTrackClick={handleAudioTrackClick}
-                onAudioTrackVolumeChange={handleAudioTrackVolumeChange}
-                onAudioTrackMuteToggle={handleAudioTrackMuteToggle}
-                onAudioTrackDelete={handleAudioTrackDelete}
+                onAudioTrackMove={handleAudioTrackMove}
                 onAddShot={handleAddShot}
                 onAddAudioTrack={handleAddAudioTrack}
               />
@@ -2408,6 +2424,7 @@ export function EditSceneView({
         }
         onGenerateVideo={handleGenerateVideo}
         onSaveVideoToMediaLibrary={handleSaveVideoToMediaLibrary}
+        onDetachAudio={handleDetachAudio}
         projectId={projectId}
         sceneId={scene.id}
         characters={characters}
@@ -2620,7 +2637,6 @@ export function EditSceneView({
       {/* Audio Track Modal */}
       <AudioTrackModal
         track={selectedAudioTrack}
-        shots={scene.shots}
         open={showAudioTrackEditor}
         onOpenChange={setShowAudioTrackEditor}
         onSave={handleAudioTrackSave}

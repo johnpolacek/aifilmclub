@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   Loader2,
   MapPin,
+  Music,
   Pause,
   Play,
   Scissors,
@@ -39,8 +40,8 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl } from "@/lib/image-utils";
-import { getEffectiveDuration } from "@/lib/scenes-client";
-import type { GenerationMode, ReferenceImage, ReferenceImageType, Shot } from "@/lib/scenes-client";
+import { createNewAudioTrack, getEffectiveDuration } from "@/lib/scenes-client";
+import type { AudioTrack, GenerationMode, ReferenceImage, ReferenceImageType, Shot } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
 import type { Character, Location } from "@/components/project-form";
 
@@ -56,6 +57,7 @@ interface ShotEditorDialogProps {
   onDelete?: (shotId: string) => void;
   onGenerateVideo: (shot: Shot) => void;
   onSaveVideoToMediaLibrary?: (shot: Shot) => void; // Save old video to media library when replacing
+  onDetachAudio?: (audioTrack: AudioTrack) => void; // Detach audio from shot as independent track
   projectId: string;
   sceneId: string;
   characters?: Character[];
@@ -193,6 +195,7 @@ export function ShotEditorDialog({
   onDelete,
   onGenerateVideo,
   onSaveVideoToMediaLibrary,
+  onDetachAudio,
   projectId,
   sceneId,
   characters = [],
@@ -243,6 +246,9 @@ export function ShotEditorDialog({
   const [trimmerCurrentTime, setTrimmerCurrentTime] = useState(0);
   const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const trimmerVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Audio detaching state
+  const [isDetachingAudio, setIsDetachingAudio] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -666,6 +672,53 @@ export function ShotEditorDialog({
     if (!shot || !onDelete) return;
     onDelete(shot.id);
     onOpenChange(false);
+  };
+
+  // Handle detach audio - extract audio from video as independent track
+  const handleDetachAudio = async () => {
+    if (!shot || !shot.video?.url || !onDetachAudio) return;
+
+    setIsDetachingAudio(true);
+    try {
+      // Use original video for audio extraction if available (full duration audio)
+      const sourceVideo = shot.originalVideo || shot.video;
+      
+      const response = await fetch("/api/audio/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          sceneId,
+          shotId: shot.id,
+          videoUrl: sourceVideo.url,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Create a new audio track positioned at the shot's timeline position
+        const audioTrack = createNewAudioTrack(
+          "", // No name needed
+          "extracted",
+          data.audioUrl,
+          shot.startTimeMs || 0,
+          sourceVideo.durationMs || 5000
+        );
+        // Add the source shot reference
+        audioTrack.sourceVideoShotId = shot.id;
+
+        onDetachAudio(audioTrack);
+        toast.success("Audio detached successfully");
+      } else {
+        toast.error(data.error || "Failed to extract audio");
+      }
+    } catch (error) {
+      console.error("[ShotEditorDialog] Detach audio error:", JSON.stringify({ error }, null, 2));
+      toast.error("Failed to detach audio");
+    } finally {
+      setIsDetachingAudio(false);
+    }
   };
 
   if (!shot) return null;
@@ -1891,6 +1944,22 @@ export function ShotEditorDialog({
                   <Scissors className="h-3.5 w-3.5 mr-1.5" />
                   Trim Video
                 </Button>
+                {onDetachAudio && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDetachAudio}
+                    disabled={isDetachingAudio}
+                  >
+                    {isDetachingAudio ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Music className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {isDetachingAudio ? "Detaching..." : "Detach Audio"}
+                  </Button>
+                )}
                 <div className="flex-1" />
                 <Button type="button" onClick={() => onOpenChange(false)}>
                   Close

@@ -4,17 +4,14 @@ import {
   GripVertical,
   ImageIcon,
   Loader2,
-  Music,
   Plus,
   Sparkles,
   Trash2,
   Video,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { AudioWaveform } from "@/components/audio-waveform";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, Shot } from "@/lib/scenes-client";
 
@@ -30,9 +27,7 @@ interface TimelineProps {
   onShotClick: (shot: Shot) => void;
   onShotReorder: (shotIds: string[]) => void;
   onAudioTrackClick: (track: AudioTrack) => void;
-  onAudioTrackVolumeChange: (trackId: string, volume: number) => void;
-  onAudioTrackMuteToggle: (trackId: string) => void;
-  onAudioTrackDelete: (trackId: string) => void;
+  onAudioTrackMove?: (trackId: string, newStartTimeMs: number) => void;
   onAddShot: () => void;
   onAddAudioTrack: () => void;
   pixelsPerSecond?: number;
@@ -52,6 +47,7 @@ interface ShotCardProps {
   onDrop: () => void;
   onDragEnd: () => void;
   pixelsPerSecond: number;
+  left: number; // Absolute position in pixels
 }
 
 function ShotCard({
@@ -64,6 +60,7 @@ function ShotCard({
   onDrop,
   onDragEnd,
   pixelsPerSecond,
+  left,
 }: ShotCardProps) {
   // Calculate width based on effective duration (after trimming)
   const effectiveDurationMs = getEffectiveDuration(shot);
@@ -84,10 +81,14 @@ function ShotCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={`
-        shrink-0 w-28 h-16 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden
+        absolute h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden
         ${isSelected ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border hover:border-primary/50"}
         ${isDragging ? "opacity-50 scale-95" : ""}
       `}
+      style={{
+        left: `${left}px`,
+        width: `${width}px`,
+      }}
     >
       {/* Thumbnail or placeholder */}
       {thumbnailUrl ? (
@@ -144,93 +145,62 @@ function ShotCard({
 interface AudioTrackRowProps {
   track: AudioTrack;
   isSelected: boolean;
+  isDragging: boolean;
   onClick: () => void;
-  onVolumeChange: (volume: number) => void;
-  onMuteToggle: () => void;
-  onDelete: () => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
   pixelsPerSecond: number;
-  totalDurationMs: number;
+  left: number; // Absolute position in pixels
 }
 
 function AudioTrackRow({
   track,
   isSelected,
+  isDragging,
   onClick,
-  onVolumeChange,
-  onMuteToggle,
-  onDelete,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onMouseDown,
   pixelsPerSecond,
-  totalDurationMs,
+  left,
 }: AudioTrackRowProps) {
-  // Calculate position and width
-  const left = (track.startTimeMs / 1000) * pixelsPerSecond;
+  // Calculate width based on duration
   const width = Math.max(40, (track.durationMs / 1000) * pixelsPerSecond);
-  const totalWidth = Math.max(width + left, (totalDurationMs / 1000) * pixelsPerSecond);
 
   return (
-    <div className="flex items-center gap-2 h-10">
-      {/* Track controls */}
-      <div className="flex-shrink-0 w-32 flex items-center gap-1 px-2">
-        <button
-          type="button"
-          onClick={onMuteToggle}
-          className="p-1 rounded hover:bg-muted"
-          title={track.muted ? "Unmute" : "Mute"}
-        >
-          {track.muted ? (
-            <VolumeX className="h-3 w-3 text-muted-foreground" />
-          ) : (
-            <Volume2 className="h-3 w-3 text-foreground" />
-          )}
-        </button>
-        <div className="flex-1 min-w-0">
-          <Slider
-            value={[track.volume * 100]}
-            onValueChange={([v]) => onVolumeChange(v / 100)}
-            max={100}
-            step={1}
-            className="w-full"
-            disabled={track.muted}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="p-1 rounded hover:bg-destructive/20 hover:text-destructive"
-          title="Delete track"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
-      </div>
-
-      {/* Track visualization */}
-      <div
-        className="flex-1 h-8 bg-muted/30 rounded relative overflow-hidden"
-        style={{ minWidth: `${totalWidth}px` }}
-        onClick={onClick}
-      >
-        {/* Audio clip */}
-        <div
-          className={`absolute h-full rounded cursor-pointer transition-all ${
-            isSelected ? "ring-2 ring-primary" : ""
-          } ${track.muted ? "opacity-50" : ""}`}
-          style={{
-            left: `${left}px`,
-            width: `${width}px`,
-            background:
-              track.sourceType === "extracted"
-                ? "linear-gradient(to right, #3b82f6, #1d4ed8)"
-                : "linear-gradient(to right, #10b981, #059669)",
-          }}
-        >
-          {/* Waveform placeholder */}
-          <div className="h-full flex items-center justify-center">
-            <Music className="h-3 w-3 text-white/70" />
-            <span className="text-[10px] text-white/70 ml-1 truncate max-w-[80%]">
-              {track.name}
-            </span>
-          </div>
-        </div>
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      onMouseDown={onMouseDown}
+      className={`absolute h-10 rounded-md cursor-move transition-all overflow-hidden border ${
+        isSelected 
+          ? "border-primary ring-2 ring-primary/30 bg-primary/5" 
+          : "border-border bg-muted/20 hover:border-primary/50"
+      } ${track.muted ? "opacity-40" : ""} ${isDragging ? "opacity-50 scale-95" : ""}`}
+      style={{
+        left: `${left}px`,
+        width: `${width}px`,
+      }}
+      onClick={(e) => {
+        // Only trigger onClick if not dragging
+        if (!isDragging) {
+          onClick();
+        }
+      }}
+    >
+      {/* Waveform visualization */}
+      <div className="absolute inset-0">
+        <AudioWaveform
+          audioUrl={track.sourceUrl}
+          width={width}
+          height={40}
+          color={isSelected ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.5)"}
+        />
       </div>
     </div>
   );
@@ -248,20 +218,41 @@ export default function Timeline({
   onShotClick,
   onShotReorder,
   onAudioTrackClick,
-  onAudioTrackVolumeChange,
-  onAudioTrackMuteToggle,
-  onAudioTrackDelete,
+  onAudioTrackMove,
   onAddShot,
   onAddAudioTrack,
   pixelsPerSecond = 20,
 }: TimelineProps) {
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
+  const [draggedAudioTrackId, setDraggedAudioTrackId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
+  // Calculate shot positions sequentially based on order and effective durations
+  const shotPositions = useMemo(() => {
+    const sortedShots = [...shots].sort((a, b) => a.order - b.order);
+    let currentTimeMs = 0;
+    return sortedShots.map((shot) => {
+      const startTimeMs = currentTimeMs;
+      const effectiveDurationMs = getEffectiveDuration(shot);
+      const left = (startTimeMs / 1000) * pixelsPerSecond;
+      currentTimeMs += effectiveDurationMs;
+      return {
+        shot,
+        left,
+        startTimeMs,
+      };
+    });
+  }, [shots, pixelsPerSecond]);
+
   // Calculate total timeline duration using effective (trimmed) durations
-  const totalDurationMs = shots.reduce((total, shot) => {
-    return total + getEffectiveDuration(shot);
-  }, 0);
+  const totalDurationMs = useMemo(() => {
+    return shots.reduce((total, shot) => {
+      return total + getEffectiveDuration(shot);
+    }, 0);
+  }, [shots]);
+
+  // Calculate timeline width in pixels
+  const timelineWidth = Math.max(400, (totalDurationMs / 1000) * pixelsPerSecond);
 
   // Handle shot reordering
   const handleDragStart = useCallback((shotId: string) => {
@@ -296,19 +287,89 @@ export default function Timeline({
     setDraggedShotId(null);
   }, []);
 
-  // Time markers
-  const timeMarkers = [];
-  const totalSeconds = Math.ceil(totalDurationMs / 1000) || 10;
-  for (let i = 0; i <= totalSeconds; i += 5) {
-    timeMarkers.push(i);
-  }
+  // Handle audio track dragging
+  const handleAudioTrackMouseDown = useCallback((trackId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const track = audioTracks.find(t => t.id === trackId);
+    if (!track || !onAudioTrackMove) return;
+    
+    const trackRect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - trackRect.left;
+    setDraggedAudioTrackId(trackId);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!timelineRef.current) return;
+      const timelineRect = timelineRef.current.getBoundingClientRect();
+      const newX = moveEvent.clientX - timelineRect.left - offsetX;
+      const newStartTimeMs = Math.max(0, (newX / pixelsPerSecond) * 1000);
+      onAudioTrackMove(trackId, newStartTimeMs);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      setDraggedAudioTrackId(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [audioTracks, pixelsPerSecond, onAudioTrackMove]);
+
+  const handleAudioTrackDragStart = useCallback((trackId: string) => {
+    setDraggedAudioTrackId(trackId);
+  }, []);
+
+  const handleAudioTrackDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleAudioTrackDragEnd = useCallback(() => {
+    setDraggedAudioTrackId(null);
+  }, []);
+
+  // Time markers for ruler
+  const timeMarkers = useMemo(() => {
+    const markers = [];
+    const totalSeconds = Math.ceil(totalDurationMs / 1000) || 10;
+    for (let i = 0; i <= totalSeconds; i += 5) {
+      markers.push(i);
+    }
+    return markers;
+  }, [totalDurationMs]);
 
   return (
     <div className="bg-card/50 backdrop-blur">
-      {/* Video track */}
-      <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
-        <div ref={timelineRef} className="flex-1 flex items-center gap-1 overflow-x-auto py-1">
-          {shots.map((shot) => (
+      {/* Timeline Ruler */}
+      <div className="border-b border-border px-2 py-1">
+        <div className="relative" style={{ width: `${timelineWidth}px`, height: '24px' }}>
+          {timeMarkers.map((seconds) => {
+            const left = (seconds * pixelsPerSecond);
+            return (
+              <div
+                key={seconds}
+                className="absolute top-0 bottom-0 flex flex-col items-center"
+                style={{ left: `${left}px`, transform: 'translateX(-50%)' }}
+              >
+                <div className="w-px h-2 bg-border" />
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  {seconds}s
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Shots Row */}
+      <div className="border-b border-border px-2 py-2">
+        <div 
+          ref={timelineRef} 
+          className="relative overflow-x-auto"
+          style={{ height: '64px', minWidth: `${timelineWidth}px` }}
+        >
+          {shotPositions.map(({ shot, left }) => (
             <ShotCard
               key={shot.id}
               shot={shot}
@@ -320,6 +381,7 @@ export default function Timeline({
               onDrop={() => handleDrop(shot.id)}
               onDragEnd={handleDragEnd}
               pixelsPerSecond={pixelsPerSecond}
+              left={left}
             />
           ))}
           {/* Add Shot button */}
@@ -327,7 +389,8 @@ export default function Timeline({
             variant="ghost"
             size="sm"
             onClick={onAddShot}
-            className="h-16 px-4 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
+            className="absolute h-16 px-4 border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex items-center gap-2"
+            style={{ left: `${timelineWidth}px`, top: '0' }}
           >
             <Plus className="h-4 w-4" />
             <span className="text-xs font-medium">Add Shot</span>
@@ -335,27 +398,38 @@ export default function Timeline({
         </div>
       </div>
 
-      {/* Audio tracks */}
-      <div className="px-2 py-2 space-y-1">
-        {audioTracks.map((track) => (
-          <AudioTrackRow
-            key={track.id}
-            track={track}
-            isSelected={selectedAudioTrackId === track.id}
-            onClick={() => onAudioTrackClick(track)}
-            onVolumeChange={(v) => onAudioTrackVolumeChange(track.id, v)}
-            onMuteToggle={() => onAudioTrackMuteToggle(track.id)}
-            onDelete={() => onAudioTrackDelete(track.id)}
-            pixelsPerSecond={pixelsPerSecond}
-            totalDurationMs={totalDurationMs}
-          />
-        ))}
+      {/* Audio Tracks */}
+      <div className="px-2 py-2 space-y-2">
+        {audioTracks.map((track) => {
+          const left = (track.startTimeMs / 1000) * pixelsPerSecond;
+          return (
+            <div
+              key={track.id}
+              className="relative overflow-x-auto"
+              style={{ height: '40px', minWidth: `${timelineWidth}px` }}
+            >
+              <AudioTrackRow
+                track={track}
+                isSelected={selectedAudioTrackId === track.id}
+                isDragging={draggedAudioTrackId === track.id}
+                onClick={() => onAudioTrackClick(track)}
+                onDragStart={() => handleAudioTrackDragStart(track.id)}
+                onDragOver={handleAudioTrackDragOver}
+                onDragEnd={handleAudioTrackDragEnd}
+                onMouseDown={(e) => handleAudioTrackMouseDown(track.id, e)}
+                pixelsPerSecond={pixelsPerSecond}
+                left={left}
+              />
+            </div>
+          );
+        })}
 
         {/* Add audio track button */}
         <button
           type="button"
           onClick={onAddAudioTrack}
-          className="w-42 h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
+          className="h-8 border-2 border-dashed border-muted-foreground/30 rounded flex items-center justify-center gap-2 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
+          style={{ minWidth: `${timelineWidth}px` }}
         >
           <Plus className="h-4 w-4" />
           Add Audio Track
