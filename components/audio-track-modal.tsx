@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Music, Pause, Play, Scissors, Upload, Volume2, X } from "lucide-react";
+import { Loader2, Music, Pause, Play, RotateCcw, Scissors, Upload, Volume2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AudioWaveform } from "@/components/audio-waveform";
 import { Button } from "@/components/ui/button";
@@ -275,7 +275,7 @@ export function AudioTrackModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isTrimMode ? "max-w-2xl" : "max-w-md"}>
+      <DialogContent className="sm:max-w-2xl w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isTrimMode ? (
@@ -592,7 +592,7 @@ export function AudioTrackModal({
           )}
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-col sm:flex-row gap-2 items-center">
           {isTrimMode ? (
             /* ============ TRIM MODE FOOTER ============ */
             <>
@@ -649,10 +649,10 @@ export function AudioTrackModal({
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="flex items-center gap-1 sm:w-auto text-xs text-destructive hover:text-destructive"
+                  className="mr-2 flex items-center gap-1 sm:w-auto text-xs text-destructive hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
-                  Delete Track
+                  Delete
                 </button>
               )}
               {/* Trim button - only show for existing tracks with audio */}
@@ -670,19 +670,19 @@ export function AudioTrackModal({
                   }}
                 >
                   <Scissors className="h-3.5 w-3.5 mr-1.5" />
-                  Trim Audio
+                  Trim
                 </Button>
               )}
               {/* Restore original button */}
               {hasOriginal && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={handleRestoreOriginal}
-                  className="text-xs"
                 >
-                  Restore Original
+                  <RotateCcw className="h-3 w-3 mr-1.5" />
+                  Restore
                 </Button>
               )}
               <div className="flex-1" />
