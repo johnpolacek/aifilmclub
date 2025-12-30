@@ -112,7 +112,11 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
 
         const trackStartMs = track.startTimeMs;
         const trackEndMs = track.startTimeMs + track.durationMs;
-        const trimStartMs = track.trimStartMs || 0;
+        
+        // If originalSourceUrl exists, the audio file is already trimmed, so don't apply trimStartMs again
+        // trimStartMs/trimEndMs are just metadata about what was trimmed
+        const hasBeenTrimmed = !!track.originalSourceUrl;
+        const trimStartMs = hasBeenTrimmed ? 0 : (track.trimStartMs || 0);
 
         // Check if this track should be playing at the current time
         if (globalTime >= trackStartMs && globalTime < trackEndMs) {
