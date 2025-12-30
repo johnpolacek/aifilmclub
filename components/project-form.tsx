@@ -1926,11 +1926,10 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label htmlFor="genre">Genre</Label>
                         <Select
-                          id={genreSelectId}
                           value={formData.genre}
                           onValueChange={(value) => setFormData({ ...formData, genre: value })}
                         >
-                          <SelectTrigger className="w-full bg-background">
+                          <SelectTrigger id={genreSelectId} className="w-full bg-background">
                             <SelectValue placeholder="Select genre..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -1953,11 +1952,10 @@ export default function ProjectForm({
                       <div className="space-y-2">
                         <Label htmlFor="duration">Duration</Label>
                         <Select
-                          id={durationSelectId}
                           value={formData.duration}
                           onValueChange={(value) => setFormData({ ...formData, duration: value })}
                         >
-                          <SelectTrigger className="w-full bg-background">
+                          <SelectTrigger id={durationSelectId} className="w-full bg-background">
                             <SelectValue placeholder="Select duration..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -2262,7 +2260,6 @@ export default function ProjectForm({
                         )}
                         <div className="space-y-2">
                           <Select
-                            id={toolSelectIds[category]}
                             value={selectedTool[category]}
                             onValueChange={(value) => {
                               setSelectedTool({ ...selectedTool, [category]: value });
@@ -2275,7 +2272,7 @@ export default function ProjectForm({
                             }}
                             key={`tool-select-${category}`}
                           >
-                            <SelectTrigger className="w-full bg-background">
+                            <SelectTrigger id={toolSelectIds[category]} className="w-full bg-background">
                               <SelectValue
                                 placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
                               />
@@ -3656,11 +3653,10 @@ export default function ProjectForm({
                         <div className="space-y-2">
                           <Label htmlFor="genre">Genre</Label>
                           <Select
-                            id={genreSelectId}
                             value={formData.genre}
                             onValueChange={(value) => setFormData({ ...formData, genre: value })}
                           >
-                            <SelectTrigger className="w-full bg-background">
+                            <SelectTrigger id={genreSelectId} className="w-full bg-background">
                               <SelectValue placeholder="Select genre..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -3683,11 +3679,10 @@ export default function ProjectForm({
                         <div className="space-y-2">
                           <Label htmlFor="duration">Duration</Label>
                           <Select
-                            id={durationSelectId}
                             value={formData.duration}
                             onValueChange={(value) => setFormData({ ...formData, duration: value })}
                           >
-                            <SelectTrigger className="w-full bg-background">
+                            <SelectTrigger id={durationSelectId} className="w-full bg-background">
                               <SelectValue placeholder="Select duration..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -5172,7 +5167,6 @@ export default function ProjectForm({
                         )}
                         <div className="space-y-2">
                           <Select
-                            id={toolSelectIds[category]}
                             value={selectedTool[category]}
                             onValueChange={(value) => {
                               setSelectedTool({ ...selectedTool, [category]: value });
@@ -5185,7 +5179,7 @@ export default function ProjectForm({
                             }}
                             key={`tool-select-${category}`}
                           >
-                            <SelectTrigger className="w-full bg-background">
+                            <SelectTrigger id={toolSelectIds[category]} className="w-full bg-background">
                               <SelectValue
                                 placeholder={`Add ${getCategoryLabel(category).toLowerCase()} tool...`}
                               />
