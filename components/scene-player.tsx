@@ -46,21 +46,36 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
     let currentTimeMs = 0;
     return playableShots.map((shot) => {
       const startTime = currentTimeMs;
-      // Get base duration (from actual measurement or stored value)
-      const baseDuration = actualDurations.get(shot.id) || shot.video?.durationMs || 5000;
-      // Apply trim to get effective duration
-      const trimStartMs = shot.trimStartMs || 0;
-      const trimEndMs = shot.trimEndMs || 0;
-      const effectiveDuration = Math.max(0, baseDuration - trimStartMs - trimEndMs);
+      
+      // Check if video has been trimmed (originalVideo exists)
+      // If so, the current video.durationMs IS the effective duration (trim already baked in)
+      const hasBeenTrimmed = !!shot.originalVideo;
+      
+      // Get base duration - use original video duration if trimmed, otherwise current video
+      const baseDuration = hasBeenTrimmed 
+        ? (shot.originalVideo?.durationMs || 8000)
+        : (actualDurations.get(shot.id) || shot.video?.durationMs || 5000);
+      
+      // Get trim values - only apply if video hasn't been trimmed yet
+      const trimStartMs = hasBeenTrimmed ? 0 : (shot.trimStartMs || 0);
+      const trimEndMs = hasBeenTrimmed ? 0 : (shot.trimEndMs || 0);
+      
+      // Calculate effective duration
+      // If trimmed, use current video duration directly (trim is baked in)
+      // If not trimmed, subtract trim values from base duration
+      const effectiveDuration = hasBeenTrimmed
+        ? (shot.video?.durationMs || 5000)
+        : Math.max(0, baseDuration - trimStartMs - trimEndMs);
+      
       currentTimeMs += effectiveDuration;
       return {
         shot,
         startTimeMs: startTime,
         endTimeMs: currentTimeMs,
         durationMs: effectiveDuration,
-        trimStartMs, // Store for playback offset
-        trimEndMs, // Store for end detection
-        baseDuration, // Original video duration
+        trimStartMs, // Store for playback offset (0 if already trimmed)
+        trimEndMs, // Store for end detection (0 if already trimmed)
+        baseDuration, // Video duration to use for playback (original if trimmed, current otherwise)
       };
     });
   }, [playableShots, actualDurations]);
@@ -132,10 +147,13 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
     return videoRef.current;
   }, []);
 
-  // Play video
+  // Play video - does NOT set muted state (that's handled by goToNextShot/goToShot)
+  // This avoids race conditions where playVideo's stale closure would override the correct muted state
   const playVideo = useCallback(() => {
     const video = getActiveVideo();
     if (video) {
+      // Don't set muted here - it's already set correctly by goToNextShot/goToShot
+      // Setting it here would use stale currentShotIndex and potentially unmute a muted shot
       video.play();
       setIsPlaying(true);
       syncAudioTracks(globalTimeMs, true);
@@ -162,9 +180,15 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
     if (isPlaying) {
       pauseVideo();
     } else {
+      // Set muted state before playing (playVideo doesn't set it to avoid race conditions)
+      const video = getActiveVideo();
+      const currentShot = playableShots[currentShotIndex];
+      if (video) {
+        video.muted = isMuted || currentShot?.audioMuted || false;
+      }
       playVideo();
     }
-  }, [isPlaying, pauseVideo, playVideo]);
+  }, [isPlaying, pauseVideo, playVideo, getActiveVideo, playableShots, currentShotIndex, isMuted]);
 
   // Go to next shot
   const goToNextShot = useCallback(() => {
@@ -217,6 +241,9 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
       setVideoError(null);
       
       if (nextShotInfo && currentVideo) {
+        // Ensure muted state is set for the next shot
+        currentVideo.muted = isMuted || nextShot?.audioMuted || false;
+        
         setTimeout(() => {
           if (videoRef.current) {
             videoRef.current.currentTime = nextShotInfo.trimStartMs / 1000;
@@ -467,6 +494,8 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
             const video = getActiveVideo();
             if (video) {
               video.currentTime = videoTime;
+              // Ensure muted state is correct for target shot
+              video.muted = isMuted || targetShot?.audioMuted || false;
               if (isPlaying) {
                 video.play();
               }
@@ -630,7 +659,7 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
         {!isPlaying && (
           <button
             type="button"
-            onClick={playVideo}
+            onClick={togglePlay}
             className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
           >
             <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
