@@ -213,8 +213,20 @@ export interface Scene {
 /**
  * Get the effective duration of a shot after trimming
  * Returns the playable duration (full duration minus trim from start and end)
+ * 
+ * IMPORTANT: If originalVideo exists, the current video file is already trimmed,
+ * so video.durationMs IS the effective duration (don't double-subtract trim values).
+ * Only calculate from trim values when there's no originalVideo (trim not yet applied).
  */
 export function getEffectiveDuration(shot: Shot): number {
+  // If we have an originalVideo, the current video is already trimmed
+  // The trim values were baked in when the trimmed video file was created
+  if (shot.originalVideo) {
+    return shot.video?.durationMs || 5000;
+  }
+  
+  // No originalVideo means trim hasn't been applied to the file yet
+  // Calculate effective duration from trim values
   const fullDuration = shot.video?.durationMs || 5000;
   const trimStart = shot.trimStartMs || 0;
   const trimEnd = shot.trimEndMs || 0;

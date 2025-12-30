@@ -23,7 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AudioTrackModal } from "@/components/audio-track-modal";
 import type { Character, Location } from "@/components/project-form";
-import { ScenePlayer } from "@/components/scene-player";
+import { ScenePlayer, type ScenePlayerHandle } from "@/components/scene-player";
 import { ScreenplayElementComponent } from "@/components/screenplay-element";
 import { ShotEditorDialog } from "@/components/shot-editor-modal";
 import Timeline from "@/components/timeline";
@@ -541,24 +541,6 @@ export function EditSceneView({
   // Use removedShots from scene state instead of separate state
   const removedShots = scene.removedShots || [];
   
-  // Log removedShots whenever it changes
-  useEffect(() => {
-    console.log(
-      "[EditSceneView] removedShots state:",
-      JSON.stringify({
-        count: removedShots.length,
-        shots: removedShots.map(s => ({
-          id: s.id,
-          prompt: s.prompt?.substring(0, 50),
-          hasVideo: !!s.video,
-          videoStatus: s.video?.status,
-          videoUrl: s.video?.url?.substring(0, 100),
-          thumbnailUrl: s.video?.thumbnailUrl?.substring(0, 100),
-        })),
-        sceneRemovedShotsCount: scene.removedShots?.length || 0,
-      }, null, 2)
-    );
-  }, [removedShots, scene.removedShots]);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null); // Track which video is playing in Media Library
   const [shotToDelete, setShotToDelete] = useState<Shot | null>(null); // Shot pending deletion confirmation
@@ -581,6 +563,7 @@ export function EditSceneView({
 
   // Scene player state
   const [showPlayer, setShowPlayer] = useState(false);
+  const scenePlayerRef = useRef<ScenePlayerHandle>(null);
 
   // Build library images from characters and generated images
   const libraryImages = useMemo(() => {
@@ -1442,11 +1425,13 @@ export function EditSceneView({
   };
 
   const handleShotClick = (shot: Shot) => {
+    scenePlayerRef.current?.pause();
     setSelectedShot(shot);
     setShowShotEditor(true);
   };
 
   const handleAddShot = () => {
+    scenePlayerRef.current?.pause();
     const newShot = createNewShot(scene.shots.length);
     setSelectedShot(newShot);
     setShowShotEditor(true);
@@ -2216,7 +2201,7 @@ export function EditSceneView({
           {/* Main Area - Player & Timeline */}
           <div className="lg:col-span-3 space-y-4">
             <div className="w-full mx-auto">
-              <ScenePlayer shots={scene.shots} audioTracks={scene.audioTracks} />
+              <ScenePlayer ref={scenePlayerRef} shots={scene.shots} audioTracks={scene.audioTracks} />
             </div>
 
             {/* Video Generation Status */}
@@ -2265,6 +2250,7 @@ export function EditSceneView({
                         variant="outline"
                         size="sm"
                         onClick={() => {
+                          scenePlayerRef.current?.pause();
                           setSelectedShot(shot);
                           setShowShotEditor(true);
                         }}
@@ -2301,24 +2287,6 @@ export function EditSceneView({
           </div>
         </div>
 
-        {/* Media Library - Full Width */}
-        {(() => {
-          console.log(
-            "[EditSceneView] Rendering Media Library section:",
-            JSON.stringify({
-              removedShotsLength: removedShots.length,
-              sceneRemovedShotsLength: scene.removedShots?.length || 0,
-              shouldShow: removedShots.length > 0,
-              removedShots: removedShots.map(s => ({
-                id: s.id,
-                prompt: s.prompt?.substring(0, 50),
-                hasVideo: !!s.video,
-                videoStatus: s.video?.status,
-              })),
-            }, null, 2)
-          );
-          return null;
-        })()}
         {removedShots.length > 0 && (
           <div className="mt-8 pt-6 border-t border-border">
             <Card>
@@ -2459,24 +2427,6 @@ export function EditSceneView({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {(() => {
-              console.log(
-                "[EditSceneView] Media Library Dialog rendering:",
-                JSON.stringify({
-                  removedShotsLength: removedShots.length,
-                  sceneRemovedShotsLength: scene.removedShots?.length || 0,
-                  removedShots: removedShots.map(s => ({
-                    id: s.id,
-                    prompt: s.prompt?.substring(0, 50),
-                    hasVideo: !!s.video,
-                    videoStatus: s.video?.status,
-                    videoUrl: s.video?.url?.substring(0, 100),
-                    thumbnailUrl: s.video?.thumbnailUrl?.substring(0, 100),
-                  })),
-                }, null, 2)
-              );
-              return null;
-            })()}
             {removedShots.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Video className="h-12 w-12 mx-auto mb-4 opacity-50" />

@@ -31,6 +31,12 @@ export function AudioWaveform({
   useEffect(() => {
     let cancelled = false;
 
+    // Don't attempt to load if URL is empty or invalid
+    if (!audioUrl || audioUrl.trim() === "") {
+      setIsLoading(false);
+      return;
+    }
+
     // Don't reload if we already have waveform data for this URL
     if (loadedUrlRef.current === audioUrl) {
       return;
@@ -49,14 +55,19 @@ export function AudioWaveform({
           setIsLoading(false);
         }
       } catch (error) {
-        console.error("[AudioWaveform] Failed to load waveform:", error);
+        console.error("[AudioWaveform] Failed to load waveform:", error instanceof Error ? error.message : String(error));
         if (!cancelled) {
           setIsLoading(false);
+          // Set a fallback waveform so the UI doesn't break
+          setWaveform({
+            peaks: Array(50).fill(0.3),
+            duration: 0,
+          });
         }
       }
     }
 
-    if (audioUrl && width > 0) {
+    if (width > 0) {
       loadWaveform();
     }
 

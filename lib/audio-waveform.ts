@@ -18,9 +18,25 @@ export async function generateWaveformFromUrl(
   audioUrl: string,
   numSamples: number = 100
 ): Promise<WaveformData> {
+  // Return empty waveform for invalid URLs
+  if (!audioUrl || audioUrl.trim() === "") {
+    return {
+      peaks: Array(numSamples).fill(0.3),
+      duration: 0,
+    };
+  }
+
   try {
-    // Fetch the audio file
-    const response = await fetch(audioUrl);
+    // Fetch the audio file with credentials to handle CORS
+    const response = await fetch(audioUrl, {
+      mode: "cors",
+      credentials: "omit",
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
     const arrayBuffer = await response.arrayBuffer();
 
     // Decode audio data
@@ -59,7 +75,7 @@ export async function generateWaveformFromUrl(
       duration: audioBuffer.duration,
     };
   } catch (error) {
-    console.error("[generateWaveformFromUrl] Error:", error);
+    console.error("[generateWaveformFromUrl] Error:", error instanceof Error ? error.message : String(error));
     // Return a flat waveform as fallback
     return {
       peaks: Array(numSamples).fill(0.3),

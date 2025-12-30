@@ -44,7 +44,7 @@ interface ShotCardProps {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
   onDragEnd: () => void;
-  widthPercent: number; // Percentage of total timeline width
+  widthPercent: number; // Width as percentage of timeline
 }
 
 function ShotCard({
@@ -73,13 +73,13 @@ function ShotCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={`
-        h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden shrink-0
+        h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden
         ${isSelected ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border hover:border-primary/50"}
         ${isDragging ? "opacity-50 scale-95" : ""}
       `}
       style={{
-        width: `${widthPercent}%`,
-        minWidth: '60px',
+        flex: `${widthPercent} 1 0%`,
+        minWidth: '20px',
       }}
     >
       {/* Thumbnail or placeholder */}
@@ -216,26 +216,48 @@ export default function Timeline({
 
   // Calculate total timeline duration using effective (trimmed) durations
   const totalDurationMs = useMemo(() => {
-    return shots.reduce((total, shot) => {
-      return total + getEffectiveDuration(shot);
+    const total = shots.reduce((acc, shot) => {
+      return acc + getEffectiveDuration(shot);
     }, 0);
+    console.log("[Timeline] totalDurationMs:", total);
+    return total;
   }, [shots]);
 
-  // Calculate shot positions with percentage widths for proportional layout
+  // Calculate shot positions with durations for proportional layout
   const shotPositions = useMemo(() => {
     const sortedShots = [...shots].sort((a, b) => a.order - b.order);
     let currentTimeMs = 0;
-    return sortedShots.map((shot) => {
+    const positions = sortedShots.map((shot) => {
       const startTimeMs = currentTimeMs;
+      const fullDuration = shot.video?.durationMs || 5000;
+      const trimStart = shot.trimStartMs || 0;
+      const trimEnd = shot.trimEndMs || 0;
       const effectiveDurationMs = getEffectiveDuration(shot);
       const widthPercent = totalDurationMs > 0 ? (effectiveDurationMs / totalDurationMs) * 100 : 0;
+      
+      console.log("[Timeline] Shot:", JSON.stringify({
+        id: shot.id,
+        order: shot.order,
+        hasOriginalVideo: !!shot.originalVideo,
+        originalVideoDuration: shot.originalVideo?.durationMs,
+        currentVideoDuration: fullDuration,
+        trimStart,
+        trimEnd,
+        effectiveDurationMs,
+        widthPercent: widthPercent.toFixed(2) + "%",
+      }, null, 2));
+      
       currentTimeMs += effectiveDurationMs;
       return {
         shot,
         startTimeMs,
+        durationMs: effectiveDurationMs,
         widthPercent,
       };
     });
+    
+    console.log("[Timeline] Total widthPercent:", positions.reduce((sum, p) => sum + p.widthPercent, 0).toFixed(2) + "%");
+    return positions;
   }, [shots, totalDurationMs]);
 
   // Handle shot reordering
@@ -376,7 +398,7 @@ export default function Timeline({
       <div className="border-b border-border px-2 py-2 w-full">
         <div 
           ref={timelineRef} 
-          className="flex gap-1 w-full"
+          className="flex w-full"
           style={{ height: '64px' }}
         >
           {shotPositions.map(({ shot, widthPercent }) => (

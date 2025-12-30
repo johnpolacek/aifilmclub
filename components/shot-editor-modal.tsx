@@ -20,6 +20,7 @@ import {
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AudioWaveform } from "@/components/audio-waveform";
 import { generateThumbnailFromFile } from "@/lib/video-thumbnail";
 import { Button } from "@/components/ui/button";
 import {
@@ -782,6 +783,12 @@ export function ShotEditorDialog({
                     src={sourceVideo?.url}
                     className="w-full h-full object-contain"
                     poster={sourceVideo?.thumbnailUrl}
+                    onLoadedMetadata={() => {
+                      // Seek to trim start position when video loads (so user sees the trimmed region)
+                      if (trimmerVideoRef.current && trimStartMs > 0) {
+                        trimmerVideoRef.current.currentTime = trimStartMs / 1000;
+                      }
+                    }}
                     onTimeUpdate={(e) => {
                       const video = e.currentTarget;
                       setTrimmerCurrentTime(video.currentTime * 1000);
@@ -830,10 +837,23 @@ export function ShotEditorDialog({
                 {/* Trim Timeline Bar */}
                 <div className="space-y-3 px-1">
                   {/* Custom trim bar with draggable handles */}
-                  <div className="relative h-10 bg-muted border border-border rounded overflow-visible">
+                  <div className="relative h-12 bg-muted border border-border rounded overflow-visible">
+                    {/* Audio Waveform Background - show waveform for any video (even if audio is muted/detached) */}
+                    {sourceVideo?.url && (
+                      <div className="absolute inset-0 z-0 overflow-hidden rounded">
+                        <AudioWaveform
+                          audioUrl={sourceVideo.url}
+                          width={600}
+                          height={48}
+                          color="hsl(var(--primary) / 0.4)"
+                          className="w-full h-full"
+                        />
+                      </div>
+                    )}
+                    
                     {/* Active region highlight (between handles) */}
                     <div 
-                      className="absolute inset-y-0 bg-primary/15"
+                      className="absolute inset-y-0 bg-primary/15 z-10"
                       style={{ 
                         left: `${(trimStartMs / sourceDuration) * 100}%`,
                         right: `${(trimEndMs / sourceDuration) * 100}%`
@@ -841,11 +861,11 @@ export function ShotEditorDialog({
                     />
                     {/* Trimmed out regions (dark overlay) */}
                     <div 
-                      className="absolute inset-y-0 left-0 bg-black/50 rounded-l"
+                      className="absolute inset-y-0 left-0 bg-black/60 rounded-l z-10"
                       style={{ width: `${(trimStartMs / sourceDuration) * 100}%` }}
                     />
                     <div 
-                      className="absolute inset-y-0 right-0 bg-black/50 rounded-r"
+                      className="absolute inset-y-0 right-0 bg-black/60 rounded-r z-10"
                       style={{ width: `${(trimEndMs / sourceDuration) * 100}%` }}
                     />
 

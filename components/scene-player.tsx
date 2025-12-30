@@ -1,10 +1,9 @@
 "use client";
 
 import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, Shot } from "@/lib/scenes-client";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +13,11 @@ interface ScenePlayerProps {
   className?: string;
 }
 
-export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerProps) {
+export interface ScenePlayerHandle {
+  pause: () => void;
+}
+
+export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(function ScenePlayer({ shots, audioTracks = [], className }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const preloadedVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const preloadedShotsRef = useRef<Set<string>>(new Set());
@@ -148,6 +151,11 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       syncAudioTracks(globalTimeMs, false);
     }
   }, [globalTimeMs, syncAudioTracks, getActiveVideo]);
+
+  // Expose pause method to parent components
+  useImperativeHandle(ref, () => ({
+    pause: pauseVideo,
+  }), [pauseVideo]);
 
   // Toggle play/pause
   const togglePlay = useCallback(() => {
@@ -392,12 +400,6 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
           preloadedVideo.src = shot.video.url;
           preloadedVideo.load();
           preloadedShotsRef.current.add(shot.id);
-          
-          console.log("[ScenePlayer] Preloading shot:", JSON.stringify({
-            shotId: shot.id,
-            shotIndex: playableShots.indexOf(shot),
-            url: shot.video.url
-          }, null, 2));
         }
       }
     });
@@ -733,5 +735,5 @@ export function ScenePlayer({ shots, audioTracks = [], className }: ScenePlayerP
       ))}
     </div>
   );
-}
+});
 
