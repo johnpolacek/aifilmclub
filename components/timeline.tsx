@@ -216,37 +216,19 @@ export default function Timeline({
 
   // Calculate total timeline duration using effective (trimmed) durations
   const totalDurationMs = useMemo(() => {
-    const total = shots.reduce((acc, shot) => {
+    return shots.reduce((acc, shot) => {
       return acc + getEffectiveDuration(shot);
     }, 0);
-    console.log("[Timeline] totalDurationMs:", total);
-    return total;
   }, [shots]);
 
   // Calculate shot positions with durations for proportional layout
   const shotPositions = useMemo(() => {
     const sortedShots = [...shots].sort((a, b) => a.order - b.order);
     let currentTimeMs = 0;
-    const positions = sortedShots.map((shot) => {
+    return sortedShots.map((shot) => {
       const startTimeMs = currentTimeMs;
-      const fullDuration = shot.video?.durationMs || 5000;
-      const trimStart = shot.trimStartMs || 0;
-      const trimEnd = shot.trimEndMs || 0;
       const effectiveDurationMs = getEffectiveDuration(shot);
       const widthPercent = totalDurationMs > 0 ? (effectiveDurationMs / totalDurationMs) * 100 : 0;
-      
-      console.log("[Timeline] Shot:", JSON.stringify({
-        id: shot.id,
-        order: shot.order,
-        hasOriginalVideo: !!shot.originalVideo,
-        originalVideoDuration: shot.originalVideo?.durationMs,
-        currentVideoDuration: fullDuration,
-        trimStart,
-        trimEnd,
-        effectiveDurationMs,
-        widthPercent: widthPercent.toFixed(2) + "%",
-      }, null, 2));
-      
       currentTimeMs += effectiveDurationMs;
       return {
         shot,
@@ -255,9 +237,6 @@ export default function Timeline({
         widthPercent,
       };
     });
-    
-    console.log("[Timeline] Total widthPercent:", positions.reduce((sum, p) => sum + p.widthPercent, 0).toFixed(2) + "%");
-    return positions;
   }, [shots, totalDurationMs]);
 
   // Handle shot reordering
