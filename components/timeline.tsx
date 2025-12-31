@@ -2,7 +2,6 @@
 
 import {
   Loader2,
-  Plus,
   Video,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -23,8 +22,6 @@ interface TimelineProps {
   onShotReorder: (shotIds: string[]) => void;
   onAudioTrackClick: (track: AudioTrack) => void;
   onAudioTrackMove?: (trackId: string, newStartTimeMs: number) => void;
-  onAddShot: () => void;
-  onAddAudioTrack: () => void;
 }
 
 // ============================================================================
@@ -209,8 +206,6 @@ export default function Timeline({
   onShotReorder,
   onAudioTrackClick,
   onAudioTrackMove,
-  onAddShot,
-  onAddAudioTrack,
 }: TimelineProps) {
   const [draggedShotId, setDraggedShotId] = useState<string | null>(null);
   const [draggedAudioTrackId, setDraggedAudioTrackId] = useState<string | null>(null);
@@ -437,26 +432,6 @@ export default function Timeline({
             </div>
           );
         })}
-
-        {/* Add buttons */}
-        <div className="flex items-center justify-center gap-4 w-full border-t border-border mt-6 pt-4">
-          <button
-            type="button"
-            onClick={onAddShot}
-            className="h-8 bg-primary text-primary-foreground rounded inline-flex items-center justify-center gap-2 px-4 text-xs font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Shot
-          </button>
-          <button
-            type="button"
-            onClick={onAddAudioTrack}
-            className="h-8 border-2 border-dashed border-muted-foreground/30 rounded inline-flex items-center justify-center gap-2 px-4 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Audio
-          </button>
-        </div>
       </div>
     </div>
   );
