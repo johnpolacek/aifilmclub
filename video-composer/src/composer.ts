@@ -4,6 +4,7 @@ import { join } from "path";
 import { v4 as uuid } from "uuid";
 import { downloadFile } from "./downloader.js";
 import { uploadToS3 } from "./uploader.js";
+import { createJob, updateJob } from "./job-store.js";
 import type {
   CompositionRequest,
   CompositionResult,
@@ -18,6 +19,9 @@ export async function processComposition(
   request: CompositionRequest
 ): Promise<void> {
   const workDir = join("/tmp", `compose-${uuid()}`);
+
+  // Initialize job tracking
+  createJob(request.jobId);
 
   console.log(
     "[composer] Starting composition:",
@@ -39,11 +43,24 @@ export async function processComposition(
     // 1. Download all source files
     const videoFiles: string[] = [];
     const sortedShots = request.shots.sort((a, b) => a.order - b.order);
+    const totalDownloads = sortedShots.length + (request.audioTracks?.filter(t => !t.muted).length || 0);
+    let downloadedCount = 0;
+
+    updateJob(request.jobId, {
+      status: "downloading",
+      stage: `Downloading files (0/${totalDownloads})`,
+      progress: 0,
+    });
 
     for (const shot of sortedShots) {
       const localPath = join(workDir, `shot-${shot.order}.mp4`);
       await downloadFile(shot.videoUrl, localPath);
       videoFiles.push(localPath);
+      downloadedCount++;
+      updateJob(request.jobId, {
+        stage: `Downloading files (${downloadedCount}/${totalDownloads})`,
+        progress: Math.round((downloadedCount / totalDownloads) * 20), // Downloads are 0-20%
+      });
     }
 
     const audioFiles: { path: string; track: CompositionAudioTrack }[] = [];
@@ -52,6 +69,11 @@ export async function processComposition(
         const localPath = join(workDir, `audio-${track.id}.mp3`);
         await downloadFile(track.sourceUrl, localPath);
         audioFiles.push({ path: localPath, track });
+        downloadedCount++;
+        updateJob(request.jobId, {
+          stage: `Downloading files (${downloadedCount}/${totalDownloads})`,
+          progress: Math.round((downloadedCount / totalDownloads) * 20),
+        });
       }
     }
 
@@ -68,18 +90,35 @@ export async function processComposition(
     );
 
     // 2. Compose with FFmpeg
+    updateJob(request.jobId, {
+      status: "processing",
+      stage: "Compositing video...",
+      progress: 20,
+    });
+
     const outputPath = join(workDir, "output.mp4");
     await composeWithFfmpeg(request, videoFiles, audioFiles, outputPath);
 
     console.log("[composer] FFmpeg composition complete");
 
     // 3. Generate thumbnail
+    updateJob(request.jobId, {
+      stage: "Generating thumbnail...",
+      progress: 90,
+    });
+
     const thumbnailPath = join(workDir, "thumbnail.jpg");
     await generateThumbnail(outputPath, thumbnailPath);
 
     console.log("[composer] Thumbnail generated");
 
     // 4. Upload to S3
+    updateJob(request.jobId, {
+      status: "uploading",
+      stage: "Uploading to cloud...",
+      progress: 92,
+    });
+
     const timestamp = Date.now();
     const videoKey = `projects/${request.projectId}/scenes/${request.sceneId}/composite-${timestamp}.mp4`;
     const thumbKey = `projects/${request.projectId}/scenes/${request.sceneId}/composite-thumb-${timestamp}.jpg`;
@@ -91,6 +130,12 @@ export async function processComposition(
 
     // 5. Get duration
     const durationMs = await getVideoDuration(outputPath);
+
+    updateJob(request.jobId, {
+      status: "completed",
+      stage: "Complete!",
+      progress: 100,
+    });
 
     console.log(
       "[composer] Composition complete:",
@@ -128,6 +173,12 @@ export async function processComposition(
       )
     );
 
+    updateJob(request.jobId, {
+      status: "failed",
+      stage: "Failed",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+
     await sendWebhook(request.webhookUrl, {
       jobId: request.jobId,
       status: "failed",
@@ -148,6 +199,7 @@ async function composeWithFfmpeg(
   audioFiles: { path: string; track: CompositionAudioTrack }[],
   outputPath: string
 ): Promise<void> {
+  const { jobId } = request;
   const shots = request.shots.sort((a, b) => a.order - b.order);
 
   // Calculate total video duration for audio track positioning
@@ -279,7 +331,15 @@ async function composeWithFfmpeg(
       })
       .on("progress", (progress) => {
         if (progress.percent) {
-          console.log(`[composer] Progress: ${Math.round(progress.percent)}%`);
+          // FFmpeg progress can go over 100% due to audio processing
+          // Normalize to 20-90% range (downloads are 0-20%, upload is 90-100%)
+          const normalizedProgress = Math.min(100, progress.percent);
+          const mappedProgress = 20 + Math.round((normalizedProgress / 100) * 70);
+          console.log(`[composer] Progress: ${Math.round(progress.percent)}% (mapped: ${mappedProgress}%)`);
+          updateJob(jobId, {
+            stage: `Encoding video... ${Math.min(100, Math.round(progress.percent))}%`,
+            progress: mappedProgress,
+          });
         }
       })
       .on("end", () => resolve())

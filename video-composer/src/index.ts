@@ -1,5 +1,7 @@
+import "dotenv/config";
 import express, { type Request, type Response } from "express";
 import { processComposition } from "./composer.js";
+import { getJob } from "./job-store.js";
 import type { CompositionRequest } from "./types.js";
 
 const app = express();
@@ -10,6 +12,24 @@ const API_SECRET = process.env.API_SECRET;
 // Health check
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Job status endpoint
+app.get("/status/:jobId", (req: Request, res: Response) => {
+  // Verify shared secret
+  const authHeader = req.headers.authorization;
+  if (authHeader !== `Bearer ${API_SECRET}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { jobId } = req.params;
+  const job = getJob(jobId);
+
+  if (!job) {
+    return res.status(404).json({ error: "Job not found" });
+  }
+
+  return res.json(job);
 });
 
 // Composition endpoint

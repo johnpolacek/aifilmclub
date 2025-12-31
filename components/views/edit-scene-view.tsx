@@ -567,6 +567,9 @@ export function EditSceneView({
 
   // Render scene state
   const [isRendering, setIsRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState<number | null>(null);
+  const [renderStage, setRenderStage] = useState<string | null>(null);
+  const [showCompositeVideoDialog, setShowCompositeVideoDialog] = useState(false);
 
   // Build library images from characters and generated images
   const libraryImages = useMemo(() => {
@@ -1657,6 +1660,73 @@ export function EditSceneView({
     toast.success("Shot added to timeline");
   };
 
+  // Poll for composition status
+  const pollCompositionStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/scenes/${scene.id}/compose?projectId=${projectId}`);
+      const data = await response.json();
+      
+      // Update progress and stage
+      if (data.progress !== null && data.progress !== undefined) {
+        setRenderProgress(data.progress);
+      }
+      if (data.stage) {
+        setRenderStage(data.stage);
+      }
+      
+      if (data.status === "completed" && data.compositeVideo) {
+        setScene((prev) => ({
+          ...prev,
+          compositeStatus: "completed",
+          compositeVideo: data.compositeVideo,
+          compositeError: undefined,
+        }));
+        setRenderProgress(null);
+        setRenderStage(null);
+        toast.success("Video rendering complete!");
+        return true; // Stop polling
+      } else if (data.status === "failed") {
+        setScene((prev) => ({
+          ...prev,
+          compositeStatus: "failed",
+          compositeError: data.error || "Unknown error",
+        }));
+        setRenderProgress(null);
+        setRenderStage(null);
+        toast.error("Video rendering failed");
+        return true; // Stop polling
+      }
+      return false; // Continue polling
+    } catch (error) {
+      console.error(
+        "[EditSceneView] Poll composition status error:",
+        JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+      );
+      return false;
+    }
+  }, [scene.id, projectId]);
+
+  // Poll for composition status when processing
+  useEffect(() => {
+    if (scene.compositeStatus === "processing") {
+      // Poll immediately on mount
+      pollCompositionStatus();
+      
+      const interval = setInterval(async () => {
+        const shouldStop = await pollCompositionStatus();
+        if (shouldStop) {
+          clearInterval(interval);
+        }
+      }, 1500); // Poll every 1.5 seconds for smoother progress updates
+
+      return () => clearInterval(interval);
+    } else {
+      // Clear progress when not processing
+      setRenderProgress(null);
+      setRenderStage(null);
+    }
+  }, [scene.compositeStatus, pollCompositionStatus]);
+
   // Render scene - compose all shots and audio tracks into a single video
   const handleRenderScene = async () => {
     setIsRendering(true);
@@ -2274,48 +2344,87 @@ export function EditSceneView({
             </div>
 
             {/* Render Scene Button & Composite Video */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleRenderScene}
-                  disabled={isRendering || scene.compositeStatus === "processing" || scene.shots.filter(s => s.video?.status === "completed").length === 0}
-                  variant="outline"
-                  size="sm"
-                  className="bg-transparent"
-                >
-                  {isRendering || scene.compositeStatus === "processing" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Rendering...
-                    </>
-                  ) : (
-                    <>
-                      <Film className="h-4 w-4 mr-2" />
-                      Render Scene
-                    </>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleRenderScene}
+                    disabled={isRendering || scene.compositeStatus === "processing" || scene.shots.filter(s => s.video?.status === "completed").length === 0}
+                    variant="outline"
+                    size="sm"
+                    className="bg-transparent"
+                  >
+                    {isRendering || scene.compositeStatus === "processing" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Rendering...
+                      </>
+                    ) : (
+                      <>
+                        <Film className="h-4 w-4 mr-2" />
+                        Render Scene
+                      </>
+                    )}
+                  </Button>
+                  {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
+                    <span className="text-xs text-muted-foreground">
+                      Last rendered: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
+                    </span>
                   )}
-                </Button>
+                  {scene.compositeStatus === "failed" && scene.compositeError && (
+                    <span className="text-xs text-destructive">
+                      Render failed: {scene.compositeError}
+                    </span>
+                  )}
+                </div>
                 {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
-                  <span className="text-xs text-muted-foreground">
-                    Last rendered: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
-                  </span>
-                )}
-                {scene.compositeStatus === "failed" && scene.compositeError && (
-                  <span className="text-xs text-destructive">
-                    Render failed: {scene.compositeError}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setShowCompositeVideoDialog(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <PlayCircle className="h-4 w-4 mr-2" />
+                      View Rendered Video
+                    </Button>
+                    <a
+                      href={scene.compositeVideo.url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Download
+                    </a>
+                  </div>
                 )}
               </div>
-              {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
-                <a
-                  href={scene.compositeVideo.url}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline"
-                >
-                  Download Rendered Video
-                </a>
+
+              {/* Render Progress */}
+              {scene.compositeStatus === "processing" && (
+                <div className="rounded-lg border border-primary/30 overflow-hidden bg-primary/5">
+                  <div className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                        <span className="text-sm font-medium text-primary">
+                          {renderStage || "Processing..."}
+                        </span>
+                      </div>
+                      {renderProgress !== null && (
+                        <span className="text-xs text-muted-foreground">
+                          {renderProgress}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-300 ease-out"
+                        style={{ width: `${renderProgress || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -3074,6 +3183,54 @@ export function EditSceneView({
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Composite Video Dialog */}
+      <Dialog open={showCompositeVideoDialog} onOpenChange={setShowCompositeVideoDialog}>
+        <DialogContent className="sm:max-w-6xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Film className="h-5 w-5" />
+              Rendered Composite Video
+            </DialogTitle>
+            <DialogDescription>
+              {scene.compositeVideo?.renderedAt && (
+                <>Rendered on {new Date(scene.compositeVideo.renderedAt).toLocaleString()}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {scene.compositeVideo?.url && (
+            <div className="space-y-4">
+              <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                <video
+                  src={scene.compositeVideo.url}
+                  controls
+                  className="w-full h-full"
+                  poster={scene.compositeVideo.thumbnailUrl}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+              <div className="flex items-center justify-between">
+                {scene.compositeVideo.durationMs && (
+                  <span className="text-sm text-muted-foreground">
+                    Duration: {Math.round(scene.compositeVideo.durationMs / 1000)}s
+                  </span>
+                )}
+                <a
+                  href={scene.compositeVideo.url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" size="sm">
+                    Download Video
+                  </Button>
+                </a>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

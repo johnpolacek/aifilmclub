@@ -170,7 +170,7 @@ export async function POST(
 
 /**
  * GET /api/scenes/[sceneId]/compose
- * Get the composition status for a scene
+ * Get the composition status for a scene, including live progress from the worker
  */
 export async function GET(
   request: Request,
@@ -199,10 +199,41 @@ export async function GET(
       return NextResponse.json({ error: "Scene not found" }, { status: 404 });
     }
 
+    // If processing, try to get live progress from the worker
+    let liveProgress = null;
+    if (
+      scene.compositeStatus === "processing" &&
+      scene.compositeVideo?.jobId &&
+      COMPOSER_URL &&
+      COMPOSER_SECRET
+    ) {
+      try {
+        const statusResponse = await fetch(
+          `${COMPOSER_URL}/status/${scene.compositeVideo.jobId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${COMPOSER_SECRET}`,
+            },
+          }
+        );
+        if (statusResponse.ok) {
+          liveProgress = await statusResponse.json();
+        }
+      } catch (err) {
+        // Worker might not be available, continue with scene status
+        console.log(
+          "[compose-status] Could not fetch live progress:",
+          JSON.stringify({ error: err instanceof Error ? err.message : String(err) }, null, 2)
+        );
+      }
+    }
+
     return NextResponse.json({
       status: scene.compositeStatus || null,
       compositeVideo: scene.compositeVideo || null,
       error: scene.compositeError || null,
+      progress: liveProgress?.progress || null,
+      stage: liveProgress?.stage || null,
     });
   } catch (error) {
     console.error(
