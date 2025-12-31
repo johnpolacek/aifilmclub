@@ -1,12 +1,8 @@
 "use client";
 
 import {
-  GripVertical,
-  ImageIcon,
   Loader2,
   Plus,
-  Sparkles,
-  Trash2,
   Video,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -73,7 +69,7 @@ function ShotCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={`
-        h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden
+        relative h-16 rounded-lg border-2 cursor-pointer transition-all overflow-hidden
         ${isSelected ? "border-primary shadow-lg ring-2 ring-primary/20" : "border-border hover:border-primary/50"}
         ${isDragging ? "opacity-50 scale-95" : ""}
       `}
@@ -125,6 +121,14 @@ function ShotCard({
         <div className="w-full h-full bg-muted/50 flex items-center justify-center">
           <Video className="h-6 w-6 text-muted-foreground" />
         </div>
+      )}
+      
+      {/* Audio indicator line - show at bottom for completed videos with audio */}
+      {shot.video?.status === "completed" && !shot.audioMuted && (
+        <div 
+          className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-600"
+          title="Has audio"
+        />
       )}
     </div>
   );
@@ -450,7 +454,7 @@ export default function Timeline({
             className="h-8 border-2 border-dashed border-muted-foreground/30 rounded inline-flex items-center justify-center gap-2 px-4 text-xs hover:border-primary/50 hover:text-foreground transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Add Audio Track
+            Add Audio
           </button>
         </div>
       </div>

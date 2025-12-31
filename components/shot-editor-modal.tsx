@@ -252,7 +252,18 @@ export function ShotEditorDialog({
   // Audio detaching state
   const [isDetachingAudio, setIsDetachingAudio] = useState(false);
 
+  // Auto-open file picker state
+  const [shouldOpenFilePicker, setShouldOpenFilePicker] = useState(false);
+
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Effect to open file picker after sourceType changes to "uploaded"
+  useEffect(() => {
+    if (shouldOpenFilePicker && sourceType === "uploaded" && videoInputRef.current) {
+      videoInputRef.current.click();
+      setShouldOpenFilePicker(false);
+    }
+  }, [shouldOpenFilePicker, sourceType]);
 
   // Reset state when modal opens or shot changes
   useEffect(() => {
@@ -279,6 +290,8 @@ export function ShotEditorDialog({
       setIsGeneratingEndFrame(false);
       // Reset replace mode when modal opens
       setIsReplaceMode(false);
+      // Reset file picker trigger
+      setShouldOpenFilePicker(false);
       // Reset trim state
       setIsTrimMode(false);
       setTrimStartMs(shot.trimStartMs || 0);
@@ -1127,13 +1140,9 @@ export function ShotEditorDialog({
                 type="button"
                 variant={sourceType === "uploaded" ? "default" : "outline"}
                 onClick={() => {
-                  // If no video exists, directly open file selector
-                  if (!shot.video?.url) {
-                    setSourceType("uploaded");
-                    videoInputRef.current?.click();
-                  } else {
-                    setSourceType("uploaded");
-                  }
+                  setSourceType("uploaded");
+                  // Trigger file picker after re-render when input is available
+                  setShouldOpenFilePicker(true);
                 }}
                 className="flex-1"
               >
@@ -1971,10 +1980,10 @@ export function ShotEditorDialog({
                   size="sm"
                   onClick={() => {
                     setIsTrimMode(true);
-                    // Reset trim values for new trim (we're creating a new trimmed file)
-                    setTrimStartMs(0);
-                    setTrimEndMs(0);
-                    setTrimmerCurrentTime(0);
+                    // Initialize with existing trim values if video was already trimmed
+                    setTrimStartMs(shot?.trimStartMs || 0);
+                    setTrimEndMs(shot?.trimEndMs || 0);
+                    setTrimmerCurrentTime(shot?.trimStartMs || 0);
                   }}
                 >
                   <Scissors className="h-3.5 w-3.5 mr-1.5" />
