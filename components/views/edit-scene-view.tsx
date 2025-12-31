@@ -49,7 +49,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getImageUrl, getPublicUrl } from "@/lib/image-utils";
 import type { AudioTrack, GenerationMode, Scene, Shot, ShotVideo } from "@/lib/scenes-client";
-import { createNewShot } from "@/lib/scenes-client";
+import { createNewShot, getEffectiveDuration } from "@/lib/scenes-client";
 import { elementsToText, parseScreenplayToElements } from "@/lib/screenplay-parser";
 import type { ScreenplayElement, ScreenplayElementType } from "@/lib/types/screenplay";
 import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screenplay";
@@ -1779,11 +1779,23 @@ export function EditSceneView({
     setScene((prev) => {
       const existingIndex = prev.audioTracks.findIndex((t) => t.id === track.id);
       if (existingIndex >= 0) {
+        // Updating existing track - keep its position
         const newTracks = [...prev.audioTracks];
         newTracks[existingIndex] = track;
         return { ...prev, audioTracks: newTracks };
       } else {
-        return { ...prev, audioTracks: [...prev.audioTracks, track] };
+        // Adding new track - position at end of timeline
+        // Calculate timeline end by summing all shot durations
+        const timelineEndMs = prev.shots.reduce((total, shot) => {
+          return total + getEffectiveDuration(shot);
+        }, 0);
+        
+        const positionedTrack: AudioTrack = {
+          ...track,
+          startTimeMs: timelineEndMs,
+        };
+        
+        return { ...prev, audioTracks: [...prev.audioTracks, positionedTrack] };
       }
     });
     setShowAudioTrackEditor(false);
@@ -1815,10 +1827,29 @@ export function EditSceneView({
 
   // Handle detach audio from shot - add extracted audio as new track
   const handleDetachAudio = (audioTrack: AudioTrack) => {
-    setScene((prev) => ({
-      ...prev,
-      audioTracks: [...prev.audioTracks, audioTrack],
-    }));
+    setScene((prev) => {
+      // Calculate the shot's timeline position if sourceVideoShotId is provided
+      let positionedTrack = audioTrack;
+      if (audioTrack.sourceVideoShotId) {
+        const sourceShot = prev.shots.find(s => s.id === audioTrack.sourceVideoShotId);
+        if (sourceShot) {
+          // Calculate timeline position by summing durations of shots before this one
+          const shotPosition = prev.shots
+            .filter(s => s.order < sourceShot.order)
+            .reduce((total, shot) => total + getEffectiveDuration(shot), 0);
+          
+          positionedTrack = {
+            ...audioTrack,
+            startTimeMs: shotPosition,
+          };
+        }
+      }
+      
+      return {
+        ...prev,
+        audioTracks: [...prev.audioTracks, positionedTrack],
+      };
+    });
   };
 
   // Handle audio track position change (dragging)

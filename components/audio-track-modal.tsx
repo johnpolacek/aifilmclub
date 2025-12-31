@@ -305,7 +305,7 @@ export function AudioTrackModal({
           <input
             ref={audioInputRef}
             type="file"
-            accept="audio/mp3,audio/wav,audio/ogg,audio/aac,audio/m4a"
+            accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/aac,audio/x-m4a,audio/mp4,.m4a,.mp3,.wav"
             onChange={handleAudioUpload}
             className="hidden"
           />
