@@ -177,8 +177,8 @@ function AudioTrackRow({
       } ${track.muted ? "opacity-40" : ""} ${isDragging ? "opacity-50 scale-95" : ""}`}
       style={{
         left: `${leftPercent}%`,
-        width: `${Math.max(5, widthPercent)}%`,
-        minWidth: '40px',
+        width: `${Math.max(0.5, widthPercent)}%`,
+        minWidth: '8px',
       }}
       onClick={onClick}
     >

@@ -663,9 +663,9 @@ export function AudioTrackModal({
                   size="sm"
                   onClick={() => {
                     setIsTrimMode(true);
-                    // Reset trim values for new trim (we're creating a new trimmed file)
-                    setTrimStartMs(0);
-                    setTrimEndMs(0);
+                    // Preserve existing trim values if they exist, otherwise reset to 0
+                    setTrimStartMs(track.trimStartMs || 0);
+                    setTrimEndMs(track.trimEndMs || 0);
                     setCurrentTime(0);
                   }}
                 >

@@ -2347,25 +2347,18 @@ export function EditSceneView({
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={handleRenderScene}
-                    disabled={isRendering || scene.compositeStatus === "processing" || scene.shots.filter(s => s.video?.status === "completed").length === 0}
-                    variant="outline"
-                    size="sm"
-                    className="bg-transparent"
-                  >
-                    {isRendering || scene.compositeStatus === "processing" ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Rendering...
-                      </>
-                    ) : (
-                      <>
-                        <Film className="h-4 w-4 mr-2" />
-                        Render Scene
-                      </>
-                    )}
-                  </Button>
+                  {!(isRendering || scene.compositeStatus === "processing") && (
+                    <Button
+                      onClick={handleRenderScene}
+                      disabled={scene.shots.filter(s => s.video?.status === "completed").length === 0}
+                      variant="outline"
+                      size="sm"
+                      className="bg-transparent"
+                    >
+                      <Film className="h-4 w-4 mr-2" />
+                      Render Scene
+                    </Button>
+                  )}
                   {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
                     <span className="text-xs text-muted-foreground">
                       Last rendered: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
