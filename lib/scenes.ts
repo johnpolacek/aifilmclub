@@ -5,6 +5,8 @@ import { getObjectFromS3, listObjectsInS3, putObjectToS3 } from "./s3";
 export type {
   AudioSourceType,
   AudioTrack,
+  CompositeStatus,
+  CompositeVideo,
   GeneratedImage,
   GeneratedVideo,
   GenerationMode,

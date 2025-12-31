@@ -179,6 +179,22 @@ export interface GeneratedVideo {
 }
 
 /**
+ * Composite video (rendered from timeline)
+ */
+export interface CompositeVideo {
+  url: string;
+  thumbnailUrl?: string;
+  durationMs: number;
+  renderedAt: string;
+  jobId?: string;
+}
+
+/**
+ * Composite video rendering status
+ */
+export type CompositeStatus = "pending" | "processing" | "completed" | "failed";
+
+/**
  * Scene interface - represents a single scene in a film project
  */
 export interface Scene {
@@ -197,6 +213,11 @@ export interface Scene {
 
   // Transition to next scene
   transitionOut: Transition;
+
+  // Composite video (rendered from timeline)
+  compositeVideo?: CompositeVideo;
+  compositeStatus?: CompositeStatus;
+  compositeError?: string;
 
   // Legacy fields (kept for migration compatibility)
   generatedImages?: GeneratedImage[];

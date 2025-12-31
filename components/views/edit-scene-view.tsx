@@ -565,6 +565,9 @@ export function EditSceneView({
   const [showPlayer, setShowPlayer] = useState(false);
   const scenePlayerRef = useRef<ScenePlayerHandle>(null);
 
+  // Render scene state
+  const [isRendering, setIsRendering] = useState(false);
+
   // Build library images from characters and generated images
   const libraryImages = useMemo(() => {
     const images: LibraryImage[] = [];
@@ -1654,6 +1657,41 @@ export function EditSceneView({
     toast.success("Shot added to timeline");
   };
 
+  // Render scene - compose all shots and audio tracks into a single video
+  const handleRenderScene = async () => {
+    setIsRendering(true);
+    try {
+      const response = await fetch(`/api/scenes/${scene.id}/compose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Rendering started! This may take a few minutes.");
+        // Update scene state to show processing status
+        setScene((prev) => ({
+          ...prev,
+          compositeStatus: "processing",
+          compositeVideo: {
+            ...(prev.compositeVideo || { url: "", durationMs: 0, renderedAt: "" }),
+            jobId: data.jobId,
+          },
+        }));
+      } else {
+        toast.error(data.error || "Failed to start rendering");
+      }
+    } catch (error) {
+      console.error(
+        "[EditSceneView] Render scene error:",
+        JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+      );
+      toast.error("Failed to start rendering");
+    } finally {
+      setIsRendering(false);
+    }
+  };
+
   const handleShotReorder = (shotIds: string[]) => {
     setScene((prev) => {
       const shotMap = new Map(prev.shots.map((s) => [s.id, s]));
@@ -2233,6 +2271,52 @@ export function EditSceneView({
           <div className="lg:col-span-3 space-y-4">
             <div className="w-full mx-auto">
               <ScenePlayer ref={scenePlayerRef} shots={scene.shots} audioTracks={scene.audioTracks} />
+            </div>
+
+            {/* Render Scene Button & Composite Video */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleRenderScene}
+                  disabled={isRendering || scene.compositeStatus === "processing" || scene.shots.filter(s => s.video?.status === "completed").length === 0}
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent"
+                >
+                  {isRendering || scene.compositeStatus === "processing" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Rendering...
+                    </>
+                  ) : (
+                    <>
+                      <Film className="h-4 w-4 mr-2" />
+                      Render Scene
+                    </>
+                  )}
+                </Button>
+                {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
+                  <span className="text-xs text-muted-foreground">
+                    Last rendered: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
+                  </span>
+                )}
+                {scene.compositeStatus === "failed" && scene.compositeError && (
+                  <span className="text-xs text-destructive">
+                    Render failed: {scene.compositeError}
+                  </span>
+                )}
+              </div>
+              {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
+                <a
+                  href={scene.compositeVideo.url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  Download Rendered Video
+                </a>
+              )}
             </div>
 
             {/* Video Generation Status */}
