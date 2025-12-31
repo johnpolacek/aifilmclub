@@ -1,6 +1,7 @@
 {
   "name": "video-composer",
   "version": "1.0.0",
+  "type": "module",
   "description": "Video composition service using FFmpeg for AI Film Camp",
   "main": "dist/index.js",
   "scripts": {

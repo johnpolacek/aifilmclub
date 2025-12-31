@@ -1,6 +1,6 @@
 import { createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
-import type { Readable } from "stream";
+import { Readable } from "stream";
 
 /**
  * Download a file from a URL to a local path

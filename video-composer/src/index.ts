@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import { processComposition } from "./composer.js";
 import type { CompositionRequest } from "./types.js";
 
@@ -8,12 +8,12 @@ app.use(express.json({ limit: "50mb" }));
 const API_SECRET = process.env.API_SECRET;
 
 // Health check
-app.get("/health", (_req, res) => {
+app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // Composition endpoint
-app.post("/compose", async (req, res) => {
+app.post("/compose", async (req: Request, res: Response) => {
   // Verify shared secret
   const authHeader = req.headers.authorization;
   if (authHeader !== `Bearer ${API_SECRET}`) {
