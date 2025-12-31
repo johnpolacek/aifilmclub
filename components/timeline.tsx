@@ -350,7 +350,7 @@ export default function Timeline({
   }, [totalDurationMs]);
 
   return (
-    <div className="bg-card/50 backdrop-blur w-full">
+    <div className="w-full">
       {/* Timeline Ruler */}
       <div className="border-b border-border px-2 py-1 w-full">
         <div className="relative w-full" style={{ height: '24px' }}>

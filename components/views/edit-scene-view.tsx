@@ -2417,7 +2417,7 @@ export function EditSceneView({
             </div>
 
             {/* Controls Row: Add Shot, Add Audio, Render Scene */}
-            <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4">
+            <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4 -mt-8">
               <div className="flex items-center gap-4">
                 <Button
                   type="button"
@@ -2454,7 +2454,7 @@ export function EditSceneView({
                 {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
                   <>
                     <span className="text-xs text-muted-foreground">
-                      Last rendered: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
+                      Last render: {new Date(scene.compositeVideo.renderedAt).toLocaleString()}
                     </span>
                     <Button
                       onClick={() => setShowCompositeVideoDialog(true)}
@@ -2510,16 +2510,11 @@ export function EditSceneView({
                 </div>
               </div>
             )}
-
-            {/* Instructions */}
-            <p className="text-xs text-muted-foreground text-center pt-4 pb-8 italic">
-              Click a shot to edit • Drag to reorder
-            </p>
           </div>
         </div>
 
         {removedShots.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-border">
+          <div className="mt-20">
             <Card>
               <CardHeader className="py-4">
                 <div className="flex items-center justify-between">
