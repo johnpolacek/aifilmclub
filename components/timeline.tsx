@@ -167,7 +167,7 @@ function AudioTrackRow({
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
       onMouseDown={onMouseDown}
-      className={`absolute h-10 rounded-md cursor-move transition-all overflow-hidden border ${
+      className={`absolute h-6 rounded-md cursor-move transition-all overflow-hidden border ${
         isSelected 
           ? "border-primary ring-2 ring-primary/30 bg-primary/5" 
           : "border-border bg-muted/20 hover:border-primary/50"
@@ -184,7 +184,7 @@ function AudioTrackRow({
         <AudioWaveform
           audioUrl={track.sourceUrl}
           width={200} // Fixed width for waveform sampling
-          height={40}
+          height={24}
           color={isSelected ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.5)"}
           className="w-full h-full"
         />
@@ -397,7 +397,7 @@ export default function Timeline({
       </div>
 
       {/* Audio Tracks */}
-      <div className="px-2 py-2 space-y-2 w-full">
+      <div className="px-1 py-1 space-y-1 w-full">
         {audioTracks.map((track) => {
           // Use dragged position for visual feedback during dragging, otherwise use actual position
           const displayStartTimeMs = draggedAudioTrackId === track.id && draggedAudioTrackPosition !== null
@@ -408,8 +408,7 @@ export default function Timeline({
           return (
             <div
               key={track.id}
-              className="relative w-full"
-              style={{ height: '40px' }}
+              className="relative w-full h-6"
             >
               <AudioTrackRow
                 track={track}

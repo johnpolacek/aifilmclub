@@ -2160,7 +2160,7 @@ export function EditSceneView({
     <div className="min-h-screen bg-background flex flex-col pt-20">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 lg:px-8 py-4">
+        <div className="container mx-auto px-4 lg:px-8 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
@@ -2359,11 +2359,10 @@ export function EditSceneView({
                 </CardContent>
               </Card>
             )}
-
           </div>
 
           {/* Main Area - Player & Timeline */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-3 space-y-2">
             <div className="w-full mx-auto">
               <ScenePlayer ref={scenePlayerRef} shots={scene.shots} audioTracks={scene.audioTracks} />
             </div>
@@ -2443,7 +2442,7 @@ export function EditSceneView({
             </div>
 
             {/* Controls Row: Add Shot, Add Audio, Render Scene */}
-            <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4 -mt-8">
+            <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4">
               {!(isRendering || scene.compositeStatus === "processing") && (
                 <div className="flex items-center gap-4">
                   <Button

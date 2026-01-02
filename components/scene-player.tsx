@@ -758,19 +758,19 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
             variant="outline"
             size="icon"
             onClick={goToPrevShot}
-            className="bg-transparent h-8 w-8"
+            className="bg-transparent h-7 w-12"
             title="Previous shot"
           >
-            <SkipBack className="h-4 w-4" />
+            <SkipBack className="h-3 w-3" />
           </Button>
           <Button
             type="button"
             variant="outline"
             size="icon"
             onClick={togglePlay}
-            className="bg-transparent h-9 w-9"
+            className="bg-transparent h-7 w-12"
           >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
+            {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3 ml-0.5" />}
           </Button>
           <Button
             type="button"
@@ -778,10 +778,10 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
             size="icon"
             onClick={goToNextShot}
             disabled={!hasNext}
-            className="bg-transparent h-8 w-8"
+            className="bg-transparent h-7 w-12"
             title="Next shot"
           >
-            <SkipForward className="h-4 w-4" />
+            <SkipForward className="h-3 w-3" />
           </Button>
         </div>
 
