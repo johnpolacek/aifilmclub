@@ -2475,7 +2475,7 @@ export function EditSceneView({
                     size="sm"
                   >
                     <Film className="h-4 w-4 mr-2" />
-                    Render Scene
+                    Render
                   </Button>
                 )}
                 {scene.compositeStatus === "completed" && scene.compositeVideo?.url && (
@@ -2489,7 +2489,7 @@ export function EditSceneView({
                       size="sm"
                     >
                       <PlayCircle className="h-4 w-4 mr-2" />
-                      View Rendered Video
+                      View Composite
                     </Button>
                     {scene.compositeVideo?.url && (
                       <Button
