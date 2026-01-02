@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 interface ScenePlayerProps {
   shots: Shot[];
   audioTracks?: AudioTrack[];
+  masterVolume?: number; // Master volume control (0.0 to 2.0, default: 1.0)
   className?: string;
 }
 
@@ -17,7 +18,7 @@ export interface ScenePlayerHandle {
   pause: () => void;
 }
 
-export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(function ScenePlayer({ shots, audioTracks = [], className }, ref) {
+export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(function ScenePlayer({ shots, audioTracks = [], masterVolume = 1.0, className }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const preloadedVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const preloadedShotsRef = useRef<Set<string>>(new Set());
@@ -127,7 +128,7 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
             audioEl.currentTime = trackTime;
           }
 
-          audioEl.volume = track.muted ? 0 : track.volume * volume;
+          audioEl.volume = track.muted ? 0 : track.volume * volume * masterVolume;
           audioEl.muted = isMuted || track.muted;
 
           if (playing && audioEl.paused) {
@@ -143,7 +144,7 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
         }
       });
     },
-    [audioTracks, isMuted, volume]
+    [audioTracks, isMuted, volume, masterVolume]
   );
 
   // Get the currently active video element

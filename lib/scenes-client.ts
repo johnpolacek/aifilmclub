@@ -216,6 +216,9 @@ export interface Scene {
   audioTracks: AudioTrack[]; // Multiple audio layers
   removedShots?: Shot[]; // Shots removed from timeline but kept in Media Library
 
+  // Audio settings
+  masterVolume?: number; // Master volume control (0.0 to 2.0, default: 1.0)
+
   // Transition to next scene
   transitionOut: Transition;
 

@@ -14,12 +14,15 @@ import {
   Trash2,
   Video,
   X,
+  FileDown,
+  Volume2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import JSZip from "jszip";
 import { AudioTrackModal } from "@/components/audio-track-modal";
 import type { Character, Location } from "@/components/project-form";
 import { ScenePlayer, type ScenePlayerHandle } from "@/components/scene-player";
@@ -46,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import { getImageUrl, getPublicUrl } from "@/lib/image-utils";
 import type { AudioTrack, GenerationMode, Scene, Shot, ShotVideo } from "@/lib/scenes-client";
 import { createNewShot, getEffectiveDuration } from "@/lib/scenes-client";
@@ -499,6 +503,7 @@ export function EditSceneView({
       generatedImages: initialScene.generatedImages || [],
       removedShots: initialScene.removedShots || [],
       transitionOut: initialScene.transitionOut || { type: "none", durationMs: 0 },
+      masterVolume: initialScene.masterVolume ?? 1.0,
     };
     
     console.log(
@@ -569,6 +574,11 @@ export function EditSceneView({
   const [renderProgress, setRenderProgress] = useState<number | null>(null);
   const [renderStage, setRenderStage] = useState<string | null>(null);
   const [showCompositeVideoDialog, setShowCompositeVideoDialog] = useState(false);
+
+  // Export source videos state
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Build library images from characters and generated images
   const libraryImages = useMemo(() => {
@@ -1787,6 +1797,87 @@ export function EditSceneView({
     }
   }, [scene.sceneNumber]);
 
+  const handleExportSourceVideos = useCallback(async () => {
+    try {
+      setIsExporting(true);
+      setExportProgress({ current: 0, total: 0 });
+
+      // Collect all source video URLs from shots
+      const sourceVideos: Array<{ url: string; filename: string }> = [];
+      
+      scene.shots.forEach((shot, index) => {
+        // Use originalVideo if it exists (original source before trimming), otherwise use video
+        const videoUrl = shot.originalVideo?.url || shot.video?.url;
+        if (videoUrl && shot.video?.status === "completed") {
+          const extension = videoUrl.split('.').pop()?.split('?')[0] || 'mp4';
+          sourceVideos.push({
+            url: videoUrl,
+            filename: `shot-${shot.order + 1}-${shot.id.substring(0, 8)}.${extension}`,
+          });
+        }
+      });
+
+      if (sourceVideos.length === 0) {
+        toast.error("No source videos found to export");
+        setIsExporting(false);
+        setExportProgress(null);
+        return;
+      }
+
+      setExportProgress({ current: 0, total: sourceVideos.length });
+
+      // Create zip file
+      const zip = new JSZip();
+
+      // Download each video and add to zip
+      for (let i = 0; i < sourceVideos.length; i++) {
+        const { url, filename } = sourceVideos[i];
+        try {
+          toast.info(`Downloading ${filename}...`);
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${filename}`);
+          }
+          const blob = await response.blob();
+          zip.file(filename, blob);
+          setExportProgress({ current: i + 1, total: sourceVideos.length });
+        } catch (error) {
+          console.error(
+            `[EditSceneView] Failed to download ${filename}:`,
+            JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+          );
+          toast.error(`Failed to download ${filename}`);
+        }
+      }
+
+      // Generate zip file
+      toast.info("Creating zip file...");
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      
+      // Download zip
+      const zipUrl = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = zipUrl;
+      a.download = `scene-${scene.sceneNumber}-source-videos-${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(zipUrl);
+
+      toast.success(`Exported ${sourceVideos.length} source video(s) as zip!`);
+      setShowExportDialog(false);
+    } catch (error) {
+      console.error(
+        "[EditSceneView] Export source videos error:",
+        JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+      );
+      toast.error("Failed to export source videos");
+    } finally {
+      setIsExporting(false);
+      setExportProgress(null);
+    }
+  }, [scene.shots, scene.sceneNumber]);
+
   const handleShotReorder = (shotIds: string[]) => {
     setScene((prev) => {
       const shotMap = new Map(prev.shots.map((s) => [s.id, s]));
@@ -1992,6 +2083,14 @@ export function EditSceneView({
       audioTracks: prev.audioTracks.map((t) =>
         t.id === trackId ? { ...t, startTimeMs: newStartTimeMs, updatedAt: new Date().toISOString() } : t
       ),
+    }));
+  };
+
+  // Handle master volume change
+  const handleMasterVolumeChange = (volume: number[]) => {
+    setScene((prev) => ({
+      ...prev,
+      masterVolume: volume[0],
     }));
   };
 
@@ -2364,7 +2463,7 @@ export function EditSceneView({
           {/* Main Area - Player & Timeline */}
           <div className="lg:col-span-3 space-y-2">
             <div className="w-full mx-auto">
-              <ScenePlayer ref={scenePlayerRef} shots={scene.shots} audioTracks={scene.audioTracks} />
+              <ScenePlayer ref={scenePlayerRef} shots={scene.shots} audioTracks={scene.audioTracks} masterVolume={scene.masterVolume ?? 1.0} />
             </div>
 
             {/* Video Generation Status */}
@@ -2441,6 +2540,31 @@ export function EditSceneView({
               />
             </div>
 
+            {/* Master Volume Control */}
+            <div className="w-full border-t border-border pt-4 px-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 min-w-[120px]">
+                  <Volume2 className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Master Volume</Label>
+                </div>
+                <div className="flex-1 flex items-center gap-3">
+                  <Slider
+                    value={[scene.masterVolume ?? 1.0]}
+                    onValueChange={handleMasterVolumeChange}
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    className="flex-1"
+                  />
+                  <div className="min-w-[60px] text-right">
+                    <span className="text-sm font-mono text-muted-foreground">
+                      {Math.round((scene.masterVolume ?? 1.0) * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Controls Row: Add Shot, Add Audio, Render Scene */}
             <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4">
               {!(isRendering || scene.compositeStatus === "processing") && (
@@ -2452,7 +2576,7 @@ export function EditSceneView({
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Shot
+                    Video
                   </Button>
                   <Button
                     type="button"
@@ -2461,7 +2585,7 @@ export function EditSceneView({
                     size="sm"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Audio
+                    Audio
                   </Button>
                 </div>
               )}
@@ -2492,19 +2616,30 @@ export function EditSceneView({
                       View Composite
                     </Button>
                     {scene.compositeVideo?.url && (
-                      <Button
-                        onClick={() => {
-                          if (scene.compositeVideo?.url) {
-                            handleDownloadVideo(scene.compositeVideo.url);
-                          }
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1 text-xs border border-primary/30"
-                      >
-                        <Download className="h-4 w-4" />
-                        Download
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => {
+                            if (scene.compositeVideo?.url) {
+                              handleDownloadVideo(scene.compositeVideo.url);
+                            }
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 text-xs border border-primary/30"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                        <Button
+                          onClick={() => setShowExportDialog(true)}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 text-xs border border-primary/30"
+                        >
+                          <FileDown className="h-4 w-4" />
+                          Export
+                        </Button>
+                      </>
                     )}
                   </>
                 )}
@@ -3268,6 +3403,87 @@ export function EditSceneView({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Source Videos Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileDown className="h-5 w-5" />
+              Export Source Videos
+            </DialogTitle>
+            <DialogDescription>
+              Export all original source video files from this scene as a zip archive.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {isExporting ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      {exportProgress
+                        ? `Exporting ${exportProgress.current} of ${exportProgress.total} videos...`
+                        : "Preparing export..."}
+                    </p>
+                    {exportProgress && (
+                      <div className="mt-2 w-full bg-muted rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-primary h-full transition-all duration-300"
+                          style={{
+                            width: `${(exportProgress.current / exportProgress.total) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This may take a few moments depending on the number of videos.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  This will download all original source video files from the shots in this scene
+                  and package them into a zip file.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Total videos to export: {scene.shots.filter((s) => s.video?.status === "completed").length}
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowExportDialog(false)}
+              disabled={isExporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleExportSourceVideos}
+              disabled={isExporting || scene.shots.filter((s) => s.video?.status === "completed").length === 0}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export Videos
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

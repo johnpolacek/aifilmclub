@@ -10,6 +10,7 @@ export interface CompositionRequest {
   webhookUrl: string; // Callback URL when complete
   shots: CompositionShot[];
   audioTracks: CompositionAudioTrack[];
+  masterVolume?: number; // Master volume control (0.0 to 2.0, default: 1.0)
 }
 
 export interface CompositionShot {

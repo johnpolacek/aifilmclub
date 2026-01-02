@@ -375,11 +375,25 @@ async function composeWithFfmpeg(
 
       // Mix all audio tracks together
       filters.push(
-        `${audioTrackLabels.join("")}amix=inputs=${audioTrackLabels.length}:duration=longest:dropout_transition=0[outa]`
+        `${audioTrackLabels.join("")}amix=inputs=${audioTrackLabels.length}:duration=longest:dropout_transition=0[mixed_audio]`
       );
+      
+      // Apply master volume to mixed audio
+      const masterVolume = request.masterVolume ?? 1.0;
+      if (masterVolume !== 1.0) {
+        filters.push(`[mixed_audio]volume=${masterVolume}[outa]`);
+      } else {
+        filters.push(`[mixed_audio]acopy[outa]`);
+      }
     } else {
       // No additional audio tracks, just use concatenated audio
-      filters.push(`[concat_audio]acopy[outa]`);
+      // Apply master volume to concatenated audio
+      const masterVolume = request.masterVolume ?? 1.0;
+      if (masterVolume !== 1.0) {
+        filters.push(`[concat_audio]volume=${masterVolume}[outa]`);
+      } else {
+        filters.push(`[concat_audio]acopy[outa]`);
+      }
     }
 
     console.log(

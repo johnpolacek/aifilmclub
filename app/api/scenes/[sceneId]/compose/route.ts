@@ -76,6 +76,7 @@ export async function POST(
       projectId: scene.projectId,
       sceneId: scene.id,
       webhookUrl,
+      masterVolume: scene.masterVolume ?? 1.0,
       shots: completedShots.map((s) => {
         const shotData = {
           id: s.id,
@@ -130,6 +131,7 @@ export async function POST(
           sceneId,
           shotCount: compositionRequest.shots.length,
           audioTrackCount: compositionRequest.audioTracks.length,
+          masterVolume: compositionRequest.masterVolume,
           webhookUrl,
         },
         null,
