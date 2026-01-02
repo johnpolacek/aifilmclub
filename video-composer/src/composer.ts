@@ -367,8 +367,10 @@ async function composeWithFfmpeg(
         const trackLabel = `at${i}`;
 
         // Delay and trim the audio track
+        // Use precise millisecond values without rounding to prevent sync drift
+        const delayMs = startSeconds * 1000;
         filters.push(
-          `[${inputIndex}:a]atrim=start=${trimStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,adelay=${Math.round(startSeconds * 1000)}|${Math.round(startSeconds * 1000)},volume=${track.volume}[${trackLabel}]`
+          `[${inputIndex}:a]atrim=start=${trimStartSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${track.volume}[${trackLabel}]`
         );
         audioTrackLabels.push(`[${trackLabel}]`);
       });
