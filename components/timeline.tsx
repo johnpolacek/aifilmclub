@@ -350,9 +350,44 @@ export default function Timeline({
   }, [totalDurationMs]);
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      {/* Shot boundary guide lines */}
+      {shotPositions.map(({ shot, startTimeMs, durationMs }) => {
+        const startPercent = totalDurationMs > 0 ? (startTimeMs / totalDurationMs) * 100 : 0;
+        const endPercent = totalDurationMs > 0 ? ((startTimeMs + durationMs) / totalDurationMs) * 100 : 0;
+        return (
+          <>
+            {/* Start boundary */}
+            <div
+              key={`shot-start-${shot.id}`}
+              className="absolute top-0 bottom-0 w-px bg-primary/30 pointer-events-none z-10"
+              style={{ left: `${startPercent}%` }}
+            />
+            {/* End boundary */}
+            <div
+              key={`shot-end-${shot.id}`}
+              className="absolute top-0 bottom-0 w-px bg-primary/20 pointer-events-none z-10"
+              style={{ left: `${endPercent}%` }}
+            />
+          </>
+        );
+      })}
+
+      {/* Time marker guide lines (every 1 second) */}
+      {Array.from({ length: Math.ceil(totalDurationMs / 1000) + 1 }).map((_, i) => {
+        const seconds = i;
+        const percent = totalDurationMs > 0 ? (seconds * 1000 / totalDurationMs) * 100 : 0;
+        return (
+          <div
+            key={`time-guide-${seconds}`}
+            className="absolute top-0 bottom-0 w-px bg-border/50 pointer-events-none z-0"
+            style={{ left: `${percent}%` }}
+          />
+        );
+      })}
+
       {/* Timeline Ruler */}
-      <div className="border-b border-border px-2 py-1 w-full">
+      <div className="border-b border-border px-2 py-1 w-full relative z-20">
         <div className="relative w-full" style={{ height: '24px' }}>
           {timeMarkers.map((seconds) => {
             const leftPercent = totalDurationMs > 0 ? (seconds * 1000 / totalDurationMs) * 100 : 0;
@@ -373,7 +408,7 @@ export default function Timeline({
       </div>
 
       {/* Shots Row */}
-      <div className="border-b border-border px-2 py-2 w-full">
+      <div className="border-b border-border px-2 py-2 w-full relative z-20">
         <div 
           ref={timelineRef} 
           className="flex w-full"
@@ -397,7 +432,7 @@ export default function Timeline({
       </div>
 
       {/* Audio Tracks */}
-      <div className="px-1 py-1 space-y-1 w-full">
+      <div className="px-1 py-1 space-y-1 w-full relative z-20">
         {audioTracks.map((track) => {
           // Use dragged position for visual feedback during dragging, otherwise use actual position
           const displayStartTimeMs = draggedAudioTrackId === track.id && draggedAudioTrackPosition !== null
