@@ -20,6 +20,9 @@ export interface CompositionShot {
   trimStartMs: number;
   trimEndMs: number;
   audioMuted: boolean;
+  fadeInType?: "none" | "black" | "white";
+  fadeOutType?: "none" | "black" | "white";
+  fadeDurationMs?: number;
 }
 
 export interface CompositionAudioTrack {

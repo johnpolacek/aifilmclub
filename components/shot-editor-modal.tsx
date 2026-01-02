@@ -10,7 +10,6 @@ import {
   Play,
   Scissors,
   Sparkles,
-  Trash2,
   Upload,
   User,
   Video,
@@ -252,6 +251,14 @@ export function ShotEditorDialog({
   // Audio detaching state
   const [isDetachingAudio, setIsDetachingAudio] = useState(false);
 
+  // Effects mode state
+  const [isEffectsMode, setIsEffectsMode] = useState(false);
+  const [fadeInType, setFadeInType] = useState<"none" | "black" | "white">(shot?.fadeInType || "none");
+  const [fadeOutType, setFadeOutType] = useState<"none" | "black" | "white">(shot?.fadeOutType || "none");
+  const [fadeDurationMs, setFadeDurationMs] = useState<number>(shot?.fadeDurationMs || 500);
+  const [effectsPreviewTime, setEffectsPreviewTime] = useState(0); // Current time for fade preview in effects mode
+  const [normalPreviewTime, setNormalPreviewTime] = useState(0); // Current time for fade preview in normal view
+
   // Auto-open file picker state
   const [shouldOpenFilePicker, setShouldOpenFilePicker] = useState(false);
 
@@ -298,6 +305,13 @@ export function ShotEditorDialog({
       setTrimEndMs(shot.trimEndMs || 0);
       setIsTrimmerPlaying(false);
       setTrimmerCurrentTime(0);
+      // Reset effects mode state
+      setIsEffectsMode(false);
+      setFadeInType(shot.fadeInType || "none");
+      setFadeOutType(shot.fadeOutType || "none");
+      setFadeDurationMs(shot.fadeDurationMs || 500);
+      setEffectsPreviewTime(0);
+      setNormalPreviewTime(0);
     }
   }, [open, shot]);
 
@@ -613,6 +627,9 @@ export function ShotEditorDialog({
       referenceImages: typedReferenceImages.length > 0 
         ? typedReferenceImages.map((ref) => ref.url) 
         : undefined,
+      fadeInType: fadeInType !== "none" ? fadeInType : undefined,
+      fadeOutType: fadeOutType !== "none" ? fadeOutType : undefined,
+      fadeDurationMs: (fadeInType !== "none" || fadeOutType !== "none") ? fadeDurationMs : undefined,
       updatedAt: new Date().toISOString(),
     };
 
@@ -759,6 +776,11 @@ export function ShotEditorDialog({
                 <Scissors className="h-5 w-5 text-primary" />
                 Trim Video
               </>
+            ) : isEffectsMode ? (
+              <>
+                <Sparkles className="h-5 w-5 text-primary" />
+                Apply Effects
+              </>
             ) : (
               <>
                 <Film className="h-5 w-5 text-primary" />
@@ -769,6 +791,8 @@ export function ShotEditorDialog({
           <DialogDescription>
             {isTrimMode
               ? "Drag the handles to set in and out points. Click play to preview the trimmed segment."
+              : isEffectsMode
+              ? "Configure fade effects for this shot. Effects will be applied when the scene is rendered."
               : isReplaceMode
               ? "Upload a new video or generate one to replace this shot. The current shot will be moved to the media library."
               : hasCompletedVideo 
@@ -780,7 +804,187 @@ export function ShotEditorDialog({
         {/* Simplified view for completed shots (unless in replace mode) */}
         {hasCompletedVideo && shot.video && !isReplaceMode ? (
           <div className="space-y-6 py-4">
-            {isTrimMode ? (
+            {isEffectsMode ? (
+              /* ============ EFFECTS MODE ============ */
+              <div className="space-y-6">
+                {/* Video Preview */}
+                <div className="space-y-2">
+                  <Label>Video Preview</Label>
+                  <div className="relative aspect-video rounded-lg overflow-hidden border border-border bg-muted/30">
+                    <video
+                      ref={trimmerVideoRef}
+                      src={shot.video.url}
+                      className="w-full h-full object-cover"
+                      poster={shot.video.thumbnailUrl}
+                      onLoadedMetadata={() => {
+                        // Start at trim point if trimmed
+                        if (trimmerVideoRef.current && shot.trimStartMs) {
+                          trimmerVideoRef.current.currentTime = shot.trimStartMs / 1000;
+                        }
+                        // Initialize effects preview time
+                        const trimStart = shot.trimStartMs || 0;
+                        const videoTime = trimmerVideoRef.current?.currentTime || 0;
+                        setEffectsPreviewTime(Math.max(0, (videoTime * 1000) - trimStart));
+                      }}
+                      onTimeUpdate={(e) => {
+                        const video = e.currentTarget;
+                        // Store effective time (relative to trim start) in milliseconds
+                        const trimStart = shot.trimStartMs || 0;
+                        const effectiveTime = Math.max(0, (video.currentTime * 1000) - trimStart);
+                        setEffectsPreviewTime(effectiveTime);
+                        
+                        // Stop at trim end point
+                        if (shot.trimEndMs) {
+                          const fullDuration = shot.video?.durationMs || 5000;
+                          const endPoint = (fullDuration - shot.trimEndMs) / 1000;
+                          if (video.currentTime >= endPoint) {
+                            video.pause();
+                            video.currentTime = (shot.trimStartMs || 0) / 1000;
+                          }
+                        }
+                      }}
+                      onEnded={() => {
+                        // Reset to trim start on end
+                        if (trimmerVideoRef.current && shot.trimStartMs) {
+                          trimmerVideoRef.current.currentTime = shot.trimStartMs / 1000;
+                        }
+                      }}
+                      controls
+                    />
+                    
+                    {/* Fade In Overlay */}
+                    {fadeInType !== "none" && (() => {
+                      const fadeDuration = fadeDurationMs;
+                      const effectiveTime = effectsPreviewTime; // Already accounts for trim start
+                      const fadeProgress = Math.min(1, Math.max(0, effectiveTime / fadeDuration));
+                      const opacity = fadeInType === "black" || fadeInType === "white" 
+                        ? 1 - fadeProgress 
+                        : 0;
+                      const bgColor = fadeInType === "white" ? "bg-white" : "bg-black";
+                      
+                      if (fadeProgress < 1 && effectiveTime >= 0) {
+                        return (
+                          <div
+                            className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none`}
+                            style={{ opacity }}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+                    
+                    {/* Fade Out Overlay */}
+                    {fadeOutType !== "none" && (() => {
+                      const videoDuration = shot.video?.durationMs || 5000;
+                      const fadeDuration = fadeDurationMs;
+                      const trimStart = shot.trimStartMs || 0;
+                      const trimEnd = shot.trimEndMs || 0;
+                      const effectiveDuration = videoDuration - trimStart - trimEnd;
+                      const fadeOutStart = effectiveDuration - fadeDuration;
+                      const effectiveTime = effectsPreviewTime; // Already accounts for trim start
+                      const fadeProgress = effectiveTime >= fadeOutStart
+                        ? Math.min(1, Math.max(0, (effectiveTime - fadeOutStart) / fadeDuration))
+                        : 0;
+                      const opacity = fadeOutType === "black" || fadeOutType === "white"
+                        ? fadeProgress
+                        : 0;
+                      const bgColor = fadeOutType === "white" ? "bg-white" : "bg-black";
+                      
+                      if (fadeProgress > 0 && fadeProgress <= 1) {
+                        return (
+                          <div
+                            className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none`}
+                            style={{ opacity }}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  {/* Duration info */}
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>
+                      {shot.originalVideo ? (
+                        <>
+                          Duration: {((shot.video.durationMs || 5000) / 1000).toFixed(2)}s
+                          <span className="text-xs ml-1">
+                            (original: {((shot.originalVideo.durationMs || 5000) / 1000).toFixed(1)}s)
+                          </span>
+                        </>
+                      ) : (
+                        <>Duration: {((shot.video.durationMs || 5000) / 1000).toFixed(1)}s</>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Fade Effects */}
+                <div className="space-y-4">
+                  <div className={`grid gap-6 ${(fadeInType !== "none" || fadeOutType !== "none") ? "grid-cols-3" : "grid-cols-2"}`}>
+                    {/* Fade In */}
+                    <div className="w-full flex gap-4 items-center">
+                      <Label className="text-sm py-2">Fade In</Label>
+                      <Select
+                        value={fadeInType}
+                        onValueChange={(value) => setFadeInType(value as "none" | "black" | "white")}
+                      >
+                        <SelectTrigger className="grow">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="black">From Black</SelectItem>
+                          <SelectItem value="white">From White</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Fade Out */}
+                    <div className="w-full flex gap-4 items-center">
+                      <Label className="text-sm py-2">Fade Out</Label>
+                      <Select
+                        value={fadeOutType}
+                        onValueChange={(value) => setFadeOutType(value as "none" | "black" | "white")}
+                      >
+                        <SelectTrigger className="grow">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="black">To Black</SelectItem>
+                          <SelectItem value="white">To White</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Duration */}
+                    {(fadeInType !== "none" || fadeOutType !== "none") && (
+                      <div className="w-full flex gap-4 items-center">
+                        <Label className="text-sm py-2">Duration</Label>
+                        <Select
+                          value={fadeDurationMs.toString()}
+                          onValueChange={(value) => setFadeDurationMs(parseInt(value, 10))}
+                        >
+                          <SelectTrigger className="grow">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="100">0.1s</SelectItem>
+                            <SelectItem value="200">0.2s</SelectItem>
+                            <SelectItem value="300">0.3s</SelectItem>
+                            <SelectItem value="500">0.5s</SelectItem>
+                            <SelectItem value="750">0.75s</SelectItem>
+                            <SelectItem value="1000">1.0s</SelectItem>
+                            <SelectItem value="1500">1.5s</SelectItem>
+                            <SelectItem value="2000">2.0s</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : isTrimMode ? (
               /* ============ TRIM MODE ============ */
               (() => {
                 // Use original video for trimming if available
@@ -988,15 +1192,25 @@ export function ShotEditorDialog({
                         if (trimmerVideoRef.current && shot.trimStartMs) {
                           trimmerVideoRef.current.currentTime = shot.trimStartMs / 1000;
                         }
+                        // Initialize normal preview time
+                        const trimStart = shot.trimStartMs || 0;
+                        const videoTime = trimmerVideoRef.current?.currentTime || 0;
+                        setNormalPreviewTime(Math.max(0, (videoTime * 1000) - trimStart));
                       }}
-                      onTimeUpdate={() => {
+                      onTimeUpdate={(e) => {
+                        const video = e.currentTarget;
+                        // Store effective time (relative to trim start) in milliseconds
+                        const trimStart = shot.trimStartMs || 0;
+                        const effectiveTime = Math.max(0, (video.currentTime * 1000) - trimStart);
+                        setNormalPreviewTime(effectiveTime);
+                        
                         // Stop at trim end point
-                        if (trimmerVideoRef.current && shot.trimEndMs) {
+                        if (shot.trimEndMs) {
                           const fullDuration = shot.video?.durationMs || 5000;
                           const endPoint = (fullDuration - shot.trimEndMs) / 1000;
-                          if (trimmerVideoRef.current.currentTime >= endPoint) {
-                            trimmerVideoRef.current.pause();
-                            trimmerVideoRef.current.currentTime = (shot.trimStartMs || 0) / 1000;
+                          if (video.currentTime >= endPoint) {
+                            video.pause();
+                            video.currentTime = (shot.trimStartMs || 0) / 1000;
                           }
                         }
                       }}
@@ -1008,6 +1222,55 @@ export function ShotEditorDialog({
                       }}
                       controls
                     />
+                    
+                    {/* Fade In Overlay */}
+                    {shot.fadeInType && shot.fadeInType !== "none" && (() => {
+                      const fadeDuration = shot.fadeDurationMs || 500;
+                      const effectiveTime = normalPreviewTime; // Already accounts for trim start
+                      const fadeProgress = Math.min(1, Math.max(0, effectiveTime / fadeDuration));
+                      const opacity = shot.fadeInType === "black" || shot.fadeInType === "white" 
+                        ? 1 - fadeProgress 
+                        : 0;
+                      const bgColor = shot.fadeInType === "white" ? "bg-white" : "bg-black";
+                      
+                      if (fadeProgress < 1 && effectiveTime >= 0) {
+                        return (
+                          <div
+                            className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none z-10`}
+                            style={{ opacity }}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+                    
+                    {/* Fade Out Overlay */}
+                    {shot.fadeOutType && shot.fadeOutType !== "none" && (() => {
+                      const videoDuration = shot.video?.durationMs || 5000;
+                      const fadeDuration = shot.fadeDurationMs || 500;
+                      const trimStart = shot.trimStartMs || 0;
+                      const trimEnd = shot.trimEndMs || 0;
+                      const effectiveDuration = videoDuration - trimStart - trimEnd;
+                      const fadeOutStart = effectiveDuration - fadeDuration;
+                      const effectiveTime = normalPreviewTime; // Already accounts for trim start
+                      const fadeProgress = effectiveTime >= fadeOutStart
+                        ? Math.min(1, Math.max(0, (effectiveTime - fadeOutStart) / fadeDuration))
+                        : 0;
+                      const opacity = shot.fadeOutType === "black" || shot.fadeOutType === "white"
+                        ? fadeProgress
+                        : 0;
+                      const bgColor = shot.fadeOutType === "white" ? "bg-white" : "bg-black";
+                      
+                      if (fadeProgress > 0 && fadeProgress <= 1) {
+                        return (
+                          <div
+                            className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none z-10`}
+                            style={{ opacity }}
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   {/* Duration info */}
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -1950,6 +2213,43 @@ export function ShotEditorDialog({
                   )}
                 </Button>
               </>
+            ) : isEffectsMode ? (
+              /* ============ EFFECTS MODE FOOTER ============ */
+              <>
+                <div className="flex-1" />
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => {
+                    // Cancel - reset fade values and exit effects mode
+                    setFadeInType(shot?.fadeInType || "none");
+                    setFadeOutType(shot?.fadeOutType || "none");
+                    setFadeDurationMs(shot?.fadeDurationMs || 500);
+                    setIsEffectsMode(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button"
+                  onClick={() => {
+                    if (!shot) return;
+                    // Apply fade effects
+                    const updatedShot: Shot = {
+                      ...shot,
+                      fadeInType: fadeInType !== "none" ? fadeInType : undefined,
+                      fadeOutType: fadeOutType !== "none" ? fadeOutType : undefined,
+                      fadeDurationMs: (fadeInType !== "none" || fadeOutType !== "none") ? fadeDurationMs : undefined,
+                      updatedAt: new Date().toISOString(),
+                    };
+                    onSave(updatedShot);
+                    setIsEffectsMode(false);
+                    toast.success("Effects applied");
+                  }}
+                >
+                  Apply Effects
+                </Button>
+              </>
             ) : (
               /* ============ NORMAL VIEW FOOTER ============ */
               <>
@@ -2023,6 +2323,21 @@ export function ShotEditorDialog({
                     {isDetachingAudio ? "Detaching..." : "Detach Audio"}
                   </Button>
                 )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsEffectsMode(true);
+                    // Initialize with existing fade values
+                    setFadeInType(shot?.fadeInType || "none");
+                    setFadeOutType(shot?.fadeOutType || "none");
+                    setFadeDurationMs(shot?.fadeDurationMs || 500);
+                  }}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Effects
+                </Button>
                 <div className="flex-1" />
                 <Button type="button" onClick={() => onOpenChange(false)}>
                   Close

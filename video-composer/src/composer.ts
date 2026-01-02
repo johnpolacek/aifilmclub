@@ -202,6 +202,26 @@ async function composeWithFfmpeg(
   const { jobId } = request;
   const shots = request.shots.sort((a, b) => a.order - b.order);
 
+  // Probe actual video durations for accurate fade timing
+  const actualDurations: number[] = [];
+  for (const videoFile of videoFiles) {
+    try {
+      const durationMs = await getVideoDuration(videoFile);
+      actualDurations.push(durationMs);
+    } catch (err) {
+      console.error(
+        "[composer] Failed to probe video duration:",
+        JSON.stringify({ videoFile, error: err instanceof Error ? err.message : String(err) }, null, 2)
+      );
+      actualDurations.push(0); // Will fall back to shot.durationMs
+    }
+  }
+
+  console.log(
+    "[composer] Probed video durations:",
+    JSON.stringify({ actualDurations }, null, 2)
+  );
+
   // Calculate total video duration for audio track positioning
   let totalVideoDurationMs = 0;
   for (const shot of shots) {
@@ -231,26 +251,92 @@ async function composeWithFfmpeg(
     // Process each video shot
     shots.forEach((shot, i) => {
       const trimStart = shot.trimStartMs / 1000;
-      const duration =
+      const storedDuration =
         (shot.durationMs - shot.trimStartMs - shot.trimEndMs) / 1000;
+      
+      // Use actual probed duration if available, otherwise fall back to stored duration
+      const actualDurationMs = actualDurations[i] || shot.durationMs;
+      const actualDuration = actualDurationMs / 1000;
+      
+      // For fade calculations, use the smaller of stored vs actual to be safe
+      // This ensures fade out starts early enough to complete before video ends
+      const needsTrim = shot.trimStartMs > 0 || shot.trimEndMs > 0;
+      const effectiveDuration = needsTrim ? storedDuration : Math.min(storedDuration, actualDuration);
+      
       const vLabel = `v${i}`;
       const aLabel = `a${i}`;
+      const fadeDuration = (shot.fadeDurationMs || 500) / 1000;
+      const fadeInType = shot.fadeInType || "none";
+      const fadeOutType = shot.fadeOutType || "none";
 
-      // Trim video
-      filters.push(
-        `[${i}:v]trim=start=${trimStart}:duration=${duration},setpts=PTS-STARTPTS,format=yuv420p[${vLabel}]`
+      console.log(
+        "[composer] Processing shot fade effects:",
+        JSON.stringify({
+          shotId: shot.id,
+          order: shot.order,
+          durationMs: shot.durationMs,
+          actualDurationMs,
+          trimStartMs: shot.trimStartMs,
+          trimEndMs: shot.trimEndMs,
+          storedDuration,
+          actualDuration,
+          effectiveDuration,
+          needsTrim,
+          fadeInType,
+          fadeOutType,
+          fadeDurationMs: shot.fadeDurationMs,
+          fadeDurationSeconds: fadeDuration,
+        }, null, 2)
       );
 
-      // Handle video audio
+      // Build video filter chain
+      // When trim values are 0, skip the trim filter to avoid issues with already-trimmed videos
+      let videoFilter = needsTrim
+        ? `[${i}:v]trim=start=${trimStart}:duration=${storedDuration},setpts=PTS-STARTPTS,format=yuv420p`
+        : `[${i}:v]setpts=PTS-STARTPTS,format=yuv420p`;
+      
+      // Apply fade in if needed
+      if (fadeInType !== "none") {
+        const color = fadeInType === "white" ? ":c=white" : "";
+        videoFilter += `,fade=t=in:st=0:d=${fadeDuration}${color}`;
+      }
+      
+      // Apply fade out if needed
+      if (fadeOutType !== "none") {
+        // Use effective duration (actual video duration) for fade out timing
+        // This ensures the fade actually appears at the end of the video
+        const fadeOutStart = Math.max(0, effectiveDuration - fadeDuration);
+        const color = fadeOutType === "white" ? ":c=white" : "";
+        videoFilter += `,fade=t=out:st=${fadeOutStart}:d=${fadeDuration}${color}`;
+        console.log(
+          "[composer] Fade out filter:",
+          JSON.stringify({ 
+            needsTrim, 
+            storedDuration,
+            actualDuration,
+            effectiveDuration,
+            fadeOutStart, 
+            fadeDuration, 
+            color: color || "black", 
+            filterPart: `fade=t=out:st=${fadeOutStart}:d=${fadeDuration}${color}` 
+          }, null, 2)
+        );
+      }
+      
+      videoFilter += `[${vLabel}]`;
+      filters.push(videoFilter);
+
+      // Handle video audio - use effectiveDuration to match the video output
+      const audioDuration = needsTrim ? storedDuration : effectiveDuration;
       if (shot.audioMuted) {
         // Generate silent audio matching video duration
         filters.push(
-          `anullsrc=channel_layout=stereo:sample_rate=44100,atrim=duration=${duration}[${aLabel}]`
+          `anullsrc=channel_layout=stereo:sample_rate=44100,atrim=duration=${audioDuration}[${aLabel}]`
         );
       } else {
         // Trim audio from video
         filters.push(
-          `[${i}:a]atrim=start=${trimStart}:duration=${duration},asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[${aLabel}]`
+          `[${i}:a]atrim=start=${trimStart}:duration=${audioDuration},asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[${aLabel}]`
         );
       }
 

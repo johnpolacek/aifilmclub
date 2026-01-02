@@ -614,16 +614,72 @@ export const ScenePlayer = forwardRef<ScenePlayerHandle, ScenePlayerProps>(funct
       <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
         {/* Current video */}
         {currentShot && currentShot.video?.url && (
-          <video
-            ref={videoRef}
-            src={currentShot.video.url}
-            className="w-full h-full object-contain cursor-pointer"
-            {...createVideoHandlers(currentShotIndex, currentShot)}
-            muted={isMuted || currentShot.audioMuted}
-            playsInline
-          >
-            <track kind="captions" />
-          </video>
+          <>
+            <video
+              ref={videoRef}
+              src={currentShot.video.url}
+              className="w-full h-full object-contain cursor-pointer"
+              {...createVideoHandlers(currentShotIndex, currentShot)}
+              muted={isMuted || currentShot.audioMuted}
+              playsInline
+            >
+              <track kind="captions" />
+            </video>
+            
+            {/* Fade In Overlay */}
+            {currentShot.fadeInType && currentShot.fadeInType !== "none" && (() => {
+              const shotInfo = shotTimeline[currentShotIndex];
+              if (!shotInfo) return null;
+              
+              const fadeDuration = (currentShot.fadeDurationMs || 500) / 1000; // Convert to seconds
+              // Video time relative to trim start (fade starts at beginning of effective video)
+              const videoTime = Math.max(0, currentTime - (shotInfo.trimStartMs / 1000));
+              const fadeProgress = Math.min(1, Math.max(0, videoTime / fadeDuration));
+              const opacity = currentShot.fadeInType === "black" || currentShot.fadeInType === "white" 
+                ? 1 - fadeProgress 
+                : 0;
+              const bgColor = currentShot.fadeInType === "white" ? "bg-white" : "bg-black";
+              
+              if (fadeProgress < 1 && videoTime >= 0) {
+                return (
+                  <div
+                    className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none z-10`}
+                    style={{ opacity }}
+                  />
+                );
+              }
+              return null;
+            })()}
+            
+            {/* Fade Out Overlay */}
+            {currentShot.fadeOutType && currentShot.fadeOutType !== "none" && (() => {
+              const shotInfo = shotTimeline[currentShotIndex];
+              if (!shotInfo) return null;
+              
+              const fadeDuration = (currentShot.fadeDurationMs || 500) / 1000; // Convert to seconds
+              const effectiveDuration = shotInfo.durationMs / 1000; // Effective duration in seconds
+              const fadeOutStart = effectiveDuration - fadeDuration;
+              // Video time relative to trim start (fade out is at end of effective video)
+              const videoTime = Math.max(0, currentTime - (shotInfo.trimStartMs / 1000));
+              const fadeProgress = videoTime >= fadeOutStart
+                ? Math.min(1, Math.max(0, (videoTime - fadeOutStart) / fadeDuration))
+                : 0;
+              const opacity = currentShot.fadeOutType === "black" || currentShot.fadeOutType === "white"
+                ? fadeProgress
+                : 0;
+              const bgColor = currentShot.fadeOutType === "white" ? "bg-white" : "bg-black";
+              
+              if (fadeProgress > 0) {
+                return (
+                  <div
+                    className={`absolute inset-0 ${bgColor} transition-opacity duration-75 pointer-events-none z-10`}
+                    style={{ opacity }}
+                  />
+                );
+              }
+              return null;
+            })()}
+          </>
         )}
         
         {/* Preloaded videos for all shots (hidden, for preloading only) */}

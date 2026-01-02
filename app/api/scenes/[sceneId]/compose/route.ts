@@ -76,16 +76,37 @@ export async function POST(
       projectId: scene.projectId,
       sceneId: scene.id,
       webhookUrl,
-      shots: completedShots.map((s) => ({
-        id: s.id,
-        order: s.order,
-        videoUrl: s.video!.url,
-        durationMs: s.video!.durationMs || 5000,
-        // If originalVideo exists, trim is already baked in
-        trimStartMs: s.originalVideo ? 0 : s.trimStartMs || 0,
-        trimEndMs: s.originalVideo ? 0 : s.trimEndMs || 0,
-        audioMuted: s.audioMuted || false,
-      })),
+      shots: completedShots.map((s) => {
+        const shotData = {
+          id: s.id,
+          order: s.order,
+          videoUrl: s.video!.url,
+          durationMs: s.video!.durationMs || 5000,
+          // If originalVideo exists, trim is already baked in
+          trimStartMs: s.originalVideo ? 0 : s.trimStartMs || 0,
+          trimEndMs: s.originalVideo ? 0 : s.trimEndMs || 0,
+          audioMuted: s.audioMuted || false,
+          fadeInType: s.fadeInType || "none",
+          fadeOutType: s.fadeOutType || "none",
+          fadeDurationMs: s.fadeDurationMs || 500,
+        };
+        console.log(
+          "[compose] Shot data:",
+          JSON.stringify({
+            shotId: s.id,
+            hasOriginalVideo: !!s.originalVideo,
+            videoDurationMs: s.video!.durationMs,
+            originalVideoDurationMs: s.originalVideo?.durationMs,
+            shotTrimStartMs: s.trimStartMs,
+            shotTrimEndMs: s.trimEndMs,
+            fadeInType: s.fadeInType,
+            fadeOutType: s.fadeOutType,
+            fadeDurationMs: s.fadeDurationMs,
+            sentData: shotData,
+          }, null, 2)
+        );
+        return shotData;
+      }),
       audioTracks: (scene.audioTracks || [])
         .filter((t) => !t.muted)
         .map((t) => ({

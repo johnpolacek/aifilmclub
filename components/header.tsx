@@ -49,7 +49,7 @@ export function Header() {
               </div>
             </SignedIn>
             <SignedOut>
-              <div suppressHydrationWarning>
+              <div className="flex items-center gap-2" suppressHydrationWarning>
                 <SignInButton mode="modal">
                   <Button
                     variant="outline"

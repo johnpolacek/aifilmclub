@@ -106,6 +106,11 @@ export interface Shot {
   // Audio settings
   audioMuted?: boolean; // When true, video plays silently (e.g., after detaching audio)
 
+  // Fade effects
+  fadeInType?: "none" | "black" | "white"; // Fade in from black/white at start
+  fadeOutType?: "none" | "black" | "white"; // Fade out to black/white at end
+  fadeDurationMs?: number; // Duration of fade effect in milliseconds (default: 500ms)
+
   createdAt: string;
   updatedAt: string;
 }

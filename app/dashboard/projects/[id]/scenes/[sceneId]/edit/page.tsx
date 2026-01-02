@@ -1,5 +1,6 @@
+import { auth, currentUser } from "@clerk/nextjs/server";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { EditSceneView } from "@/components/views/edit-scene-view";
 import { getProject } from "@/lib/projects";
 import { getScene } from "@/lib/scenes";
@@ -23,6 +24,13 @@ export default async function EditScenePage({
 }: {
   params: Promise<{ id: string; sceneId: string }>;
 }) {
+  // Check authentication
+  const { userId } = await auth();
+
+  if (!userId) {
+    redirect("/signin");
+  }
+
   const { id: projectId, sceneId } = await params;
 
   // Get project data (for characters)
@@ -30,6 +38,15 @@ export default async function EditScenePage({
 
   if (!projectData) {
     notFound();
+  }
+
+  // Verify user owns the project
+  const user = await currentUser();
+  const currentUsername =
+    user?.username || user?.emailAddresses[0]?.emailAddress.split("@")[0] || "";
+  
+  if (projectData.username !== currentUsername) {
+    redirect("/dashboard");
   }
 
   // Get scene data

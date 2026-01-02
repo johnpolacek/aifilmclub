@@ -1761,6 +1761,32 @@ export function EditSceneView({
     }
   };
 
+  const handleDownloadVideo = useCallback(async (videoUrl: string) => {
+    try {
+      toast.info("Downloading video...");
+      const response = await fetch(videoUrl);
+      if (!response.ok) {
+        throw new Error("Failed to fetch video");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `scene-${scene.sceneNumber}-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Video downloaded!");
+    } catch (error) {
+      console.error(
+        "[EditSceneView] Download video error:",
+        JSON.stringify({ error: error instanceof Error ? error.message : String(error) }, null, 2)
+      );
+      toast.error("Failed to download video");
+    }
+  }, [scene.sceneNumber]);
+
   const handleShotReorder = (shotIds: string[]) => {
     setScene((prev) => {
       const shotMap = new Map(prev.shots.map((s) => [s.id, s]));
@@ -2418,26 +2444,28 @@ export function EditSceneView({
 
             {/* Controls Row: Add Shot, Add Audio, Render Scene */}
             <div className="flex items-center justify-between gap-4 w-full border-t border-border pt-4 -mt-8">
-              <div className="flex items-center gap-4">
-                <Button
-                  type="button"
-                  onClick={handleAddShot}
-                  size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Shot
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleAddAudioTrack}
-                  variant="outline"
-                  size="sm"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Audio
-                </Button>
-              </div>
+              {!(isRendering || scene.compositeStatus === "processing") && (
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    onClick={handleAddShot}
+                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Shot
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleAddAudioTrack}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Audio
+                  </Button>
+                </div>
+              )}
 
               <div className="flex items-center gap-4">
                 {!(isRendering || scene.compositeStatus === "processing") && (
@@ -2464,16 +2492,21 @@ export function EditSceneView({
                       <PlayCircle className="h-4 w-4 mr-2" />
                       View Rendered Video
                     </Button>
-                    <a
-                      href={scene.compositeVideo.url}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-primary hover:underline border border-primary/30 rounded-md px-2 py-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download
-                    </a>
+                    {scene.compositeVideo?.url && (
+                      <Button
+                        onClick={() => {
+                          if (scene.compositeVideo?.url) {
+                            handleDownloadVideo(scene.compositeVideo.url);
+                          }
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1 text-xs border border-primary/30"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+                    )}
                   </>
                 )}
                 {scene.compositeStatus === "failed" && scene.compositeError && (
@@ -3220,16 +3253,19 @@ export function EditSceneView({
                     Duration: {Math.round(scene.compositeVideo.durationMs / 1000)}s
                   </span>
                 )}
-                <a
-                  href={scene.compositeVideo.url}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button variant="outline" size="sm">
+                {scene.compositeVideo?.url && (
+                  <Button
+                    onClick={() => {
+                      if (scene.compositeVideo?.url) {
+                        handleDownloadVideo(scene.compositeVideo.url);
+                      }
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
                     Download Video
                   </Button>
-                </a>
+                )}
               </div>
             </div>
           )}
