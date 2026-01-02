@@ -2108,22 +2108,6 @@ export function EditSceneView({
       return; // No changes to save
     }
 
-    console.log(
-      "[EditSceneView] Saving scene:",
-      JSON.stringify({
-        sceneId: scene.id,
-        removedShotsCount: scene.removedShots?.length || 0,
-        removedShots: scene.removedShots?.map(s => ({
-          id: s.id,
-          prompt: s.prompt?.substring(0, 50),
-          hasVideo: !!s.video,
-          videoStatus: s.video?.status,
-          videoUrl: s.video?.url?.substring(0, 100),
-        })) || [],
-        shotsCount: scene.shots.length,
-      }, null, 2)
-    );
-
     setSaveStatus("saving");
 
     try {
@@ -2131,15 +2115,6 @@ export function EditSceneView({
         ...scene,
         updatedAt: new Date().toISOString(),
       };
-
-      console.log(
-        "[EditSceneView] Sending scene to API:",
-        JSON.stringify({
-          sceneId: updatedScene.id,
-          removedShotsCount: updatedScene.removedShots?.length || 0,
-          removedShotsIds: updatedScene.removedShots?.map(s => s.id) || [],
-        }, null, 2)
-      );
 
       const response = await fetch(`/api/scenes/${scene.id}`, {
         method: "PUT",
@@ -2151,15 +2126,6 @@ export function EditSceneView({
       });
 
       const data = await response.json();
-
-      console.log(
-        "[EditSceneView] Scene save response:",
-        JSON.stringify({
-          success: data.success,
-          error: data.error,
-          sceneId: scene.id,
-        }, null, 2)
-      );
 
       if (data.success) {
         lastSavedSceneRef.current = currentSceneJson;
