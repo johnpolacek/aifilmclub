@@ -5,6 +5,7 @@ import { uploadImageFromBuffer } from "@/lib/s3";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { isVideoGenerationEnabled } from "@/lib/utils/video-generation";
 
 /**
  * Extract a frame from the middle of a video using ffmpeg
@@ -115,6 +116,14 @@ async function extractVideoThumbnail(
 
 export async function GET(request: Request) {
   try {
+    // Check if video generation is enabled (localhost/development only)
+    if (!isVideoGenerationEnabled()) {
+      return NextResponse.json(
+        { success: false, error: "Video generation is only available in development mode" },
+        { status: 403 }
+      );
+    }
+
     // Check authentication
     const { userId } = await auth();
     if (!userId) {

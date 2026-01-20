@@ -3,6 +3,7 @@ import { experimental_generateImage } from "ai";
 import { GoogleAuth } from "google-auth-library";
 import { GoogleGenAI } from "@google/genai";
 import type { GenerationMode } from "@/lib/scenes";
+import { isVideoGenerationEnabled } from "@/lib/utils/video-generation";
 
 /**
  * Google Gemini AI Service
@@ -373,6 +374,11 @@ export async function generateVideo(
 
   if (!prompt) {
     return { success: false, error: "Prompt is required" };
+  }
+
+  // Safety check: Only allow video generation in development/localhost
+  if (!isVideoGenerationEnabled()) {
+    return { success: false, error: "Video generation is only available in development mode" };
   }
 
   try {

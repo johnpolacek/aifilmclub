@@ -23,6 +23,12 @@ export function Header() {
               Projects
             </Link>
             <Link
+              href="/films"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Films
+            </Link>
+            <Link
               href="/resources"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >

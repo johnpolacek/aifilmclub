@@ -45,6 +45,7 @@ import { createNewAudioTrack, getEffectiveDuration } from "@/lib/scenes-client";
 import type { AudioTrack, GenerationMode, ReferenceImage, ReferenceImageType, Shot } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
 import type { Character, Location } from "@/components/project-form";
+import { isVideoGenerationEnabled } from "@/lib/utils/video-generation";
 
 // ============================================================================
 // TYPES
@@ -56,7 +57,7 @@ interface ShotEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   onSave: (shot: Shot) => void;
   onDelete?: (shotId: string) => void;
-  onGenerateVideo: (shot: Shot) => void;
+  onGenerateVideo?: (shot: Shot) => void;
   onSaveVideoToMediaLibrary?: (shot: Shot) => void; // Save old video to media library when replacing
   onDetachAudio?: (audioTrack: AudioTrack) => void; // Detach audio from shot as independent track
   projectId: string;
@@ -208,7 +209,7 @@ export function ShotEditorDialog({
   // Local state for editing
   const [prompt, setPrompt] = useState(shot?.prompt || "");
   const [sourceType, setSourceType] = useState<"uploaded" | "generated">(
-    shot?.sourceType || "generated"
+    shot?.sourceType || (isVideoGenerationEnabled() && onGenerateVideo ? "generated" : "uploaded")
   );
   const [generationMode, setGenerationMode] = useState<GenerationMode>(
     shot?.generationMode || "text-only"
@@ -276,7 +277,7 @@ export function ShotEditorDialog({
   useEffect(() => {
     if (open && shot) {
       setPrompt(shot.prompt || "");
-      setSourceType(shot.sourceType || "generated");
+      setSourceType(shot.sourceType || (isVideoGenerationEnabled() && onGenerateVideo ? "generated" : "uploaded"));
       setGenerationMode(shot.generationMode || "text-only");
       setStartFrameImage(shot.startFrameImage);
       setEndFrameImage(shot.endFrameImage);
@@ -639,6 +640,10 @@ export function ShotEditorDialog({
 
   // Handle generate
   const handleGenerate = () => {
+    if (!onGenerateVideo) {
+      toast.error("Video generation is not available");
+      return;
+    }
     if (!shot) return;
 
     // Validate requirements
@@ -1395,15 +1400,17 @@ export function ShotEditorDialog({
           <div className="space-y-2">
             <Label>Source</Label>
             <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={sourceType === "generated" ? "default" : "outline"}
-                onClick={() => setSourceType("generated")}
-                className="flex-1"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate with AI
-              </Button>
+              {isVideoGenerationEnabled() && onGenerateVideo && (
+                <Button
+                  type="button"
+                  variant={sourceType === "generated" ? "default" : "outline"}
+                  onClick={() => setSourceType("generated")}
+                  className="flex-1"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate with AI
+                </Button>
+              )}
               <Button
                 type="button"
                 variant={sourceType === "uploaded" ? "default" : "outline"}
@@ -1412,12 +1419,17 @@ export function ShotEditorDialog({
                   // Trigger file picker after re-render when input is available
                   setShouldOpenFilePicker(true);
                 }}
-                className="flex-1"
+                className={isVideoGenerationEnabled() && onGenerateVideo ? "flex-1" : "w-full"}
               >
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Video
               </Button>
             </div>
+            {!isVideoGenerationEnabled() && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Video generation is only available in development mode. Please upload a video file instead.
+              </p>
+            )}
           </div>
 
           {sourceType === "generated" ? (
@@ -2377,7 +2389,7 @@ export function ShotEditorDialog({
               >
                 Cancel
               </Button>
-              {sourceType === "generated" ? (
+              {sourceType === "generated" && isVideoGenerationEnabled() && onGenerateVideo ? (
                 <Button
                   type="button"
                   onClick={handleGenerate}

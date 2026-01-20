@@ -59,6 +59,7 @@ import { createScreenplayElement, ELEMENT_TYPE_LABELS } from "@/lib/types/screen
 import { uploadFile } from "@/lib/upload-utils";
 import { generateThumbnailFromFile, generateThumbnailFromUrl } from "@/lib/video-thumbnail";
 import { cn } from "@/lib/utils";
+import { isVideoGenerationEnabled } from "@/lib/utils/video-generation";
 
 // ============================================================================
 // TYPES
@@ -1895,6 +1896,12 @@ export function EditSceneView({
   };
 
   const handleGenerateVideo = async (shot: Shot) => {
+    // Check if video generation is enabled (localhost/development only)
+    if (!isVideoGenerationEnabled()) {
+      toast.error("Video generation is only available in development mode");
+      return;
+    }
+
     const loadingToast = toast.loading("Starting video generation...");
 
     // First, save the shot configuration (without processing status) so changes aren't lost if API fails
@@ -2791,7 +2798,7 @@ export function EditSceneView({
             ? handleShotDelete
             : undefined
         }
-        onGenerateVideo={handleGenerateVideo}
+        onGenerateVideo={isVideoGenerationEnabled() ? handleGenerateVideo : undefined}
         onSaveVideoToMediaLibrary={handleSaveVideoToMediaLibrary}
         onDetachAudio={handleDetachAudio}
         projectId={projectId}
@@ -3000,7 +3007,8 @@ export function EditSceneView({
         sceneId={scene.id}
       />
 
-      {/* Generate Video Dialog */}
+      {/* Generate Video Dialog - Only shown in development/localhost */}
+      {isVideoGenerationEnabled() && (
       <Dialog open={showGenerateVideoDialog} onOpenChange={setShowGenerateVideoDialog}>
         <DialogContent className="max-w-[95vw] xl:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader className="shrink-0 pb-4 border-b">
@@ -3496,6 +3504,7 @@ export function EditSceneView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

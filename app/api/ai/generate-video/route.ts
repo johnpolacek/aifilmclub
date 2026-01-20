@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { generateVideo } from "@/lib/ai/gemini";
 import type { GenerationMode } from "@/lib/scenes";
+import { isVideoGenerationEnabled } from "@/lib/utils/video-generation";
 
 /**
  * POST /api/ai/generate-video
@@ -11,9 +12,19 @@ import type { GenerationMode } from "@/lib/scenes";
  * - start-frame: Generate from start frame image + prompt
  * - start-end-frame: Generate from start and end frame images + prompt
  * - reference-images: Generate using up to 3 reference images + prompt
+ * 
+ * NOTE: This endpoint is only available in development/localhost environments
  */
 export async function POST(request: Request) {
   try {
+    // Check if video generation is enabled (localhost/development only)
+    if (!isVideoGenerationEnabled()) {
+      return NextResponse.json(
+        { success: false, error: "Video generation is only available in development mode" },
+        { status: 403 }
+      );
+    }
+
     // Check authentication
     const { userId } = await auth();
     if (!userId) {

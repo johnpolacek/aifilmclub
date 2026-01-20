@@ -4,18 +4,18 @@ import { Card } from "@/components/ui/card";
 const features = [
   {
     icon: Users,
-    title: "Collaborative Workspace",
-    description: "Share your work-in-progress and get feedback from fellow creators",
+    title: "Collaborative Community",
+    description: "Share your work-in-progress, get feedback from fellow AI filmmakers, and collaborate on projects together",
   },
   {
     icon: Trophy,
-    title: "Showcase Gallery",
-    description: "Feature your completed projects in our curated gallery",
+    title: "Showcase Your Work",
+    description: "Feature your completed projects and films in our community gallery. Share tips, tricks, and techniques",
   },
   {
     icon: MessageSquare,
-    title: "Resource Library",
-    description: "Access a library of resources to help you learn and grow as an AI film creator",
+    title: "Learn & Grow",
+    description: "Access a library of resources, tutorials, and community discussions to improve your AI filmmaking skills",
   },
 ];
 
@@ -25,10 +25,10 @@ export function CommunityFeatures() {
       <div className="container mx-auto px-4 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl lg:text-5xl font-bold mb-4 text-balance">
-            Why Join AI Film Camp?
+            Join the AI Film Camp Community
           </h2>
           <p className="text-lg text-muted-foreground text-pretty max-w-2xl mx-auto">
-            Everything you need to grow as an AI film creator
+            Connect with fellow AI filmmakers, share your work, learn new techniques, and grow together as creators
           </p>
         </div>
 
