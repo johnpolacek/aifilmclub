@@ -2058,13 +2058,18 @@ export function EditSceneView({
         const sourceShot = prev.shots.find(s => s.id === audioTrack.sourceVideoShotId);
         if (sourceShot) {
           // Calculate timeline position by summing durations of shots before this one
-          const shotPosition = prev.shots
+          const shotStartMs = prev.shots
             .filter(s => s.order < sourceShot.order)
             .reduce((total, shot) => total + getEffectiveDuration(shot), 0);
           
+          // Calculate shot end position (start + duration)
+          const shotDurationMs = getEffectiveDuration(sourceShot);
+          const shotEndMs = shotStartMs + shotDurationMs;
+          
+          // Position audio at shot end (for overlap workflow)
           positionedTrack = {
             ...audioTrack,
-            startTimeMs: shotPosition,
+            startTimeMs: shotEndMs,
           };
         }
       }
@@ -2092,6 +2097,43 @@ export function EditSceneView({
       ...prev,
       masterVolume: volume[0],
     }));
+  };
+
+  // Handle create overlap - trim video so it starts when audio starts
+  const handleCreateOverlap = (audioTrack: AudioTrack) => {
+    if (!audioTrack.sourceVideoShotId) return;
+    
+    setScene((prev) => {
+      const sourceShot = prev.shots.find(s => s.id === audioTrack.sourceVideoShotId);
+      if (!sourceShot) return prev;
+      
+      // Calculate shot's timeline start position
+      const shotStartMs = prev.shots
+        .filter(s => s.order < sourceShot.order)
+        .reduce((total, shot) => total + getEffectiveDuration(shot), 0);
+      
+      // Calculate how much to trim from video start
+      // Audio starts at audioTrack.startTimeMs, video should start there too
+      const audioStartMs = audioTrack.startTimeMs;
+      const trimAmount = audioStartMs - shotStartMs;
+      
+      if (trimAmount > 0) {
+        // Update shot with trim from start
+        const updatedShots = prev.shots.map((s) =>
+          s.id === sourceShot.id
+            ? {
+                ...s,
+                trimStartMs: (s.trimStartMs || 0) + trimAmount,
+                updatedAt: new Date().toISOString(),
+              }
+            : s
+        );
+        
+        return { ...prev, shots: updatedShots };
+      }
+      
+      return prev;
+    });
   };
 
   // ============================================================================
@@ -2952,6 +2994,8 @@ export function EditSceneView({
         onDelete={
           selectedAudioTrack ? () => handleAudioTrackDelete(selectedAudioTrack.id) : undefined
         }
+        onCreateOverlap={handleCreateOverlap}
+        shots={scene.shots}
         projectId={projectId}
         sceneId={scene.id}
       />

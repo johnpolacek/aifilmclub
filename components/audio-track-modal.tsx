@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import type { AudioTrack } from "@/lib/scenes-client";
-import { createNewAudioTrack } from "@/lib/scenes-client";
+import type { AudioTrack, Shot } from "@/lib/scenes-client";
+import { createNewAudioTrack, getEffectiveDuration } from "@/lib/scenes-client";
 import { uploadFile } from "@/lib/upload-utils";
 
 // ============================================================================
@@ -29,6 +29,8 @@ interface AudioTrackModalProps {
   onOpenChange: (open: boolean) => void;
   onSave: (track: AudioTrack) => void;
   onDelete?: (trackId: string) => void;
+  onCreateOverlap?: (audioTrack: AudioTrack) => void;
+  shots?: Shot[];
   projectId: string;
   sceneId: string;
 }
@@ -43,6 +45,8 @@ export function AudioTrackModal({
   onOpenChange,
   onSave,
   onDelete,
+  onCreateOverlap,
+  shots = [],
   projectId,
   sceneId,
 }: AudioTrackModalProps) {
@@ -588,6 +592,31 @@ export function AudioTrackModal({
                   step={1}
                 />
               </div>
+
+              {/* Create Overlap - for detached audio */}
+              {track?.sourceVideoShotId && onCreateOverlap && (
+                <div className="space-y-2 pt-2 border-t border-border">
+                  <Label>Video Overlap</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (track && onCreateOverlap) {
+                        onCreateOverlap(track);
+                        toast.success("Video trimmed to create overlap");
+                      }
+                    }}
+                    className="w-full"
+                  >
+                    <Scissors className="h-4 w-4 mr-2" />
+                    Trim Video to Create Overlap
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Trim the source video so it starts when this audio starts, creating overlap with previous shot.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>

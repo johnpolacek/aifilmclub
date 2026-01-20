@@ -729,12 +729,17 @@ export function ShotEditorDialog({
       const data = await response.json();
 
       if (data.success) {
-        // Create a new audio track positioned at the shot's timeline position
+        // Calculate shot's timeline position and duration
+        const shotStartMs = shot.startTimeMs || 0;
+        const shotDurationMs = sourceVideo.durationMs || 5000;
+        const shotEndMs = shotStartMs + shotDurationMs;
+        
+        // Create a new audio track positioned at the shot's end (for overlap workflow)
         const audioTrack = createNewAudioTrack(
           "", // No name needed
           "extracted",
           data.audioUrl,
-          shot.startTimeMs || 0,
+          shotEndMs, // Position at shot end instead of start
           sourceVideo.durationMs || 5000
         );
         // Add the source shot reference

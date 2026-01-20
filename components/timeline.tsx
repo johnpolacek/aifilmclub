@@ -356,20 +356,18 @@ export default function Timeline({
         const startPercent = totalDurationMs > 0 ? (startTimeMs / totalDurationMs) * 100 : 0;
         const endPercent = totalDurationMs > 0 ? ((startTimeMs + durationMs) / totalDurationMs) * 100 : 0;
         return (
-          <>
+          <div key={`shot-boundaries-${shot.id}`} className="contents">
             {/* Start boundary */}
             <div
-              key={`shot-start-${shot.id}`}
               className="absolute top-0 bottom-0 w-px bg-primary/30 pointer-events-none z-10"
               style={{ left: `${startPercent}%` }}
             />
             {/* End boundary */}
             <div
-              key={`shot-end-${shot.id}`}
               className="absolute top-0 bottom-0 w-px bg-primary/20 pointer-events-none z-10"
               style={{ left: `${endPercent}%` }}
             />
-          </>
+          </div>
         );
       })}
 

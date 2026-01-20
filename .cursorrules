@@ -56,4 +56,3 @@ avatars/{username}/{filename}                  # User avatars
 ### S3 Bucket
 - Bucket name: `aifilmcamp-public`
 - CloudFront distribution serves from this bucket
-
